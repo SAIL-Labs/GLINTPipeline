@@ -96,7 +96,7 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
     return amplitude_fit, amplitude, integ_model, integ_windowed, residuals_fit, residuals_reg, cov, weights
 
 
-class Null(object):
+class File(object):
     ''' Management of the FITS file'''
     
     def __init__(self, data=None, nbimg=None):
@@ -131,11 +131,6 @@ class Null(object):
             self.nbimg = nbimg
             self.data = np.zeros((self.nbimg,344,96))
             self.index = np.arange(self.nbimg)
-        
-        self.slices = np.empty(0)
-        self.slices_axes = np.empty(0)
-        self.residuals = np.empty(0)
-        self.px_range = np.empty(0)
 
     def cosmeticsFrames(self, dark):
         self.data = self.data - dark
@@ -161,6 +156,10 @@ class Null(object):
             self.data = self.data.sum(axis=axis+1)
         else:
             self.data = self.data.mean(axis=axis+1)
+
+
+class Null(File):
+    ''' Getting the null and photometries'''
     
     def insulateTracks(self, channel_pos, sep, spatial_axis):
         ''' 
@@ -362,7 +361,7 @@ class Null(object):
     def save(self, path, date, mode):
         '''
         path : string, path of the file to save. Must contain the name of the file
-        date : string, date of the acquisition of the data
+        date : string, date of the acquisition of the data (YYYY-MM-DD)
         mode : string, which estimator to use
         '''
         
