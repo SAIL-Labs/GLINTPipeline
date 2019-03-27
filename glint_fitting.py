@@ -21,95 +21,134 @@ To do:
 
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.interpolate import interp1d
+import math
+from numba import vectorize, cuda
 from timeit import default_timer as time
-from numba import cuda
-from numba.cuda.random import create_xoroshiro128p_states, xoroshiro128p_uniform_float32, xoroshiro128p_uniform_float64
-from numba import jit
+
+def rv_generator(bins_cent, pdf, nsamp):
+    '''
+    bins_cent : x-axis of the histogram
+    pdf : normalized arbitrary pdf to use to generate rv
+    '''
+    
+    bin_width = np.diff(bins_cent[:2])
+    cdf = np.cumsum(pdf) * np.diff(bins_cent[:2])
+    cdf, mask = np.unique(cdf, True)
+    cdf_bins_cent = bins_cent[mask]
+    cdf_bins_cent = cdf_bins_cent +  bin_width/2.
+
+    out = np.random.rand(nsamp)
+    
+    output_samples = np.interp(out, cdf, cdf_bins_cent)
+    output_samples = output_samples.astype(np.float32)
+    
+    return output_samples
+
+def getHistogram(data, nbins):
+    pdf, bins = np.histogram(data, bins=int(nbins**0.5), density=True)
+    bins_cent = bins[:-1] + np.diff(bins[:2])/2.
+    return pdf, bins_cent
+
+@vectorize(['float32(float32, float32, float32, float32)'], target='cuda')
+def computeNullDepth(I1, I2, phase, visibility):
+    Iminus = I1 + I2 - 2 * math.sqrt(I1 * I2) * visibility * math.cos(phase)
+    Iplus = I1 + I2 - 2 * math.sqrt(I1 * I2) * visibility * math.cos(phase)
+    null = Iminus / Iplus
+    return null
+
+@vectorize(['float32(float32, float32, float32, float32)'], target='parallel')
+def computeNullDepth_parallel(I1, I2, phase, visibility):
+    Iminus = I1 + I2 - 2 * math.sqrt(I1 * I2) * visibility * math.cos(phase)
+    Iplus = I1 + I2 - 2 * math.sqrt(I1 * I2) * visibility * math.cos(phase)
+    null = Iminus / Iplus
+    return null
+
+def computeNullDepth_normal(I1, I2, phase, visibility):
+    Iminus = I1 + I2 - 2 * np.sqrt(I1 * I2) * visibility * np.cos(phase)
+    Iplus = I1 + I2 - 2 * np.sqrt(I1 * I2) * visibility * np.cos(phase)
+    null = Iminus / Iplus
+    return null
 
 @cuda.jit
-def rv_generator_cuda(rng_states, out):
-    thread_id = cuda.grid(1)
+def computeNullDepth_cuda(I1, I2, phase, visibility, out):
+    i = cuda.grid(1)
+    if i < I1.size:
+        Iminus = I1[i] + I2[i] - 2 * math.sqrt(I1[i] * I2[i]) * visibility[0] * math.cos(phase[i])
+        Iplus = I1[i] + I2[i] - 2 * math.sqrt(I1[i] * I2[i]) * visibility[0] * math.cos(phase[i])
+        out[i] = Iminus / Iplus
 
-    x = xoroshiro128p_uniform_float32(rng_states, thread_id)
-    out[thread_id] = x
+@vectorize(['float32(float32,float32)'], target='cuda')
+def add_kernel(x,y):
+    return x+y
+
+@cuda.jit
+def add_kernel_cuda(x,y, out):
+    i = cuda.grid(1)
+    if i < x.size:
+        out[i] = x[i] + y[i]
+
+        
+''' Generates mock data '''
+n = int(1e+8)
+data_I1 = np.random.normal(0., 1., n)
+data_I2 = np.random.normal(0., 1., n)
+data_phase = np.random.normal(0., 0.1, n)
+visibility = 1.
+
+''' Get PDF '''
+pdf_I1, bins_cent_I1 = getHistogram(data_I1, int(n**0.5))
+pdf_I2, bins_cent_I2 = getHistogram(data_I2, int(n**0.5))
+pdf_phase, bins_cent_phase = getHistogram(data_phase, int(n**0.5))
+
+del data_I1, data_I2, data_phase
+
+''' Generate random values from these pdf '''
+start = time()
+rv_I1 = rv_generator(bins_cent_I1, pdf_I1, n)
+rv_I1 = rv_I1.astype(np.float32)
+stop = time()
+print('rv', stop - start)
+
+rv_I2 = rv_generator(bins_cent_I2, pdf_I2, n)
+rv_I2 = rv_I2.astype(np.float32)
+
+rv_phase = rv_generator(bins_cent_phase, pdf_phase, n)
+rv_phase = rv_phase.astype(np.float32)
+
+print('Let\'s rock')
+start = time()
+rv_I1_d = cuda.to_device(rv_I1)
+rv_I2_d = cuda.to_device(rv_I2)
+rv_phase_d = cuda.to_device(rv_phase)
+visibility_d = cuda.to_device(np.array([visibility]).astype(np.float32))
+rv_null_d = cuda.device_array(rv_I1.shape, dtype=np.float32)
 
 
-def rv_generator(bins_cent, pdf, threads_per_block, blocks, rng_states):
-    '''
-    bins_cent : x-axis of the histogram
-    pdf : normalized arbitrary pdf to use to generate rv
-    '''
-    
-    bin_width = np.diff(bins_cent[:2])
-    cdf = np.cumsum(pdf) * np.diff(bins_cent[:2])
-    cdf, mask = np.unique(cdf, True)
-    cdf_bins_cent = bins_cent[mask]
-    cdf_bins_cent = cdf_bins_cent +  bin_width/2.
-    
-    rng_states = create_xoroshiro128p_states(threads_per_block * blocks, seed=1)
-    out = np.zeros(threads_per_block * blocks, dtype=np.float32)
-    rv_generator_cuda[blocks, threads_per_block](rng_states, out)
-
-    output_samples = interp1d(cdf, cdf_bins_cent, bounds_error=False, fill_value=(0,1))(out)
-    
-    return output_samples, out
-
-def rv_generator2(bins_cent, pdf, threads_per_block, blocks):
-    '''
-    bins_cent : x-axis of the histogram
-    pdf : normalized arbitrary pdf to use to generate rv
-    '''
-    
-    bin_width = np.diff(bins_cent[:2])
-    cdf = np.cumsum(pdf) * np.diff(bins_cent[:2])
-    cdf, mask = np.unique(cdf, True)
-    cdf_bins_cent = bins_cent[mask]
-    cdf_bins_cent = cdf_bins_cent +  bin_width/2.
-    
-
-    out = np.random.rand(threads_per_block*blocks)
-    
-    output_samples = interp1d(cdf, cdf_bins_cent, bounds_error=False, fill_value=(0,1))(out)
-    
-    return output_samples, mask
-
-
-threads_per_block = 32*8
-blocks = 16*10000
-rng_states = 0. #create_xoroshiro128p_states(threads_per_block * blocks, seed=1)
-
-n = int(threads_per_block * blocks)
-rvn = np.random.randn(n)
-x, step = np.linspace(-5, 5, int(n**0.5)+1, retstep=True)
-hist, bin_edges = np.histogram(rvn, bins=x, density=True)
-bins_cent = bin_edges[:-1] + np.diff(bin_edges[:2])/2.
+computeNullDepth(rv_I1_d, rv_I2_d, rv_phase_d, visibility_d, out=rv_null_d)
+rv_null = rv_null_d.copy_to_host()
+stop = time()
+print('gpu', stop - start)
 
 start = time()
-rv, out = rv_generator(bins_cent, hist, threads_per_block, blocks, rng_states)
+rv_null_parallel = computeNullDepth_parallel(rv_I1, rv_I2, rv_phase, visibility)
 stop = time()
-print(stop-start)
-
-hist2, bins2 = np.histogram(rv, bins=int(n**0.5), density=True)
-bins2_cent = bins2[:-1] + np.diff(bins2[:2])/2.
-
-x, step = np.linspace(-5, 5, int(n**0.5)+1, retstep=True)
-y = 1./np.sqrt(2*np.pi) * np.exp(-(x[:-1]+step/2)**2/2)
-y /= np.sum(y*step)
+print('parallel', stop - start)
 
 start = time()
-rv2, mask = rv_generator2(x[:-1]+step/2, y, threads_per_block, blocks)
+rv_null2 = computeNullDepth_normal(rv_I1, rv_I2, rv_phase, visibility)
 stop = time()
-print(stop-start)
+print('normal', stop - start)
 
-hist3, bins3 = np.histogram(rv2, bins=int(n**0.5), density=True)
-bins3_cent = bins3[:-1] + np.diff(bins3[:2])/2.
+start = time()
+rv_I1_d = cuda.to_device(rv_I1)
+rv_I2_d = cuda.to_device(rv_I2)
+rv_phase_d = cuda.to_device(rv_phase)
+visibility_d = cuda.to_device(np.array([visibility]).astype(np.float32))
+rv_null_d = cuda.device_array(rv_I1.shape, dtype=np.float32)
 
-plt.figure()
-plt.plot(bins_cent, hist, 'o', label='model')
-plt.plot(bins2_cent, hist2, label='histo')
-plt.plot(bins3_cent, hist3, label='histo2')
-plt.grid()
-plt.legend(loc='best')
-
-print(rv.mean(), rv2.mean())
+start2 = time()
+computeNullDepth_cuda(rv_I1_d, rv_I2_d, rv_phase_d, visibility_d, rv_null_d)
+rv_null = rv_null_d.copy_to_host()
+stop = time()
+print(stop-start2)
+print('cuda', stop - start)
