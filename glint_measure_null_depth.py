@@ -13,9 +13,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import glint_classes
-from scipy.optimize import curve_fit
-from functools import partial
-import time
 import warnings
 warnings.filterwarnings(action="ignore", category=np.VisibleDeprecationWarning)
 
@@ -37,8 +34,7 @@ dark = np.load(output_path+'superdark.npy')
 
 ''' Set processing configuration and load instrumental calibration data '''
 nb_tracks = 16 # Number of tracks
-nb_chosen_tracks = 16
-which_tracks = np.arange(16)
+which_tracks = np.arange(16) # Tracks to process
 coeff_pos = np.load(output_path+'coeff_position_poly.npy')
 coeff_width = np.load(output_path+'coeff_width_poly.npy')
 position_poly = [np.poly1d(coeff_pos[i]) for i in range(nb_tracks)]
@@ -71,10 +67,9 @@ null = []
 null_err = []
 
 ''' Start the data processing '''
-start = time.time()
 nb_frames = 0.
-for f in data_list[:2]:
-    print('Processing '+str(f))
+for f in data_list[:]:
+    print("Process of : %s (%d / %d)" %(f, data_list.index(f)+1, len(data_list)))
     img = glint_classes.Null(f)
     
     ''' Process frames '''
@@ -132,13 +127,11 @@ for f in data_list[:2]:
 #null = np.array(null)
 #null_err = np.array(null_err)
 
-stop = time.time()
-print(stop-start)
 
-''' Miscellaneous ''' 
-plt.figure()
-plt.imshow(img.data[0], interpolation='none', aspect='auto')
-plt.colorbar()
+#''' Miscellaneous ''' 
+#plt.figure()
+#plt.imshow(img.data[0], interpolation='none', aspect='auto')
+#plt.colorbar()
 
 #for k in range(1):
 #    plt.figure()
@@ -211,21 +204,21 @@ plt.colorbar()
 #        plt.ylabel('Std of curve_fit')
 #        plt.grid()
 
-for i in range(2):
-    plt.figure()
-    plt.subplot(221)
-    plt.errorbar(np.arange(94), null[0,0,i], yerr=null_err[0,0], fmt='o')
-    plt.grid()
-    plt.ylim(-5,5)
-    plt.subplot(222)
-    plt.errorbar(np.arange(94), null[0,1,i], yerr=null_err[0,1], fmt='d')
-    plt.grid()
-    plt.ylim(-5,5)
-    plt.subplot(223)
-    plt.errorbar(np.arange(94), null[0,2,i], yerr=null_err[0,2], fmt='s')
-    plt.grid()
-    plt.ylim(-5,5)
-    plt.subplot(224)
-    plt.errorbar(np.arange(94), null[0,3,i], yerr=null_err[0,3], fmt='+')
-    plt.grid()
-    plt.ylim(-5,5)
+#for i in range(2):
+#    plt.figure()
+#    plt.subplot(221)
+#    plt.errorbar(np.arange(94), null[0][0][i], yerr=null_err[0][0], fmt='o')
+#    plt.grid()
+#    plt.ylim(-5,5)
+#    plt.subplot(222)
+#    plt.errorbar(np.arange(94), null[0][1][i], yerr=null_err[0][1], fmt='d')
+#    plt.grid()
+#    plt.ylim(-5,5)
+#    plt.subplot(223)
+#    plt.errorbar(np.arange(94), null[0][2][i], yerr=null_err[0][3], fmt='s')
+#    plt.grid()
+#    plt.ylim(-5,5)
+#    plt.subplot(224)
+#    plt.errorbar(np.arange(94), null[0][3][i], yerr=null_err[0][3], fmt='+')
+#    plt.grid()
+#    plt.ylim(-5,5)

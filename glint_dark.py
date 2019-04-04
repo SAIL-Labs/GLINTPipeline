@@ -3,6 +3,15 @@
 Created on Tue Feb 19 09:48:34 2019
 
 @author: mamartinod
+
+Create:
+    - the average dark for further frame processing.
+    - the pdf of the zero-mean dark current
+
+Save:
+    - the average dark in *.npy file format
+    - the pdf in a HDF5 file format
+
 """
 
 import numpy as np
@@ -18,6 +27,12 @@ def save(path, dic_data, date):
     path : string, path of the file to save. Must contain the name of the file
     dic_data : dictionary of data to save
     date : string, date of the acquisition of the data (YYYY-MM-DD)
+    
+    Return
+    -------------------------------
+    a HDF5 file in the specified path with the following tree:
+        dark/cent_bins : centered bins of the histogram
+        dark/histogram : non-normalized histogram (in case of interpolation needed)
     '''
     # Check if saved file exist
     if os.path.exists(path):
@@ -46,7 +61,7 @@ if not os.path.exists(output_path):
     
 ''' Monitoring '''
 ''' Check the non-uniformities and defect pixels of the darks '''
-monitor = False
+monitor = False # Set True to map the average, variance of relative difference of set of dark current datacubes
 if monitor:
     avg_dark = [] # Average dark current (in count) per frame
     var_dark = [] # Variance of dark current (in count) per frame
@@ -55,8 +70,6 @@ if monitor:
 ''' Computing average dark '''
 superDark = np.zeros((344,96))
 superNbImg = 0.
-
-
 list_hist = []
 bin_hist, step = np.linspace(-3000, 2**14, 1000, retstep=True)
 bin_hist_cent = bin_hist[:-1] + step/2
@@ -84,7 +97,7 @@ if superNbImg != 0.:
 list_hist = np.array(list_hist)
 super_hist = np.sum(list_hist, axis=0)
 
-save(output_path+'hist_dark.hdf5', {'histogram':super_hist, 'cent_bins':bin_hist_cent}, date)
+save(output_path+'hist_dark.hdf5', {'histogram':super_hist, 'bins_edges':bin_hist}, date)
 
 plt.figure()
 plt.semilogy(bin_hist_cent, super_hist)
