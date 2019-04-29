@@ -21,8 +21,8 @@ def gaussian(x, A, loc, sig):
 
 ''' Inputs '''
 datafolder = '201806_alfBoo/'
-root = "C:/glint/"
-data_path = 'C:/glint_data/'+datafolder
+root = "/mnt/96980F95980F72D3/glint/"
+data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
 data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f]
 
 ''' Output '''
@@ -68,7 +68,7 @@ null_err = []
 
 ''' Start the data processing '''
 nb_frames = 0.
-for f in data_list[:]:
+for f in data_list[:50]:
     print("Process of : %s (%d / %d)" %(f, data_list.index(f)+1, len(data_list)))
     img = glint_classes.Null(f)
     
@@ -108,14 +108,15 @@ for f in data_list[:]:
     img.getPhotometry()
     
     ''' Output file'''
-    img.save(output_path+os.path.basename(f)[:-4]+'.hdf5', '2019-03-19', 'amplitude')
+#    img.save(output_path+os.path.basename(f)[:-4]+'.hdf5', '2019-03-19', 'amplitude')
     
     ''' For following the evolution of flux in every tracks '''
 #    img.getTotalFlux()
 #    fluxes = np.vstack((fluxes, img.fluxes))
 #    nb_frames += img.nbimg
     
-#amplitude = np.array(amplitude)
+amplitude = np.array([selt for elt in amplitude for selt in elt])
+amplitude = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in amplitude])
 #amplitude_fit = np.array(amplitude_fit)
 #integ_raw = np.array(integ_raw)
 #integ_model = np.array(integ_model)
@@ -124,11 +125,11 @@ for f in data_list[:]:
 #residuals_fit = np.array(residuals_fit)
 #cov = np.array(cov)
 #bg_noise = np.array(bg_noise)
-#null = np.array(null)
+#null = np.array([selt for elt in null for selt in elt])
 #null_err = np.array(null_err)
 
 
-#''' Miscellaneous ''' 
+''' Miscellaneous ''' 
 #plt.figure()
 #plt.imshow(img.data[0], interpolation='none', aspect='auto')
 #plt.colorbar()
@@ -156,19 +157,13 @@ for f in data_list[:]:
 #        plt.plot(integ_raw[0,k,:,i], 'o')
 #        plt.plot(integ_raw0[0,k,:,i], 'd')
 #        plt.grid()
-#for k in range(1):
-##    plt.figure()
-#    for i in range(16):
-#        plt.figure()
-##        plt.subplot(4,4,i+1)
-#        plt.title('Track '+str(i+1))
-#        plt.plot(amplitude[k,0,i], 'o')
-#        try:
-#            plt.plot(amplitude_fit[k,0,i], '+')
-#        except IndexError:
-#            pass
-#        plt.ylim(-50, 800)
-#        plt.grid()
+plt.figure()
+for i in range(16):
+    plt.subplot(4,4,i+1)
+    plt.title('Track '+str(i+1))
+    plt.plot(img.wl_scale[i], amplitude[0,i,:], 'o')
+    plt.ylim(-50, 800)
+    plt.grid()
 #for k in range(1):
 #    plt.figure()
 #    for i in range(16):
@@ -204,21 +199,21 @@ for f in data_list[:]:
 #        plt.ylabel('Std of curve_fit')
 #        plt.grid()
 
-#for i in range(2):
-#    plt.figure()
-#    plt.subplot(221)
-#    plt.errorbar(np.arange(94), null[0][0][i], yerr=null_err[0][0], fmt='o')
-#    plt.grid()
-#    plt.ylim(-5,5)
-#    plt.subplot(222)
-#    plt.errorbar(np.arange(94), null[0][1][i], yerr=null_err[0][1], fmt='d')
-#    plt.grid()
-#    plt.ylim(-5,5)
-#    plt.subplot(223)
-#    plt.errorbar(np.arange(94), null[0][2][i], yerr=null_err[0][3], fmt='s')
-#    plt.grid()
-#    plt.ylim(-5,5)
-#    plt.subplot(224)
-#    plt.errorbar(np.arange(94), null[0][3][i], yerr=null_err[0][3], fmt='+')
-#    plt.grid()
-#    plt.ylim(-5,5)
+for i in range(2):
+    plt.figure()
+    plt.subplot(221)
+    plt.errorbar(img.wl_scale[0], null[0][0][i], yerr=null_err[0][0][i], fmt='o')
+    plt.grid()
+    plt.ylim(-5,5)
+    plt.subplot(222)
+    plt.errorbar(img.wl_scale[0], null[0][1][i], yerr=null_err[0][1][i], fmt='d')
+    plt.grid()
+    plt.ylim(-5,5)
+    plt.subplot(223)
+    plt.errorbar(img.wl_scale[0], null[0][2][i], yerr=null_err[0][3][i], fmt='s')
+    plt.grid()
+    plt.ylim(-5,5)
+    plt.subplot(224)
+    plt.errorbar(img.wl_scale[0], null[0][3][i], yerr=null_err[0][3][i], fmt='+')
+    plt.grid()
+    plt.ylim(-5,5)

@@ -49,13 +49,13 @@ def save(path, dic_data, date):
             
 ''' Inputs '''
 datafolder = '201806_alfBoo/'
-root = "C:/glint_data/"
+root = "/mnt/96980F95980F72D3/glint_data/"
 data_path = root+datafolder
 dark_list = [data_path+f for f in os.listdir(data_path) if 'dark' in f]
 date = '2018-06-25'
 
 ''' Output '''
-output_path = 'C:/glint/reduction/'+datafolder
+output_path = '/mnt/96980F95980F72D3/glint/reduction/'+datafolder
 if not os.path.exists(output_path):
     os.makedirs(output_path)
     
@@ -71,7 +71,7 @@ if monitor:
 superDark = np.zeros((344,96))
 superNbImg = 0.
 list_hist = []
-bin_hist, step = np.linspace(-3000, 2**14, 1000, retstep=True)
+bin_hist, step = np.linspace(-2800, 13700, 1001, retstep=True)
 bin_hist_cent = bin_hist[:-1] + step/2
 
 
@@ -92,12 +92,20 @@ for f in dark_list[:]:
 
 if superNbImg != 0.:
     superDark /= superNbImg
-    np.save(output_path+'superDark', superDark)
+    np.save(output_path+'superdark', superDark)
 
 list_hist = np.array(list_hist)
 super_hist = np.sum(list_hist, axis=0)
 
 save(output_path+'hist_dark.hdf5', {'histogram':super_hist, 'bins_edges':bin_hist}, date)
+
+plt.figure()
+plt.plot(bin_hist_cent, super_hist)
+plt.grid()
+plt.xlabel('Dark current (ADU)', size=38)
+plt.ylabel('Count', size=38)
+plt.xticks(size=36);plt.yticks(size=36)
+plt.title('Histogram of the dark current', size=40)
 
 plt.figure()
 plt.semilogy(bin_hist_cent, super_hist)
