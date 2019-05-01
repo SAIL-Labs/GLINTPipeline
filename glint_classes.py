@@ -117,11 +117,11 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
 class File(object):
     ''' Management of the HDF5 datacube'''
     
-    def __init__(self, data=None, nbimg=None):
-        self.loadfile(data, nbimg)
+    def __init__(self, data=None, nbimg=None, transpose=True):
+        self.loadfile(data, nbimg, transpose)
             
             
-    def loadfile(self, data=None, nbimg=None):
+    def loadfile(self, data=None, nbimg=None, transpose=True):
         ''' Loading of FITS file 
         -----------------
         data : string, path to data to process.
@@ -141,7 +141,7 @@ class File(object):
                     self.data = self.data[:nbimg]
                     self.nbimg  = nbimg
                     self.index = np.arange(self.nbimg)
-                self.data = np.transpose(self.data, axes=(0,2,1))
+                if transpose: self.data = np.transpose(self.data, axes=(0,2,1))
                 
         else:
             print("Mock data created")
