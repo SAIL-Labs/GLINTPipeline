@@ -75,8 +75,8 @@ def error_function(params, x, y):
     print(count, params)
     return y - MCfunction(x, *params)
   
-n_loops = 100 # number of loops
-n_samp = int(1e+8) # number of samples per loop
+n_loops = 1000 # number of loops
+n_samp = int(1e+7) # number of samples per loop
 n_bins = 1000
   
 ''' Generates mock data '''
