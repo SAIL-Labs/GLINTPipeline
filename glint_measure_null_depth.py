@@ -20,7 +20,7 @@ def gaussian(x, A, loc, sig):
     return A * np.exp(-(x-loc)**2/(2*sig**2))
 
 ''' Inputs '''
-datafolder = '201806_alfBoo/'
+datafolder = 'simulation/'
 root = "/mnt/96980F95980F72D3/glint/"
 data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
 data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f]
@@ -33,14 +33,15 @@ if not os.path.exists(output_path):
 dark = np.load(output_path+'superdark.npy')
 
 ''' Set processing configuration and load instrumental calibration data '''
+calibration_path = 'simulation'
 nb_tracks = 16 # Number of tracks
 which_tracks = np.arange(16) # Tracks to process
 coeff_pos = np.load(output_path+'coeff_position_poly.npy')
 coeff_width = np.load(output_path+'coeff_width_poly.npy')
 position_poly = [np.poly1d(coeff_pos[i]) for i in range(nb_tracks)]
 width_poly = [np.poly1d(coeff_width[i]) for i in range(nb_tracks)]
-wl_to_px_coeff = np.load(root+'reduction/201806_wavecal/wl_to_px.npy')
-px_to_wl_coeff = np.load(root+'reduction/201806_wavecal/px_to_wl.npy')
+wl_to_px_coeff = np.load(root+'reduction/'+calibration_path+'/wl_to_px.npy')
+px_to_wl_coeff = np.load(root+'reduction/'+calibration_path+'/px_to_wl.npy')
 
 
 spatial_axis = np.arange(dark.shape[0])
@@ -108,7 +109,7 @@ for f in data_list[:50]:
     img.getPhotometry()
     
     ''' Output file'''
-#    img.save(output_path+os.path.basename(f)[:-4]+'.hdf5', '2019-03-19', 'amplitude')
+    img.save(output_path+os.path.basename(f)[:-4]+'.hdf5', '2019-04-30', 'amplitude')
     
     ''' For following the evolution of flux in every tracks '''
 #    img.getTotalFlux()
@@ -117,32 +118,41 @@ for f in data_list[:50]:
     
 amplitude = np.array([selt for elt in amplitude for selt in elt])
 amplitude = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in amplitude])
-#amplitude_fit = np.array(amplitude_fit)
-#integ_raw = np.array(integ_raw)
-#integ_model = np.array(integ_model)
-#integ_windowed = np.array(integ_windowed)
-#residuals_reg = np.array(residuals_reg)
-#residuals_fit = np.array(residuals_fit)
-#cov = np.array(cov)
-#bg_noise = np.array(bg_noise)
-#null = np.array([selt for elt in null for selt in elt])
-#null_err = np.array(null_err)
-
+amplitude_fit = np.array([selt for elt in amplitude_fit for selt in elt])
+amplitude_fit = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in amplitude_fit])
+integ_raw = np.array([selt for elt in integ_raw for selt in elt])
+integ_raw = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in integ_raw])
+integ_model = np.array([selt for elt in integ_model for selt in elt])
+integ_model = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in integ_model])
+integ_windowed = np.array([selt for elt in integ_windowed for selt in elt])
+integ_windowed = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in integ_windowed])
+residuals_reg = np.array([selt for elt in residuals_reg for selt in elt])
+residuals_reg = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in residuals_reg])
+residuals_fit = np.array([selt for elt in residuals_fit for selt in elt])
+residuals_fit = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in residuals_fit])
+cov = np.array([selt for elt in cov for selt in elt])
+cov = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in cov])
+bg_noise = np.array([selt for elt in bg_noise for selt in elt])
+null = np.array([selt for elt in null for selt in elt])
+null = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in null])
+null_err = np.array([selt for elt in null_err for selt in elt])
+null_err = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in null_err])
 
 ''' Miscellaneous ''' 
-#plt.figure()
-#plt.imshow(img.data[0], interpolation='none', aspect='auto')
-#plt.colorbar()
+plt.figure()
+plt.imshow(img.data.mean(axis=0), interpolation='none', aspect='auto')
+plt.colorbar()
 
-#for k in range(1):
-#    plt.figure()
-#    for i in range(16):
-#        plt.subplot(4,4,i+1)
-#        plt.title('Track '+str(i+1))
-#        plt.plot(integ_raw[0,k,:,i], 'o')
-#        plt.plot(integ_windowed[0,k,i], 'd')
-#        plt.plot(integ_model[0,k,i], '+')
-#        plt.grid()
+for k in range(1):
+    plt.figure()
+    for i in range(16):
+        plt.subplot(4,4,i+1)
+        plt.title('Track '+str(i+1))
+        plt.plot(amplitude[k,i,:], '^')
+        plt.plot(integ_raw[k,i,:], 'o')
+        plt.plot(integ_windowed[k,i,:], 'd')
+        plt.plot(integ_model[k,i,:], '+')
+        plt.grid()
 
 #amplitude0 = np.load('amplitude.npy')
 #integ_raw0 = np.load('integ_raw.npy')
