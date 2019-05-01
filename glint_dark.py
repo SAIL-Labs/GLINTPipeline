@@ -48,11 +48,11 @@ def save(path, dic_data, date):
             f.create_dataset('dark/%s'%(key), data=dic_data[key])
             
 ''' Inputs '''
-datafolder = '201806_alfBoo/'
+datafolder = 'simulation/'
 root = "/mnt/96980F95980F72D3/glint_data/"
 data_path = root+datafolder
 dark_list = [data_path+f for f in os.listdir(data_path) if 'dark' in f]
-date = '2018-06-25'
+date = '2019-04-30'
 
 ''' Output '''
 output_path = '/mnt/96980F95980F72D3/glint/reduction/'+datafolder
@@ -71,7 +71,7 @@ if monitor:
 superDark = np.zeros((344,96))
 superNbImg = 0.
 list_hist = []
-bin_hist, step = np.linspace(-2800, 13700, 1001, retstep=True)
+bin_hist, step = np.linspace(-2800, 13700, 2001, retstep=True)
 bin_hist_cent = bin_hist[:-1] + step/2
 
 
@@ -105,15 +105,15 @@ plt.grid()
 plt.xlabel('Dark current (ADU)', size=38)
 plt.ylabel('Count', size=38)
 plt.xticks(size=36);plt.yticks(size=36)
-plt.title('Histogram of the dark current', size=40)
+plt.title('Histogram of the background noise', size=40)
 
 plt.figure()
-plt.semilogy(bin_hist_cent, super_hist)
+plt.semilogy(bin_hist_cent, super_hist, 'o')
 plt.grid()
 plt.xlabel('Dark current (ADU)', size=38)
 plt.ylabel('Count', size=38)
 plt.xticks(size=36);plt.yticks(size=36)
-plt.title('Histogram of the dark current', size=40)
+plt.title('Histogram of the background noise', size=40)
 
 ''' Inspecting non-uniformities '''
 if monitor:
