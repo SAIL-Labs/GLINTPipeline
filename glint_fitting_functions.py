@@ -78,20 +78,22 @@ def load_dark(data):
     
     return hist, bin_edges
     
-def load_data(data):
+def load_data(data, wl_edges=None):
     null_data = [[],[],[],[],[],[]]
     null_err_data = [[],[],[],[],[],[]]
+    beams_couple = []
     photo_data = [[],[],[],[]]
     photo_err_data = [[],[],[],[]]
     wl_scale = []
     
     for d in data:
         with h5py.File(d) as data_file:
-            wl_scale.append(np.array(data_file['null1/wl_scale']))
+            wl_scale.append(np.array(data_file['wl_scale']))
             
             for i in range(6):
                 null_data[i].append(np.array(data_file['null%s/null'%(i+1)]))
                 null_err_data[i].append(np.array(data_file['null%s/null_err'%(i+1)]))
+                if data.index(d) == 0: beams_couple.append(data_file['null%s'%(i+1)].attrs['comment'])
                 
             photo_data[0].append(np.array(data_file['null1/pA'])) # Fill with beam 1 intensity
             photo_data[1].append(np.array(data_file['null1/pB'])) # Fill with beam 2 intensity
@@ -115,9 +117,21 @@ def load_data(data):
     null_err_data = np.array(null_err_data)
     photo_data = np.array(photo_data)
     photo_err_data = np.array(photo_err_data)
-    wl_scale = np.array(wl_scale)
+    wl_scale = np.array(wl_scale)[0]
+    mask = np.arange(wl_scale.size)
     
-    return {'null':null_data, 'photo':photo_data, 'wl_scale':wl_scale, 'null_err':null_err_data, 'photo_err':photo_err_data}
+    if wl_edges != None:
+        wl_min, wl_max = wl_edges
+        mask = np.arange(wl_scale.size)[(wl_scale>=wl_min)&(wl_scale <= wl_max)]
+        
+    null_data = null_data[:,:,mask[0]:mask[-1]+1]
+    null_err_data = null_err_data[:,:,mask[0]:mask[-1]+1]
+    photo_data = photo_data[:,:,mask[0]:mask[-1]+1]
+    wl_scale = wl_scale[mask[0]:mask[-1]+1]
+    
+    return {'null':null_data, 'photo':photo_data, 'wl_scale':wl_scale, 'null_err':null_err_data,\
+            'photo_err':photo_err_data, 'beams couples':beams_couple, 'wl_idx':mask}
+
 
 def getHistogram(data, bins, density, target='cpu'):
     pdf, bin_edges = np.histogram(data, bins=bins, density=density)
@@ -128,15 +142,36 @@ def getHistogram(data, bins, density, target='cpu'):
         
     return pdf, bins_cent
 
-def computeNullDepth0(I1, I2, phase, visibility, dark_null, dark_antinull):
-    Iminus = I1 + I2 - 2 * np.sqrt(I1 * I2) * visibility * np.cos(phase) + dark_null
-    Iplus = I1 + I2 + 2 * np.sqrt(I1 * I2) * visibility * np.cos(phase) + dark_antinull
+def getHistogramOfIntensities(data, bins, split, target='cpu'):
+    pdf_I = [[np.histogram(selt, bins) for selt in elt] for elt in data]
+    bin_edges = np.array([[selt[1] for selt in elt] for elt in pdf_I])
+    pdf_I = np.array([[selt[0] for selt in elt] for elt in pdf_I])
+    
+    bin_edges_interf = bin_edges[:,None,:] * split[:,:,:,None]
+    pdf_I_interf = pdf_I[:,None,:] / np.sum(pdf_I[:,None,:] * np.diff(bin_edges_interf), axis=-1, keepdims=True)
+    
+    bins_cent = bin_edges_interf[:,:,:,:-1] + np.diff(bin_edges_interf[:,:,:,:2])/2.
+    
+    if target=='gpu':
+        pdf_I_interf, bins_cent = cp.asarray(pdf_I_interf, dtype=cp.float32), cp.asarray(bins_cent, dtype=cp.float32)
+    
+    return  pdf_I_interf, bins_cent
+
+def computeNullDepth(I1, I2, wavelength, opd, visibility, dark_null, dark_antinull, kappa_l):
+    wave_number = 1./wavelength
+    Iminus = I1*np.sin(kappa_l)**2 + I2*np.cos(kappa_l)**2 - \
+        np.sqrt(I1 * I2) * np.sin(2*kappa_l) * visibility * np.sin(2*np.pi*wave_number*opd-np.pi/2) + dark_null
+    Iplus = I1*np.cos(kappa_l)**2 + I2*np.sin(kappa_l)**2 + \
+        np.sqrt(I1 * I2) * np.sin(2*kappa_l) * visibility * np.sin(2*np.pi*wave_number*opd-np.pi/2) + dark_antinull
     null = Iminus / Iplus
     return null
 
-def computeNullDepth(I1, I2, phase, visibility, dark_null, dark_antinull):
-    Iminus = I1 + I2 - 2 * np.sqrt(I1 * I2) * visibility * np.cos(phase) + dark_null
-    Iplus = I1 + I2 + 2 * np.sqrt(I1 * I2) * visibility * np.cos(phase) + dark_antinull
-    null = Iminus / Iplus
-    return null
-
+def get_splitting_coeff(path, wl_idx):
+    if path == 'mock':
+        split = np.ones((4,3,96))
+    else:
+        split = path
+        
+    split = split[:,:,wl_idx[0]:wl_idx[-1]+1]
+        
+    return split
