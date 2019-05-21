@@ -50,6 +50,7 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
 
     # With fitted amplitude
     for k in range(nbimg):
+#        print(k)
         for i in which_tracks:
             for j in range(len(spectral_axis)):
                 gaus = partial(gaussian, loc=positions[i,j], sig=widths[i,j])
@@ -80,31 +81,31 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
 #                        debug.append([0, k, i, j])
 #                    if abs(popt2[0]) > 1.e+4:
 #                        debug.append([1, k, i, j])
-#                if j == 3:
-#                    plt.figure()
-#                    plt.subplot(311)
-#                    plt.plot(slices_axes[i], slices[k,j,i], label='data')
-#                    plt.plot(slices_axes[i], gaus(slices_axes[i], *popt), 'o', label='curve_fit '+str(popt[0]))
-#                    plt.plot(slices_axes[i], popt2 [0]* simple_gaus, 'd', label='linear reg '+str(popt2[0]))
-#                    plt.xlabel('Spatial position (px)')
-#                    plt.ylabel('Amplitude')
-#                    plt.grid()
-#                    plt.legend(loc='best')
-#                    plt.title('Frame '+str(k)+'/ Track '+str(i+1)+'/ Column '+str(j))
-#                    plt.subplot(312)
-#                    plt.plot(slices[k,j,i], residuals_fit[k,i,j], 'o', label='fit')
-#                    plt.plot(slices[k,j,i], residuals_reg[k,i,j], 'd', label='linear reg')
-#                    plt.xlabel('Amplitude')
-#                    plt.ylabel('Residual')
-#                    plt.grid()
-#                    plt.legend(loc='best')
-#                    plt.subplot(313)
-#                    plt.plot(slices_axes[i], residuals_fit[k,i,j], 'o', label='fit')
-#                    plt.plot(slices_axes[i], residuals_reg[k,i,j], 'd', label='linear reg')
-#                    plt.xlabel('Spatial position (px)')
-#                    plt.ylabel('Residual')
-#                    plt.grid()
-#                    plt.legend(loc='best')
+                if j == 53 and k == 0:
+                    plt.figure()
+                    plt.subplot(311)
+                    plt.plot(slices_axes[i], slices[k,j,i], 'o', label='data')
+                    plt.plot(slices_axes[i], gaus(slices_axes[i], *popt), '+-', label='curve_fit '+str(popt[0]))
+                    plt.plot(slices_axes[i], popt2 [0]* simple_gaus, '+--', label='linear reg '+str(popt2[0]))
+                    plt.xlabel('Spatial position (px)')
+                    plt.ylabel('Amplitude')
+                    plt.grid()
+                    plt.legend(loc='best')
+                    plt.title('Frame '+str(k)+'/ Track '+str(i+1)+'/ Column '+str(j))
+                    plt.subplot(312)
+                    plt.plot(slices[k,j,i], residuals_fit[k,i,j], 'o', label='fit')
+                    plt.plot(slices[k,j,i], residuals_reg[k,i,j], 'd', label='linear reg')
+                    plt.xlabel('Amplitude')
+                    plt.ylabel('Residual')
+                    plt.grid()
+                    plt.legend(loc='best')
+                    plt.subplot(313)
+                    plt.plot(slices_axes[i], residuals_fit[k,i,j], 'o', label='fit')
+                    plt.plot(slices_axes[i], residuals_reg[k,i,j], 'd', label='linear reg')
+                    plt.xlabel('Spatial position (px)')
+                    plt.ylabel('Residual')
+                    plt.grid()
+                    plt.legend(loc='best')
 #                    
 #                    if switch == True:
 #                        temp = gaus(slices_axes[i], 1.)
@@ -117,11 +118,11 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
 class File(object):
     ''' Management of the HDF5 datacube'''
     
-    def __init__(self, data=None, nbimg=None, transpose=True):
+    def __init__(self, data=None, nbimg=None, transpose=False):
         self.loadfile(data, nbimg, transpose)
             
             
-    def loadfile(self, data=None, nbimg=None, transpose=True):
+    def loadfile(self, data=None, nbimg=None, transpose=False):
         ''' Loading of FITS file 
         -----------------
         data : string, path to data to process.
@@ -141,8 +142,12 @@ class File(object):
                     self.data = self.data[:nbimg]
                     self.nbimg  = nbimg
                     self.index = np.arange(self.nbimg)
-                if transpose: self.data = np.transpose(self.data, axes=(0,2,1))
-                
+                if transpose: 
+#                    print('Transpose')
+#                    print(self.data.shape)
+                    self.data = np.transpose(self.data, axes=(0,2,1))
+#                    print(self.data.shape)
+                    
         else:
             print("Mock data created")
             self.header = {}
@@ -150,11 +155,15 @@ class File(object):
             self.data = np.zeros((self.nbimg,344,96))
             self.index = np.arange(self.nbimg)
 
-    def cosmeticsFrames(self, dark):
-        self.data = self.data - dark
-        self.data = self.data - self.data[:,:,:20].mean(axis=(1,2))[:,None,None]
-        self.bg_std = self.data[:,:,:20].std(axis=(1,2))
-        self.bg_var = self.data[:,:,:20].var(axis=(1,2))
+    def cosmeticsFrames(self, dark, nonoise=False):
+        if nonoise:
+            self.bg_std = np.zeros(self.data.shape[0])
+            self.bg_var = np.zeros(self.data.shape[0])
+        else:
+            self.data = self.data - dark
+            self.data = self.data - self.data[:,:,:20].mean(axis=(1,2))[:,None,None]
+            self.bg_std = self.data[:,:,:20].std(axis=(1,2))
+            self.bg_var = self.data[:,:,:20].var(axis=(1,2))
             
     def binning(self, binning, axis=0, avg=False):
         '''
@@ -263,8 +272,8 @@ class Null(File):
                     
         return amplitude, integ_model, integ_windowed, residuals_reg, weights
     
-    def getTotalFlux(self):
-        self.fluxes = np.sum(self.slices, axis=(1,3))
+    def getTotalFlux(self, idx_edges):
+        self.fluxes = np.sum(self.slices[:,idx_edges[0]:idx_edges[1]], axis=(1,3))
         
     def matchSpectralChannels(self, wl_to_px_coeff, px_to_wl_coeff, which_tracks):
         '''
@@ -399,7 +408,7 @@ class Null(File):
         mode : string, which estimator to use
         '''
         
-        beams_couple = {'null1':' Beams 1/2', 'null2':'Beams 2/3', 'null3':'Beams 1/4',\
+        beams_couple = {'null1':'Beams 1/2', 'null2':'Beams 2/3', 'null3':'Beams 1/4',\
                         'null4':'Beams 3/4', 'null5':'Beams 1/3', 'null6':'Beams 2/4'}
         
         if mode == 'amplitude':
@@ -441,6 +450,9 @@ class Null(File):
             f.attrs['date'] = date
             f.attrs['nbimg'] = self.nbimg
             
+            f.create_dataset('wl_scale', data=self.wl_scale.mean(axis=0))
+            f['wl_scale'].attrs['comment'] = 'wl in nm'
+            
             for i in range(6):
                 f.create_group('null%s'%(i+1))
                 f.create_dataset('null%s/null'%(i+1), data=arrs[i][0])
@@ -449,7 +461,6 @@ class Null(File):
                 f.create_dataset('null%s/pA_err'%(i+1), data=arrs[i][3])
                 f.create_dataset('null%s/pB'%(i+1), data=arrs[i][4])
                 f.create_dataset('null%s/pB_err'%(i+1), data=arrs[i][5])
-                f.create_dataset('null%s/wl_scale'%(i+1), data=self.wl_scale.mean(axis=0))
                 
                 f['null%s'%(i+1)].attrs['comment'] = beams_couple['null%s'%(i+1)]
                 f['null%s/null'%(i+1)].attrs['comment'] = 'python dim : (nb frame, wl channel)'
@@ -458,5 +469,5 @@ class Null(File):
                 f['null%s/pA_err'%(i+1)].attrs['comment'] = 'python dim : (nb frame, wl channel)'
                 f['null%s/pB'%(i+1)].attrs['comment'] = 'python ndim : (nb frame, wl channel)'
                 f['null%s/pB_err'%(i+1)].attrs['comment'] = 'python dim : (nb frame, wl channel)'
-                f['null%s/wl_scale'%(i+1)].attrs['comment'] = 'wl in nm'
+                
                 

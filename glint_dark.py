@@ -71,9 +71,20 @@ if monitor:
 superDark = np.zeros((344,96))
 superNbImg = 0.
 list_hist = []
-bin_hist, step = np.linspace(-2800, 13700, 2001, retstep=True)
-bin_hist_cent = bin_hist[:-1] + step/2
+edge_min, edge_max = 0, 0
 
+print('Setting common bin edges to all dark frames')
+for f in dark_list[:]:
+    dark0 = glint_classes.File(f)
+    data = dark0.data - dark0.data.mean(axis=(1,2))[:,None,None]
+    edge_max = max(edge_max, data.max())
+    edge_min = min(edge_min, data.min())
+
+del data, dark0
+edge_min, edge_max = int(edge_min)-1, int(edge_max)+1
+
+bin_hist, step = np.linspace(edge_min, edge_max, edge_max-edge_min, retstep=True)
+bin_hist_cent = bin_hist[:-1] + step/2
 
 for f in dark_list[:]:
     print("Process of : %s (%d / %d)" %(f, dark_list.index(f)+1, len(dark_list)))

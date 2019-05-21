@@ -19,11 +19,20 @@ warnings.filterwarnings(action="ignore", category=np.VisibleDeprecationWarning)
 def gaussian(x, A, loc, sig):
     return A * np.exp(-(x-loc)**2/(2*sig**2))
 
+''' Settings '''
+no_noise = False
+nb_img = None
+debug = False
+save = False
+nb_files = 100
+idx_edges = (40,45)
+idx_edges2 = (50,55)
+
 ''' Inputs '''
-datafolder = 'simulation/'
+datafolder = '201806_alfBoo/'
 root = "/mnt/96980F95980F72D3/glint/"
 data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f]
+data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f][:nb_files]
 
 ''' Output '''
 output_path = root+'reduction/'+datafolder
@@ -64,37 +73,24 @@ residuals_fit = []
 cov = []
 bg_noise = []
 fluxes = np.zeros((1,16))
+fluxes2 = np.zeros((1,16))
 null = []
 null_err = []
 
 ''' Start the data processing '''
-nb_frames = 0.
-for f in data_list[:50]:
+nb_frames = 0
+for f in data_list:
     print("Process of : %s (%d / %d)" %(f, data_list.index(f)+1, len(data_list)))
-    img = glint_classes.Null(f)
+    img = glint_classes.Null(f, nbimg=nb_img, transpose=True)
     
     ''' Process frames '''
-    img.cosmeticsFrames(dark)
+    img.cosmeticsFrames(dark, no_noise)
     
     ''' Insulating each track '''
     img.insulateTracks(channel_pos, sep, spatial_axis)
 
     ''' Measurement of flux per frame, per spectral channel, per track '''
-    img.getSpectralFlux(which_tracks, spectral_axis, position_poly, width_poly, debug=0)
-               
-    amplitude.append(img.amplitude)
-    integ_model.append(img.integ_model)
-    integ_windowed.append(img.integ_windowed)
-    residuals_reg.append(img.residuals_reg)
-    bg_noise.append(img.bg_std)
-    integ_raw.append(img.raw)
-    
-    try: # if debug mode TRUE in getSpectralFlux method
-        residuals_fit.append(img.residuals_fit)
-        cov.append(img.cov)
-        amplitude_fit.append(img.amplitude_fit)
-    except AttributeError:
-        pass
+    img.getSpectralFlux(which_tracks, spectral_axis, position_poly, width_poly, debug=debug)
     
     ''' Map the spectral channels between every chosen tracks before computing 
     the null depth'''
@@ -102,19 +98,39 @@ for f in data_list[:50]:
     
     ''' Compute null depth '''
     img.computeNullDepth()
-    null.append([img.null1, img.null2, img.null3, img.null4])
-    null_err.append([img.null1_err, img.null2_err, img.null3_err, img.null4_err])
+    null_depths = np.array([img.null1, img.null2, img.null3, img.null4])
+    null_depths_err = np.array([img.null1_err, img.null2_err, img.null3_err, img.null4_err])
     
     ''' Measure flux in photometric channels '''
     img.getPhotometry()
     
     ''' Output file'''
-    img.save(output_path+os.path.basename(f)[:-4]+'.hdf5', '2019-04-30', 'amplitude')
+    if save:
+        img.save(output_path+os.path.basename(f)[:-4]+'.hdf5', '2019-04-30', 'amplitude')
+
+    if debug:
+        amplitude.append(img.amplitude)
+        integ_model.append(img.integ_model)
+        integ_windowed.append(img.integ_windowed)
+        residuals_reg.append(img.residuals_reg)
+        bg_noise.append(img.bg_std)
+        integ_raw.append(img.raw)
+        null.append(null_depths)
+        null_err.append(null_depths_err)
+        
+        try: # if debug mode TRUE in getSpectralFlux method
+            residuals_fit.append(img.residuals_fit)
+            cov.append(img.cov)
+            amplitude_fit.append(img.amplitude_fit)
+        except AttributeError:
+            pass
     
     ''' For following the evolution of flux in every tracks '''
-#    img.getTotalFlux()
-#    fluxes = np.vstack((fluxes, img.fluxes))
-#    nb_frames += img.nbimg
+    img.getTotalFlux(idx_edges)
+    fluxes = np.vstack((fluxes, img.fluxes))
+    img.getTotalFlux(idx_edges2)
+    fluxes2 = np.vstack((fluxes, img.fluxes))
+    nb_frames += img.nbimg
     
 amplitude = np.array([selt for elt in amplitude for selt in elt])
 amplitude = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in amplitude])
@@ -134,17 +150,52 @@ cov = np.array([selt for elt in cov for selt in elt])
 cov = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in cov])
 bg_noise = np.array([selt for elt in bg_noise for selt in elt])
 null = np.array([selt for elt in null for selt in elt])
-null = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in null])
 null_err = np.array([selt for elt in null_err for selt in elt])
-null_err = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in null_err])
+fluxes = fluxes[1:]
+fluxes2 = fluxes2[1:]
 
 ''' Miscellaneous ''' 
+fluxes = np.array([fluxes[:,15], fluxes[:,13], fluxes[:,2], fluxes[:,0]])/nb_frames
+fluxes -= np.mean(fluxes, axis=-1)[:,None]
+
+flux_histo = [np.histogram(elt, bins=int(np.size(elt)**0.5)) for elt in fluxes]
+flux_edges = np.array([elt[1] for elt in flux_histo])
+flux_histo = np.array([elt[0] for elt in flux_histo])
+flux_histo = flux_histo / np.sum(flux_histo, axis=-1)[:,None]
+
+fluxes2 = np.array([fluxes2[:,15], fluxes2[:,13], fluxes2[:,2], fluxes2[:,0]])/nb_frames
+fluxes2 -= np.mean(fluxes2, axis=-1)[:,None]
+
+flux2_histo = [np.histogram(elt, bins=int(np.size(elt)**0.5)) for elt in fluxes2]
+flux2_edges = np.array([elt[1] for elt in flux2_histo])
+flux2_histo = np.array([elt[0] for elt in flux2_histo])
+flux2_histo = flux2_histo / np.sum(flux2_histo, axis=-1)[:,None]
+
+fluxes_dk = np.load('fluxes_dark.npy')
+fluxes_dk_histo = [np.histogram(elt, bins=int(np.size(elt)**0.5)) for elt in fluxes_dk]
+fluxes_dk_edges = np.array([elt[1] for elt in fluxes_dk_histo])
+fluxes_dk_histo = np.array([elt[0] for elt in fluxes_dk_histo])
+fluxes_dk_histo = fluxes_dk_histo / np.sum(fluxes_dk_histo, axis=-1)[:,None]
+
+plt.figure()
+plt.suptitle('Histogram of fluxes')
+for i in range(4):
+    plt.subplot(2,2,i+1)
+    plt.title('P%s'%(i+1))
+    plt.plot(flux_edges[i,:-1], flux_histo[i], 'o')
+    plt.plot(flux2_edges[i,:-1], flux2_histo[i], 'o')
+    plt.plot(fluxes_dk_edges[i,:-1], fluxes_dk_histo[i], 'o')    
+    plt.grid()
+
+
 plt.figure()
 plt.imshow(img.data.mean(axis=0), interpolation='none', aspect='auto')
 plt.colorbar()
+plt.title('Avg frame')
 
 for k in range(1):
     plt.figure()
+    plt.suptitle('Amplitude respect to different methods')
     for i in range(16):
         plt.subplot(4,4,i+1)
         plt.title('Track '+str(i+1))
@@ -168,6 +219,7 @@ for k in range(1):
 #        plt.plot(integ_raw0[0,k,:,i], 'd')
 #        plt.grid()
 plt.figure()
+plt.suptitle('Amplitude')
 for i in range(16):
     plt.subplot(4,4,i+1)
     plt.title('Track '+str(i+1))
@@ -209,21 +261,22 @@ for i in range(16):
 #        plt.ylabel('Std of curve_fit')
 #        plt.grid()
 
-for i in range(2):
+for i in range(1):
     plt.figure()
+    plt.suptitle('Null')
     plt.subplot(221)
-    plt.errorbar(img.wl_scale[0], null[0][0][i], yerr=null_err[0][0][i], fmt='o')
+    plt.errorbar(img.wl_scale[0], null[0][i], yerr=null_err[0][i], fmt='o')
     plt.grid()
     plt.ylim(-5,5)
     plt.subplot(222)
-    plt.errorbar(img.wl_scale[0], null[0][1][i], yerr=null_err[0][1][i], fmt='d')
+    plt.errorbar(img.wl_scale[0], null[1][i], yerr=null_err[1][i], fmt='d')
     plt.grid()
     plt.ylim(-5,5)
     plt.subplot(223)
-    plt.errorbar(img.wl_scale[0], null[0][2][i], yerr=null_err[0][3][i], fmt='s')
+    plt.errorbar(img.wl_scale[0], null[2][i], yerr=null_err[3][i], fmt='s')
     plt.grid()
     plt.ylim(-5,5)
     plt.subplot(224)
-    plt.errorbar(img.wl_scale[0], null[0][3][i], yerr=null_err[0][3][i], fmt='+')
+    plt.errorbar(img.wl_scale[0], null[3][i], yerr=null_err[3][i], fmt='+')
     plt.grid()
     plt.ylim(-5,5)
