@@ -30,14 +30,18 @@ def gaussian(x, A, x0, sig):
 def polynom(x, *args):
     p = np.poly1d([*args])
     return p(x)
+
+''' Settings '''
+save = False
+
 # =============================================================================
 # Get the shape (position and width) of all tracks
 # =============================================================================
 print("Getting the shape (position and width) of all tracks")
 ''' Inputs '''
 datafolder = '201806_alfBoo/'
-root = "C:/glint/"
-data_path = 'C:/glint_data/'+datafolder
+root = "/mnt/96980F95980F72D3/glint/"
+data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
 data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f]
 
 ''' Output '''
@@ -257,16 +261,17 @@ width_poly = [np.poly1d(coeff_width_poly[i]) for i in range(nb_tracks)]
 #    plt.ylabel('Residual (%)')
 #    plt.ylim(-20,20)
 
-np.save(output_path+'coeff_position_poly', coeff_position_poly)
-np.save(output_path+'coeff_width_poly', coeff_width_poly)
+if save:
+    np.save(output_path+'coeff_position_poly', coeff_position_poly)
+    np.save(output_path+'coeff_width_poly', coeff_width_poly)
 plt.close('all')
 # =============================================================================
 # Spectral calibration
 # =============================================================================
 print("-----------------------------\nSpectral calibration")
 datafolder = '201806_wavecal/'
-root = "C:/glint/"
-data_path = 'C:/glint_data/'+datafolder
+root = "/mnt/96980F95980F72D3/glint/"
+data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
 
 ''' Output '''
 output_path = root+'reduction/'+datafolder
@@ -287,7 +292,7 @@ for elt in data_list[:]:
     superNbImg = 0.
      
     for f in elt:
-        img = glint_classes.File(f)        
+        img = glint_classes.File(f, transpose=True)        
         img.data = img.data - dark
         super_img = super_img + img.data.sum(axis=0)
         superNbImg = superNbImg + img.nbimg
@@ -325,8 +330,10 @@ calib_pos = np.array(calib_pos)
 coeff_poly_wl_to_px = np.array([np.polyfit(wavelength, calib_pos[:,i,0], deg=1) for i in range(nb_tracks)]) # detector ersolution is around 5 nm/px
 coeff_poly_px_to_wl = np.array([np.polyfit(calib_pos[:,i,0], wavelength, deg=1) for i in range(nb_tracks)])
 poly_wl = [np.poly1d(coeff_poly_wl_to_px[i]) for i in range(nb_tracks)]
-np.save(output_path+'wl_to_px', coeff_poly_wl_to_px)
-np.save(output_path+'px_to_wl', coeff_poly_px_to_wl)
+
+if save:
+    np.save(output_path+'wl_to_px', coeff_poly_wl_to_px)
+    np.save(output_path+'px_to_wl', coeff_poly_px_to_wl)
 
 fwhm = 2 * np.sqrt(2*np.log(2)) * calib_pos[:,:,1] * abs(coeff_poly_px_to_wl[None,:,0])
 print('Spectral resolution for')

@@ -196,6 +196,11 @@ class Null(File):
         sep : float, separation between the tracks
         spatial_axis : array, coordinates of each tracks along the spatial axis on the detector
                          (perpendicular to the spectral one)
+                         
+        Returns:
+            self.slices: array (nb of frames, spectral channels, tracks, width), flux per track. 
+            self.slices_axes: array (spectral channels, tracks, width), spatial axis of each track
+                             
         '''
         self.slices = np.array([self.data[:,np.int(np.around(pos-sep/2)):np.int(np.around(pos+sep/2)),:] for pos in channel_pos])
         self.slices = np.transpose(self.slices, (1,3,0,2))

@@ -19,8 +19,9 @@ import matplotlib.pyplot as plt
 import os
 import glint_classes
 import h5py
+from timeit import default_timer as time
 
-def save(path, dic_data, date):
+def saveFile(path, dic_data, date):
     '''
     Save the histogram of the dark
     ------------------------------
@@ -46,12 +47,24 @@ def save(path, dic_data, date):
         f.create_group('dark')
         for key in dic_data.keys():
             f.create_dataset('dark/%s'%(key), data=dic_data[key])
-            
+
+def getHistogram(data, bins):
+    if len(data.shape) != 1:
+        data = np.ravel(data)
+        
+    histo, bin_edges = np.histogram(np.ravel(data), bins=bins)
+    return histo
+           
+''' Settings '''
+save = False
+monitor = False # Set True to map the average, variance of relative difference of set of dark current datacubes
+nb_files = 2
+
 ''' Inputs '''
 datafolder = 'simulation/'
 root = "/mnt/96980F95980F72D3/glint_data/"
 data_path = root+datafolder
-dark_list = [data_path+f for f in os.listdir(data_path) if 'dark' in f]
+dark_list = [data_path+f for f in os.listdir(data_path) if 'dark' in f][:nb_files]
 date = '2019-04-30'
 
 ''' Output '''
@@ -61,7 +74,6 @@ if not os.path.exists(output_path):
     
 ''' Monitoring '''
 ''' Check the non-uniformities and defect pixels of the darks '''
-monitor = False # Set True to map the average, variance of relative difference of set of dark current datacubes
 if monitor:
     avg_dark = [] # Average dark current (in count) per frame
     var_dark = [] # Variance of dark current (in count) per frame
@@ -83,19 +95,32 @@ for f in dark_list[:]:
 del data, dark0
 edge_min, edge_max = int(edge_min)-1, int(edge_max)+1
 
+''' Define bounds of each track '''
+y_ends = [33, 329] # row of top and bottom-most Track
+sep = (y_ends[1] - y_ends[0])/(16-1)
+channel_pos = np.around(np.arange(y_ends[0], y_ends[1]+sep, sep))
+
+
 bin_hist, step = np.linspace(edge_min, edge_max, edge_max-edge_min, retstep=True)
 bin_hist_cent = bin_hist[:-1] + step/2
+hist_slices = []
 
 for f in dark_list[:]:
     print("Process of : %s (%d / %d)" %(f, dark_list.index(f)+1, len(dark_list)))
-    dark = glint_classes.File(f)
-    
+    dark = glint_classes.Null(f)
+   
     superDark = superDark + dark.data.sum(axis=0)
     superNbImg = superNbImg + dark.nbimg
-
-    hist = np.histogram(np.ravel(dark.data - dark.data.mean(axis=(1,2))[:,None,None]), bins=bin_hist)
-    list_hist.append(hist[0])
+    dark.data = dark.data - dark.data.mean(axis=(1,2))[:,None,None]
     
+    spatial_axis = np.arange(dark.data.shape[0])
+    dark.insulateTracks(channel_pos, sep, spatial_axis)
+    
+    histo_per_file = []
+    for k in range(16):
+        histo_per_file.append(getHistogram(np.ravel(dark.slices[:,:,k,:]), bin_hist))
+    hist_slices.append(histo_per_file)
+          
     if monitor:
         avg_dark.append(dark.data.mean(axis=(1,2)))
         var_dark.append(dark.data.var(axis=(1,2)))
@@ -105,10 +130,12 @@ if superNbImg != 0.:
     superDark /= superNbImg
     np.save(output_path+'superdark', superDark)
 
-list_hist = np.array(list_hist)
-super_hist = np.sum(list_hist, axis=0)
 
-save(output_path+'hist_dark.hdf5', {'histogram':super_hist, 'bins_edges':bin_hist}, date)
+hist_slices = np.array(hist_slices)
+super_hist = np.sum(hist_slices, axis=0)
+
+if save:
+    saveFile(output_path+'hist_dark.hdf5', {'histogram':super_hist, 'bins_edges':bin_hist}, date)
 
 plt.figure()
 plt.plot(bin_hist_cent, super_hist)
