@@ -26,6 +26,7 @@ from scipy.optimize import curve_fit, leastsq, least_squares
 from timeit import default_timer as time
 import os
 import glint_fitting_functions as gff
+from scipy.special import erf
 
    
 def MCfunction(null_bins_edges, visibility, mu_opd, sig_opd):
@@ -38,7 +39,6 @@ def MCfunction(null_bins_edges, visibility, mu_opd, sig_opd):
     global nonoise
 
     sig_opd = abs(sig_opd)
-    null_bins_width = null_bins_edges[1] - null_bins_edges[0]
 
     count += 1
     print(count, visibility, mu_opd, sig_opd)     
@@ -75,7 +75,7 @@ def MCfunction(null_bins_edges, visibility, mu_opd, sig_opd):
             pdf_null = cp.histogram(rv_null.astype(cp.float32), cp.asarray(null_bins_edges, dtype=cp.float32))[0]
             accum_pdf[k] += pdf_null
     
-    accum_pdf = accum_pdf / cp.sum(accum_pdf * null_bins_width, axis=-1, keepdims=True)
+    accum_pdf = accum_pdf / cp.sum(accum_pdf, axis=-1, keepdims=True)
     
     accum_pdf = cp.asnumpy(accum_pdf)
     return accum_pdf.ravel()
@@ -86,6 +86,12 @@ def error_function(params, x, y):
     print(count, params)
     return y - MCfunction(x, *params)
 
+def expo(x, na, l, ampl):
+    y = ampl * np.exp(-l*(x-na))
+    y[x<na] = 0
+    return y
+    
+    
 ''' Settings '''  
 n_loops = 1000 # number of loops
 n_samp = int(1e+7) # number of samples per loop
@@ -101,8 +107,10 @@ file_path = root+'reduction/'+datafolder
 data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and not 'dark' in f][10:]
 
 data_dark = gff.load_dark(root+'reduction/'+datafolder+'hist_dark.hdf5')
-data = gff.load_data(data_list, wl_edges=(1550, 1555))
-data_null = np.transpose(data['null'], axes=(0,2,1))
+data = gff.load_data(data_list, wl_edges=(1550, 1560))
+data_null = np.transpose(data['null'], axes=(0,2,1)) # Axes: baselines, wavelength, frames
+data_null_err = np.transpose(data['null_err'], axes=(0,2,1)) # Axes: baselines, wavelength, frames
+data_null_err[:] = 0.05*data_null
 data_photo = np.transpose(data['photo'], axes=(0,2,1))
 wl_scale = data['wl_scale'].astype(np.float32)
 pdf_dark, bins_dark = data_dark
@@ -137,30 +145,42 @@ pdf_I_interf, bins_cent_I_interf = gff.getHistogramOfIntensities(data_photo, n_b
 ''' Prepare accumulated and real histogram '''
 null_bins_edges, null_bins_width = np.linspace(0, 1, n_bins+1, retstep=True, dtype=np.float32)
 null_bins_cent = null_bins_edges[:-1] + null_bins_width/2
-null_hist = np.array([[np.histogram(selt, bins=null_bins_edges)[0] for selt in elt] for elt in data_null])
-null_hist = null_hist / np.sum(null_hist * null_bins_width, axis=-1)[:,:,None]
-null_hist_gpu = cp.asarray(null_hist, dtype=cp.float32)
-null_bins_edges_gpu = cp.asarray(null_bins_edges, dtype=cp.float32)
+null_hist = np.array([[np.histogram(selt, bins=null_bins_edges)[0] for selt in elt] for elt in data_null]) # Axes: outputs, wavelength, bins
 
-pdf_I1, bins_cent_I1 = pdf_I_interf[0,0], bins_cent_I_interf[0,0]
-pdf_I2, bins_cent_I2 = pdf_I_interf[1,0], bins_cent_I_interf[1,0]
+weight_null_hist = 0.5*np.array([[[erf((null_bins_edges[1:]-data_null[i,j,k])/(2**0.5 * data_null_err[i,j,k])) - erf((null_bins_edges[:-1]-data_null[i,j,k])/(2**0.5 * data_null_err[i,j,k])) \
+                               for k in range(data_null.shape[2])] \
+                                for j in range(data_null.shape[1])] \
+                                for i in range(data_null.shape[0])])
+var_null_hist = np.sum(weight_null_hist * (1-weight_null_hist), axis=2)
+var_null_hist /= data_null.shape[2]**2
+var_null_hist = var_null_hist**0.5
+var_null_hist2 = var_null_hist.copy()
+    
+null_hist = null_hist / np.sum(null_hist, axis=-1)[:,:,None]
+var_null_hist2[var_null_hist>=null_hist] = null_hist[var_null_hist>=null_hist]*0.9999
 
+#null_hist_gpu = cp.asarray(null_hist, dtype=cp.float32)
+#null_bins_edges_gpu = cp.asarray(null_bins_edges, dtype=cp.float32)
+#
+#pdf_I1, bins_cent_I1 = pdf_I_interf[0,0], bins_cent_I_interf[0,0]
+#pdf_I2, bins_cent_I2 = pdf_I_interf[1,0], bins_cent_I_interf[1,0]
+#
 #rv_dark_null = gff.rv_generator(bins_cent_I1[0], pdf_I1[0], n_samp)
 #rv_dark_null = rv_dark_null.astype(np.float32)
 #histo = list(np.histogram(cp.asnumpy(rv_dark_null), 1000))
 #histo[0] = histo[0] / np.sum(histo[0]*np.diff(histo[1]))
-#
+
 #plt.figure()
 #plt.plot(cp.asnumpy(bins_cent_I1[0]), cp.asnumpy(pdf_I1[0]), 'o-')
 #plt.plot(histo[1][:-1]+np.diff(histo[1])[:1], histo[0], '+-')
 #plt.grid()
 
-count = 0.
-mu_opd = 1550/2.
-sig_opd = 40.
-na = 0.1
-visibility = np.array([(1-na)/(1+na)], dtype=np.float32)[0]
-kap_l = kappa_l[0]
+#count = 0.
+#mu_opd = 1550/2.
+#sig_opd = 40.
+#na = 0.1
+#visibility = np.array([(1-na)/(1+na)], dtype=np.float32)[0]
+#kap_l = kappa_l[0]
 
 #start = time()
 #z = MCfunction(null_bins_edges, visibility, mu_opd, sig_opd)
@@ -170,58 +190,79 @@ kap_l = kappa_l[0]
 #
 #rel_diff = abs(null_hist[0,0]-z[0])/null_hist[0,0]*100
 #rel_diff[np.isnan(rel_diff)] = 0.
-#
-#for w in data['wl_idx']:
-#    plt.figure()
+
+popt, pcov = curve_fit(expo, null_bins_cent, null_hist[0,0], p0=[0.1, 25,  max(null_hist[0,0])])
+
+for w in range(len(wl_scale))[:1]:
+    plt.figure()
 #    plt.subplot(211)
-#    plt.plot(null_bins_cent, null_hist[0,0], 'o')
+#    plt.errorbar(null_bins_cent, null_hist[0,w], yerr=var_null_hist[0,w], fmt='o')
+    plt.plot(null_bins_cent, null_hist[0,w], 'o')    
+    plt.plot(null_bins_cent, expo(null_bins_cent, *popt), '+')
 #    plt.plot(null_bins_cent, z[0], '+')
-#    plt.grid()
+    plt.grid()
 #    plt.subplot(212)
 #    plt.plot(null_bins_cent, rel_diff, 'o')
 #    plt.grid()
 #
 #print(np.mean(rel_diff[~np.isinf(rel_diff)]), np.std(rel_diff[~np.isinf(rel_diff)]), np.max(rel_diff[~np.isinf(rel_diff)]), np.min(rel_diff[~np.isinf(rel_diff)]))    
 
-''' Model fitting '''
-count = 0
-initial_guess = [(1-null_bins_edges[np.argmax(null_hist[0,0])])/(1+null_bins_edges[np.argmax(null_hist[0,0])]), mu_opd+0.1, sig_opd+0.1]
-initial_guess = np.array(initial_guess, dtype=np.float32)
-
-start = time()
-popt = curve_fit(MCfunction, null_bins_edges, null_hist[0].ravel(), p0=initial_guess, epsfcn = null_bins_width)
-stop = time()
-print('Duration:', stop - start)
-#popt = leastsq(error_function, initial_guess, epsfcn = null_bins_width, args=(null_bins_edges, data_hist), full_output=1)
-#popt = least_squares(error_function, initial_guess, diff_step = null_bins_width, args=(null_bins_edges, data_hist), verbose=1, method='lm')
-#popt = least_squares(error_function, initial_guess, diff_step = null_bins_width, \
-#                     bounds=((0.,-np.pi, -np.pi/2.),(1., np.pi, np.pi/2.)), args=(null_bins_edges, data_hist), verbose=2, method='trf')
-
-real_params = np.array([visibility, mu_opd, sig_opd])
-rel_err = (real_params - popt[0]) / real_params * 100
-print('rel_err', rel_err)
-out = MCfunction(null_bins_edges, *popt[0])
-
-z = MCfunction(null_bins_edges, *real_params)
-
-na_opt = (1-popt[0][0])/(1+popt[0][0])
-f = plt.figure()
-ax = f.add_subplot(111)
-plt.title('Histogram of the null depth', size=40)
-plt.plot(null_bins_cent, null_hist[0,0], 'o', markersize=10, label='Data')
-plt.plot(null_bins_cent, out, '-', lw=5, alpha=0.8, label='Fit')
-#plt.plot(null_bins_cent, z, '.', label='Expected')
-plt.grid()
-plt.legend(loc='best', fontsize=35)
-plt.xlabel('Null depth', size=40)
-plt.ylabel('Frequency', size=40)
-plt.xticks(size=35);plt.yticks(size=35)
-txt1 = 'Fitted values:(%.3f s)\n'%(stop-start) + 'Na = %.5f (%.3f%%)'%(na_opt, rel_err[0]) + '\n' + r'$\mu_{OPD} = %.3f$ nm (%.3f%%)'%(popt[0][1], rel_err[1]) + '\n' + r'$\sigma_{OPD} = %.3f$ nm (%.3f%%)'%(popt[0][2], rel_err[2])
-txt2 = 'Expected Values:\n' + 'Na = %.5f'%(na) + '\n' + r'$\mu_{OPD} = %.3f$ nm'%(mu_opd) + '\n' + r'$\sigma_{OPD} = %.3f$ nm'%(sig_opd)
-plt.text(0.3,0.5, txt2, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
-plt.text(0.6,0.5, txt1, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
-
-
-chi2 = np.sum((null_hist[0,0] - out)**2/(null_hist[0,0].size-popt[0].size))
-khi2 = np.sum((null_hist[0,0] - z)**2/(null_hist[0,0].size-popt[0].size))
-print('Chi2', chi2, khi2)
+#''' Model fitting '''
+#count = 0
+#guess_visi = np.where(null_hist[0].ravel() == np.max(null_hist[0].ravel()))[0][-1]
+#guess_visi = null_bins_edges[guess_visi%null_bins_edges.size]
+#initial_guess = [(1-guess_visi)/(1+guess_visi), mu_opd+0.1, sig_opd+0.1]
+#initial_guess = np.array(initial_guess, dtype=np.float32)
+#
+#start = time()
+#popt = curve_fit(MCfunction, null_bins_edges, null_hist[0].ravel(), p0=initial_guess, epsfcn = null_bins_width)
+#stop = time()
+#print('Duration:', stop - start)
+##popt = leastsq(error_function, initial_guess, epsfcn = null_bins_width, args=(null_bins_edges, data_hist), full_output=1)
+##popt = least_squares(error_function, initial_guess, diff_step = null_bins_width, args=(null_bins_edges, data_hist), verbose=1, method='lm')
+##popt = least_squares(error_function, initial_guess, diff_step = null_bins_width, \
+##                     bounds=((0.,-np.pi, -np.pi/2.),(1., np.pi, np.pi/2.)), args=(null_bins_edges, data_hist), verbose=2, method='trf')
+#
+#real_params = np.array([visibility, mu_opd, sig_opd])
+#rel_err = (real_params - popt[0]) / real_params * 100
+#print('rel_err', rel_err)
+#out = MCfunction(null_bins_edges, *popt[0])
+#
+#z = MCfunction(null_bins_edges, *real_params)
+#
+#na_opt = (1-popt[0][0])/(1+popt[0][0])
+#
+#f = plt.figure()
+#ax = f.add_subplot(111)
+#plt.semilogy(null_bins_cent, null_hist[0].T, 'o', markersize=10, label='Data')
+#plt.semilogy(null_bins_cent, out.reshape((wl_scale.size,-1)).T, '-', lw=5, alpha=0.8, label='Fit')
+#plt.grid()
+##plt.legend(loc='best', fontsize=35)
+#plt.xlabel('Null depth', size=40)
+#plt.ylabel('Frequency', size=40)
+#plt.xticks(size=35);plt.yticks(size=35)
+#txt1 = 'Fitted values:(Last = %.3f s)\n'%(stop-start) + 'Na = %.5f (%.3f%%)'%(na_opt, rel_err[0]) + '\n' + r'$\mu_{OPD} = %.3f$ nm (%.3f%%)'%(popt[0][1], rel_err[1]) + '\n' + r'$\sigma_{OPD} = %.3f$ nm (%.3f%%)'%(popt[0][2], rel_err[2])
+#txt2 = 'Expected Values:\n' + 'Na = %.5f'%(na) + '\n' + r'$\mu_{OPD} = %.3f$ nm'%(mu_opd) + '\n' + r'$\sigma_{OPD} = %.3f$ nm'%(sig_opd)
+#plt.text(0.05,0.6, txt2, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+#plt.text(0.05,0.3, txt1, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+#
+#f = plt.figure()
+#ax = f.add_subplot(111)
+#plt.title('Histogram of the null depth', size=40)
+#plt.plot(null_bins_cent, null_hist[0,0], 'o', markersize=10, label='Data')
+#plt.plot(null_bins_cent, out, '-', lw=5, alpha=0.8, label='Fit')
+##plt.plot(null_bins_cent, z, '.', label='Expected')
+#plt.grid()
+#plt.legend(loc='best', fontsize=35)
+#plt.xlabel('Null depth', size=40)
+#plt.ylabel('Frequency', size=40)
+#plt.xticks(size=35);plt.yticks(size=35)
+#txt1 = 'Fitted values:(%.3f s)\n'%(stop-start) + 'Na = %.5f (%.3f%%)'%(na_opt, rel_err[0]) + '\n' + r'$\mu_{OPD} = %.3f$ nm (%.3f%%)'%(popt[0][1], rel_err[1]) + '\n' + r'$\sigma_{OPD} = %.3f$ nm (%.3f%%)'%(popt[0][2], rel_err[2])
+#txt2 = 'Expected Values:\n' + 'Na = %.5f'%(na) + '\n' + r'$\mu_{OPD} = %.3f$ nm'%(mu_opd) + '\n' + r'$\sigma_{OPD} = %.3f$ nm'%(sig_opd)
+#plt.text(0.3,0.5, txt2, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+#plt.text(0.6,0.5, txt1, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+#
+#
+#chi2 = np.sum((null_hist[0,0] - out)**2/(null_hist[0,0].size-popt[0].size))
+#khi2 = np.sum((null_hist[0,0] - z)**2/(null_hist[0,0].size-popt[0].size))
+#print('Chi2', chi2, khi2)

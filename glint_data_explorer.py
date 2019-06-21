@@ -16,7 +16,7 @@ import os
 
 switch_dark = False
 ''' Settings '''
-nb_files = 10 # Number of data files to read
+nb_files = None # Number of data files to read. None = all files
 root = "/mnt/96980F95980F72D3/glint/" # Root path containing the reduced data
 datafolder = '201810_labdata/' # Folder of the data to explore
 wl_path = root+'reduction/201806_wavecal/px_to_wl.npy'

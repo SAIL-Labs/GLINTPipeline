@@ -38,7 +38,7 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
     Debug version of _getSpectralFluxNumba 
     For development and experimentation purpose
     '''
-    nb_tracks = len(which_tracks)
+    nb_tracks = 16
     amplitude_fit = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
     amplitude = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
     integ_model = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
@@ -81,9 +81,11 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
 #                        debug.append([0, k, i, j])
 #                    if abs(popt2[0]) > 1.e+4:
 #                        debug.append([1, k, i, j])
-                if j == 53 and k == 0:
+                if j == 56 and k == 0:
+                    print('Eight on std', (np.sum((simple_gaus/simple_gaus.sum())**2))**0.5)
+                    print(slices[k,j,i][:7].std())
                     plt.figure()
-                    plt.subplot(311)
+                    plt.subplot(211)
                     plt.plot(slices_axes[i], slices[k,j,i], 'o', label='data')
                     plt.plot(slices_axes[i], gaus(slices_axes[i], *popt), '+-', label='curve_fit '+str(popt[0]))
                     plt.plot(slices_axes[i], popt2 [0]* simple_gaus, '+--', label='linear reg '+str(popt2[0]))
@@ -92,14 +94,14 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
                     plt.grid()
                     plt.legend(loc='best')
                     plt.title('Frame '+str(k)+'/ Track '+str(i+1)+'/ Column '+str(j))
-                    plt.subplot(312)
-                    plt.plot(slices[k,j,i], residuals_fit[k,i,j], 'o', label='fit')
-                    plt.plot(slices[k,j,i], residuals_reg[k,i,j], 'd', label='linear reg')
-                    plt.xlabel('Amplitude')
-                    plt.ylabel('Residual')
-                    plt.grid()
-                    plt.legend(loc='best')
-                    plt.subplot(313)
+#                    plt.subplot(312)
+#                    plt.plot(slices[k,j,i], residuals_fit[k,i,j], 'o', label='fit')
+#                    plt.plot(slices[k,j,i], residuals_reg[k,i,j], 'd', label='linear reg')
+#                    plt.xlabel('Amplitude')
+#                    plt.ylabel('Residual')
+#                    plt.grid()
+#                    plt.legend(loc='best')
+                    plt.subplot(212)
                     plt.plot(slices_axes[i], residuals_fit[k,i,j], 'o', label='fit')
                     plt.plot(slices_axes[i], residuals_reg[k,i,j], 'd', label='linear reg')
                     plt.xlabel('Spatial position (px)')
@@ -147,6 +149,7 @@ class File(object):
 #                    print(self.data.shape)
                     self.data = np.transpose(self.data, axes=(0,2,1))
 #                    print(self.data.shape)
+                self.data = np.transpose(self.data, axes=(0,2,1))
                     
         else:
             print("Mock data created")
@@ -160,8 +163,10 @@ class File(object):
             self.bg_std = np.zeros(self.data.shape[0])
             self.bg_var = np.zeros(self.data.shape[0])
         else:
-            self.data = self.data - dark
-            self.data = self.data - self.data[:,:,:20].mean(axis=(1,2))[:,None,None]
+            if not np.all(dark==0): #If 'dark' is not a 0-array
+                self.data = self.data - dark
+                self.data = self.data - self.data[:,:,:20].mean(axis=(1,2))[:,None,None]
+                
             self.bg_std = self.data[:,:,:20].std(axis=(1,2))
             self.bg_var = self.data[:,:,:20].var(axis=(1,2))
             
@@ -188,7 +193,7 @@ class File(object):
 class Null(File):
     ''' Getting the null and photometries'''
     
-    def insulateTracks(self, channel_pos, sep, spatial_axis):
+    def insulateTracks(self, channel_pos, sep, spatial_axis, **kwargs):
         ''' 
         Insulating each track 
         ------------------
@@ -205,6 +210,9 @@ class Null(File):
         self.slices = np.array([self.data[:,np.int(np.around(pos-sep/2)):np.int(np.around(pos+sep/2)),:] for pos in channel_pos])
         self.slices = np.transpose(self.slices, (1,3,0,2))
         self.slices_axes = np.array([spatial_axis[np.int(np.around(pos-sep/2)):np.int(np.around(pos+sep/2))] for pos in channel_pos])
+        
+        if 'dark' in kwargs:
+            self.slices = self.slices - kwargs['dark'][None,:]
 
         
     def getSpectralFlux(self, which_tracks, spectral_axis, position_poly, width_poly, debug=False):
@@ -248,7 +256,7 @@ class Null(File):
         widths : array of widths of this gaussian
         '''
         
-        nb_tracks = len(which_tracks)
+        nb_tracks = 16
         amplitude = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
         integ_model = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
         integ_windowed = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
@@ -277,9 +285,45 @@ class Null(File):
                     
         return amplitude, integ_model, integ_windowed, residuals_reg, weights
     
-    def getTotalFlux(self, idx_edges):
-        self.fluxes = np.sum(self.slices[:,idx_edges[0]:idx_edges[1]], axis=(1,3))
+    def getTotalFlux(self):
+        self.fluxes = np.sum(self.slices[:,56:57,:,:], axis=(1,3))
+        self.fluxes = np.array([self.fluxes[:,15], self.fluxes[:,13], self.fluxes[:,2], self.fluxes[:,0]])
         
+    def getSpectrum(self):
+        self.spectra = np.mean(self.slices, axis=(0,3))
+        self.spectra = np.array([self.spectra[:,15], self.spectra[:,13], self.spectra[:,2], self.spectra[:,0]])
+        self.spectra /= np.sum(self.spectra, axis=1)[:,None]
+        
+    def getPhotoFluctuations(self, spectral_axis, position_poly, width_poly):
+        self.getTotalFlux()
+        self.getSpectrum()
+        self.spectral_fluxes = self.fluxes[:,:,None] * self.spectra[:,None,:]
+        
+        position_poly_photo = [position_poly[15], position_poly[13], position_poly[2], position_poly[0]]
+        width_poly_photo = [width_poly[15], width_poly[13], width_poly[2], width_poly[0]]
+        slices_axes = np.array([self.slices_axes[15], self.slices_axes[13], self.slices_axes[2], self.slices_axes[0]])
+        positions = np.array([p(spectral_axis) for p in position_poly_photo])
+        widths = np.array([p(spectral_axis) for p in width_poly_photo])
+        
+        amplitude = []
+        for i in range(len(position_poly_photo)):
+            temp = []
+            for j in range(len(spectral_axis)):
+                simple_gaus = np.exp(-(slices_axes[i]-positions[i,j])**2/(2*widths[i,j]**2)) # Shape factor of the intensity profile, to be removed before computing Null depth
+                sum_gaus = np.sum(simple_gaus)
+                amp = self.spectral_fluxes[i,:,j] / sum_gaus
+                temp.append(amp)
+            amplitude.append(temp)
+        
+        amplitude = np.array(amplitude)
+        var = (96*20*self.bg_var/self.fluxes[:,None,:]**2 + self.bg_var/(3000*20) * self.spectra[:,:,None]**2) * np.transpose(self.spectral_fluxes, axes=(0,2,1))**2 / sum_gaus**2
+        self.photo_std = var**0.5
+        self.amplitude[:,15,:] = amplitude[0].T
+        self.amplitude[:,13,:] = amplitude[1].T
+        self.amplitude[:,2,:] = amplitude[2].T
+        self.amplitude[:,0,:] = amplitude[3].T
+
+    
     def matchSpectralChannels(self, wl_to_px_coeff, px_to_wl_coeff, which_tracks):
         '''
         All tracks are slightly shifted respect to each other.
@@ -375,11 +419,21 @@ class Null(File):
         ''' Measure flux in a spectral channel with the different estimators'''
         
         # With amplitude
-        self.p1 = self.amplitude[:,15,:][:,self.px_scale[15]]
-        self.p2 = self.amplitude[:,13,:][:,self.px_scale[13]]
-        self.p3 = self.amplitude[:,2,:][:,self.px_scale[2]]
-        self.p4 = self.amplitude[:,0,:][:,self.px_scale[0]]
+        self.p1 = self.amplitude[:,15][:,self.px_scale[15]]
+        self.p2 = self.amplitude[:,13][:,self.px_scale[13]]
+        self.p3 = self.amplitude[:,2][:,self.px_scale[2]]
+        self.p4 = self.amplitude[:,0][:,self.px_scale[0]]
+        self.Iminus1, self.Iplus1 = self.amplitude[:,11][:,self.px_scale[11]], self.amplitude[:,9][:,self.px_scale[9]]
+        self.Iminus2, self.Iplus2 = self.amplitude[:,3][:,self.px_scale[3]], self.amplitude[:,12][:,self.px_scale[12]]
+        self.Iminus3, self.Iplus3 = self.amplitude[:,1][:,self.px_scale[1]], self.amplitude[:,14][:,self.px_scale[14]]
+        self.Iminus4, self.Iplus4 = self.amplitude[:,6][:,self.px_scale[6]], self.amplitude[:,4][:,self.px_scale[4]]
+        self.Iminus5, self.Iplus5 = self.amplitude[:,5][:,self.px_scale[5]], self.amplitude[:,7][:,self.px_scale[7]]
+        self.Iminus6, self.Iplus6 = self.amplitude[:,8][:,self.px_scale[8]], self.amplitude[:,10][:,self.px_scale[10]] 
         
+#        self.p1_err = self.photo_std[0,self.px_scale[15]]
+#        self.p2_err = self.photo_std[0,self.px_scale[13]]
+#        self.p3_err = self.photo_std[0,self.px_scale[2]]
+#        self.p4_err = self.photo_std[0,self.px_scale[0]]
         self.p1_err = self.p2_err = self.p3_err = self.p4_err = self.bg_std
 
         # With full gaussian model
@@ -387,6 +441,12 @@ class Null(File):
         self.p2_model = self.integ_model[:,13,:][:,self.px_scale[13]]
         self.p3_model = self.integ_model[:,2,:][:,self.px_scale[2]]
         self.p4_model = self.integ_model[:,0,:][:,self.px_scale[0]]
+        self.Iminus_model1, self.Iplus_model1 = self.integ_model[:,11][:,self.px_scale[11]], self.integ_model[:,9][:,self.px_scale[9]]
+        self.Iminus_model2, self.Iplus_model2 = self.integ_model[:,3][:,self.px_scale[3]], self.integ_model[:,12][:,self.px_scale[12]]
+        self.Iminus_model3, self.Iplus_model3 = self.integ_model[:,1][:,self.px_scale[1]], self.integ_model[:,14][:,self.px_scale[14]]
+        self.Iminus_model4, self.Iplus_model4 = self.integ_model[:,6][:,self.px_scale[6]], self.integ_model[:,4][:,self.px_scale[4]]
+        self.Iminus_model5, self.Iplus_model5 = self.integ_model[:,5][:,self.px_scale[5]], self.integ_model[:,7][:,self.px_scale[7]]
+        self.Iminus_model6, self.Iplus_model6 = self.integ_model[:,8][:,self.px_scale[8]], self.integ_model[:,10][:,self.px_scale[10]]
         
         self.p1_model_err = self.p2_model_err = self.p3_model_err = self.p4_model_err = self.raw_err
         
@@ -395,6 +455,12 @@ class Null(File):
         self.p2_windowed = self.integ_windowed[:,13,:][:,self.px_scale[13]]
         self.p3_windowed = self.integ_windowed[:,2,:][:,self.px_scale[2]]
         self.p4_windowed = self.integ_windowed[:,0,:][:,self.px_scale[0]]
+        self.Iminus_windowed1, self.Iplus_windowed1 = self.integ_windowed[:,11][:,self.px_scale[11]], self.integ_windowed[:,9][:,self.px_scale[9]]
+        self.Iminus_windowed2, self.Iplus_windowed2 = self.integ_windowed[:,3][:,self.px_scale[3]], self.integ_windowed[:,12][:,self.px_scale[12]]
+        self.Iminus_windowed3, self.Iplus_windowed3 = self.integ_windowed[:,1][:,self.px_scale[1]], self.integ_windowed[:,14][:,self.px_scale[14]]
+        self.Iminus_windowed4, self.Iplus_windowed4 = self.integ_windowed[:,6][:,self.px_scale[6]], self.integ_windowed[:,4][:,self.px_scale[4]]
+        self.Iminus_windowed5, self.Iplus_windowed5 = self.integ_windowed[:,5][:,self.px_scale[5]], self.integ_windowed[:,7][:,self.px_scale[7]]
+        self.Iminus_windowed6, self.Iplus_windowed6 = self.integ_windowed[:,8][:,self.px_scale[8]], self.integ_windowed[:,10][:,self.px_scale[10]]
         
         self.p1_windowed_err = self.p2_windowed_err = self.p3_windowed_err = self.p4_windowed_err = self.windowed_err
         
@@ -403,6 +469,12 @@ class Null(File):
         self.p2_raw = self.raw[:,13,:][:,self.px_scale[13]]
         self.p3_raw = self.raw[:,2,:][:,self.px_scale[2]]
         self.p4_raw = self.raw[:,0,:][:,self.px_scale[0]]
+        self.Iminus_raw1, self.Iplus_raw1 = self.raw[:,11][:,self.px_scale[11]], self.raw[:,9][:,self.px_scale[9]]
+        self.Iminus_raw2, self.Iplus_raw2 = self.raw[:,3][:,self.px_scale[3]], self.raw[:,12][:,self.px_scale[12]]
+        self.Iminus_raw3, self.Iplus_raw3 = self.raw[:,1][:,self.px_scale[1]], self.raw[:,14][:,self.px_scale[14]]
+        self.Iminus_raw4, self.Iplus_raw4 = self.raw[:,6][:,self.px_scale[6]], self.raw[:,4][:,self.px_scale[4]]
+        self.Iminus_raw5, self.Iplus_raw5 = self.raw[:,5][:,self.px_scale[5]], self.raw[:,7][:,self.px_scale[7]]
+        self.Iminus_raw6, self.Iplus_raw6 = self.raw[:,8][:,self.px_scale[8]], self.raw[:,10][:,self.px_scale[10]]
         
         self.p1_raw_err = self.p2_raw_err = self.p3_raw_err = self.p4_raw_err = self.raw_err        
                 
@@ -417,33 +489,33 @@ class Null(File):
                         'null4':'Beams 3/4', 'null5':'Beams 1/3', 'null6':'Beams 2/4'}
         
         if mode == 'amplitude':
-            arrs = [[self.null1, self.null1_err, self.p1, self.p1_err, self.p2, self.p2_err],\
-                [self.null2, self.null2_err, self.p2, self.p2_err, self.p3, self.p3_err],\
-                [self.null3, self.null3_err, self.p1, self.p1_err, self.p4, self.p4_err],\
-                [self.null4, self.null4_err, self.p3, self.p3_err, self.p4, self.p4_err],\
-                [self.null5, self.null5_err, self.p1, self.p1_err, self.p3, self.p3_err],\
-                [self.null6, self.null6_err, self.p2, self.p2_err, self.p4, self.p4_err]]
+            arrs = [[self.null1, self.null1_err, self.p1, self.p1_err, self.p2, self.p2_err, self.Iminus1, self.Iplus1],\
+                [self.null2, self.null2_err, self.p2, self.p2_err, self.p3, self.p3_err, self.Iminus2, self.Iplus2],\
+                [self.null3, self.null3_err, self.p1, self.p1_err, self.p4, self.p4_err, self.Iminus3, self.Iplus3],\
+                [self.null4, self.null4_err, self.p3, self.p3_err, self.p4, self.p4_err, self.Iminus4, self.Iplus4],\
+                [self.null5, self.null5_err, self.p1, self.p1_err, self.p3, self.p3_err, self.Iminus5, self.Iplus5],\
+                [self.null6, self.null6_err, self.p2, self.p2_err, self.p4, self.p4_err, self.Iminus5, self.Iplus6]]
         elif mode == 'model':
-            arrs = [[self.null_model1, self.null_model1_err, self.p1_model, self.p1_model_err, self.p2_model, self.p2_model_err],\
-                [self.null_model2, self.null_model2_err, self.p2_model, self.p2_model_err, self.p3_model, self.p3_model_err],\
-                [self.null_model3, self.null_model3_err, self.p1_model, self.p1_model_err, self.p4_model, self.p4_model_err],\
-                [self.null_model4, self.null_model4_err, self.p3_model, self.p3_model_err, self.p4_model, self.p4_model_err],\
-                [self.null_model5, self.null_model5_err, self.p1_model, self.p1_model_err, self.p3_model, self.p3_model_err],\
-                [self.null_model6, self.null_model6_err, self.p2_model, self.p2_model_err, self.p4_model, self.p4_model_err]]
+            arrs = [[self.null_model1, self.null_model1_err, self.p1_model, self.p1_model_err, self.p2_model, self.p2_model_err, self.Iminus_model1, self.Iplus_model1],\
+                [self.null_model2, self.null_model2_err, self.p2_model, self.p2_model_err, self.p3_model, self.p3_model_err, self.Iminus_model2, self.Iplus_model2],\
+                [self.null_model3, self.null_model3_err, self.p1_model, self.p1_model_err, self.p4_model, self.p4_model_err, self.Iminus_model3, self.Iplus_model3],\
+                [self.null_model4, self.null_model4_err, self.p3_model, self.p3_model_err, self.p4_model, self.p4_model_err, self.Iminus_model4, self.Iplus_model4],\
+                [self.null_model5, self.null_model5_err, self.p1_model, self.p1_model_err, self.p3_model, self.p3_model_err, self.Iminus_model5, self.Iplus_model5],\
+                [self.null_model6, self.null_model6_err, self.p2_model, self.p2_model_err, self.p4_model, self.p4_model_err, self.Iminus_model6, self.Iplus_model6]]
         elif mode == 'windowed':
-            arrs = [[self.null_windowed1, self.null_windowed1_err, self.p1_windowed, self.p1_windowed_err, self.p2_windowed, self.p2_windowed_err],\
-                [self.null_windowed2, self.null_windowed2_err, self.p2_windowed, self.p2_windowed_err, self.p3_windowed, self.p3_windowed_err],\
-                [self.null_windowed3, self.null_windowed3_err, self.p1_windowed, self.p1_windowed_err, self.p4_windowed, self.p4_windowed_err],\
-                [self.null_windowed4, self.null_windowed4_err, self.p3_windowed, self.p3_windowed_err, self.p4_windowed, self.p4_windowed_err],\
-                [self.null_windowed5, self.null_windowed5_err, self.p1_windowed, self.p1_windowed_err, self.p3_windowed, self.p3_windowed_err],\
-                [self.null_windowed6, self.null_windowed6_err, self.p2_windowed, self.p2_windowed_err, self.p4_windowed, self.p4_windowed_err]]
+            arrs = [[self.null_windowed1, self.null_windowed1_err, self.p1_windowed, self.p1_windowed_err, self.p2_windowed, self.p2_windowed_err, self.Iminus_windowed1, self.Iplus_windowed1],\
+                [self.null_windowed2, self.null_windowed2_err, self.p2_windowed, self.p2_windowed_err, self.p3_windowed, self.p3_windowed_err, self.Iminus_windowed2, self.Iplus_windowed2],\
+                [self.null_windowed3, self.null_windowed3_err, self.p1_windowed, self.p1_windowed_err, self.p4_windowed, self.p4_windowed_err, self.Iminus_windowed3, self.Iplus_windowed3],\
+                [self.null_windowed4, self.null_windowed4_err, self.p3_windowed, self.p3_windowed_err, self.p4_windowed, self.p4_windowed_err, self.Iminus_windowed4, self.Iplus_windowed4],\
+                [self.null_windowed5, self.null_windowed5_err, self.p1_windowed, self.p1_windowed_err, self.p3_windowed, self.p3_windowed_err, self.Iminus_windowed5, self.Iplus_windowed5],\
+                [self.null_windowed6, self.null_windowed6_err, self.p2_windowed, self.p2_windowed_err, self.p4_windowed, self.p4_windowed_err, self.Iminus_windowed6, self.Iplus_windowed6]]
         else:
-            arrs = [[self.null_raw1, self.null_raw1_err, self.p1_raw, self.p1_raw_err, self.p2_raw, self.p2_raw_err],\
-                [self.null_raw2, self.null_raw2_err, self.p2_raw, self.p2_raw_err, self.p3_raw, self.p3_raw_err],\
-                [self.null_raw3, self.null_raw3_err, self.p1_raw, self.p1_raw_err, self.p4_raw, self.p4_raw_err],\
-                [self.null_raw4, self.null_raw4_err, self.p3_raw, self.p3_raw_err, self.p4_raw, self.p4_raw_err],\
-                [self.null_raw5, self.null_raw5_err, self.p1_raw, self.p1_raw_err, self.p3_raw, self.p3_raw_err],\
-                [self.null_raw6, self.null_raw6_err, self.p2_raw, self.p2_raw_err, self.p4_raw, self.p4_raw_err]]
+            arrs = [[self.null_raw1, self.null_raw1_err, self.p1_raw, self.p1_raw_err, self.p2_raw, self.p2_raw_err, self.Iminus_raw1, self.Iplus_raw1],\
+                [self.null_raw2, self.null_raw2_err, self.p2_raw, self.p2_raw_err, self.p3_raw, self.p3_raw_err, self.Iminus_raw2, self.Iplus_raw2],\
+                [self.null_raw3, self.null_raw3_err, self.p1_raw, self.p1_raw_err, self.p4_raw, self.p4_raw_err, self.Iminus_raw3, self.Iplus_raw3],\
+                [self.null_raw4, self.null_raw4_err, self.p3_raw, self.p3_raw_err, self.p4_raw, self.p4_raw_err, self.Iminus_raw4, self.Iplus_raw4],\
+                [self.null_raw5, self.null_raw5_err, self.p1_raw, self.p1_raw_err, self.p3_raw, self.p3_raw_err, self.Iminus_raw5, self.Iplus_raw5],\
+                [self.null_raw6, self.null_raw6_err, self.p2_raw, self.p2_raw_err, self.p4_raw, self.p4_raw_err, self.Iminus_raw6, self.Iplus_raw6]]
 
         # Check if saved file exist
         if os.path.exists(path):
@@ -466,6 +538,8 @@ class Null(File):
                 f.create_dataset('null%s/pA_err'%(i+1), data=arrs[i][3])
                 f.create_dataset('null%s/pB'%(i+1), data=arrs[i][4])
                 f.create_dataset('null%s/pB_err'%(i+1), data=arrs[i][5])
+                f.create_dataset('null%s/Iminus'%(i+1), data=arrs[i][6])
+                f.create_dataset('null%s/Iplus'%(i+1), data=arrs[i][7])
                 
                 f['null%s'%(i+1)].attrs['comment'] = beams_couple['null%s'%(i+1)]
                 f['null%s/null'%(i+1)].attrs['comment'] = 'python dim : (nb frame, wl channel)'
@@ -474,5 +548,7 @@ class Null(File):
                 f['null%s/pA_err'%(i+1)].attrs['comment'] = 'python dim : (nb frame, wl channel)'
                 f['null%s/pB'%(i+1)].attrs['comment'] = 'python ndim : (nb frame, wl channel)'
                 f['null%s/pB_err'%(i+1)].attrs['comment'] = 'python dim : (nb frame, wl channel)'
+                f['null%s/Iminus'%(i+1)].attrs['comment'] = 'python dim : (nb frame, wl channel)'
+                f['null%s/Iplus'%(i+1)].attrs['comment'] = 'python dim : (nb frame, wl channel)'
                 
                 
