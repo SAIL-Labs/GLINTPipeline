@@ -129,11 +129,10 @@ def load_dark(data, channel):
     data_file.close()
     return params
     
-def load_data(data, wl_edges=None):
+def load_data(data, wl_edges, *args):
     null_data = [[],[],[],[],[],[]]
     Iminus_data = [[],[],[],[],[],[]]
     Iplus_data = [[],[],[],[],[],[]]
-    null_err_data = [[],[],[],[],[],[]]
     beams_couple = []
     photo_data = [[],[],[],[]]
     photo_err_data = [[],[],[],[]]
@@ -145,7 +144,6 @@ def load_data(data, wl_edges=None):
             
             for i in range(6):
                 null_data[i].append(np.array(data_file['null%s/null'%(i+1)]))
-                null_err_data[i].append(np.array(data_file['null%s/null_err'%(i+1)]))
                 Iminus_data[i].append(np.array(data_file['null%s/Iminus'%(i+1)]))
                 Iplus_data[i].append(np.array(data_file['null%s/Iplus'%(i+1)]))
                 if data.index(d) == 0: beams_couple.append(data_file['null%s'%(i+1)].attrs['comment'])
@@ -162,7 +160,6 @@ def load_data(data, wl_edges=None):
     # Merge data along frame axis
     for i in range(6):
         null_data[i] = [selt for elt in null_data[i] for selt in elt]
-        null_err_data[i] = [selt for elt in null_err_data[i] for selt in elt]
         Iminus_data[i] = [selt for elt in Iminus_data[i] for selt in elt]
         Iplus_data[i] = [selt for elt in Iplus_data[i] for selt in elt]
         
@@ -171,7 +168,6 @@ def load_data(data, wl_edges=None):
             photo_err_data[i] = [selt for elt in photo_err_data[i] for selt in elt]
             
     null_data = np.array(null_data)
-    null_err_data = np.array(null_err_data)
     Iminus_data = np.array(Iminus_data)
     Iplus_data = np.array(Iplus_data)
     photo_data = np.array(photo_data)
@@ -179,12 +175,10 @@ def load_data(data, wl_edges=None):
     wl_scale = np.array(wl_scale)[0]
     mask = np.arange(wl_scale.size)
     
-    if wl_edges != None:
-        wl_min, wl_max = wl_edges
-        mask = np.arange(wl_scale.size)[(wl_scale>=wl_min)&(wl_scale <= wl_max)]
+    wl_min, wl_max = wl_edges
+    mask = np.arange(wl_scale.size)[(wl_scale>=wl_min)&(wl_scale <= wl_max)]
         
     null_data = null_data[:,:,mask[0]:mask[-1]+1]
-    null_err_data = null_err_data[:,:,mask[0]:mask[-1]+1]
     Iminus_data = Iminus_data[:,:,mask[0]:mask[-1]+1]
     Iplus_data = Iplus_data[:,:,mask[0]:mask[-1]+1]
     photo_data = photo_data[:,:,mask[0]:mask[-1]+1]
@@ -194,11 +188,17 @@ def load_data(data, wl_edges=None):
     photo_data = np.transpose(photo_data, axes=(0,2,1))
     Iminus_data = np.transpose(Iminus_data, axes=(0,2,1))
     Iplus_data = np.transpose(Iplus_data, axes=(0,2,1))
-#    null_err_data = np.transpose(null_err_data, axes=(0,2,1))
-#    photo_err_data = np.transpose(photo_err_data, axes=(0,2,1))
     
-    return {'null':null_data, 'photo':photo_data, 'wl_scale':wl_scale, 'null_err':null_err_data,\
+    out = {'null':null_data, 'photo':photo_data, 'wl_scale':wl_scale,\
             'photo_err':photo_err_data, 'beams couples':beams_couple, 'wl_idx':mask, 'Iminus':Iminus_data, 'Iplus':Iplus_data}
+    
+    if len(args) > 0:
+        null_err_data = getErrorNull(out, args[0])
+    else:
+        null_err_data = np.zeros(null_data.shape)
+    out['null_err'] = null_err_data
+    
+    return out
 
 
 def getHistogram(data, bins, density, target='cpu'):
@@ -291,8 +291,8 @@ def pdfDeconvolution(bins, histo_photo, histo_noise, bandwidth, plots=False):
     return deconv
 
 def getErrorNull(data_dic, dark_dic):
-    var_Iminus = dark_dic['Iminus'].var(axis=-1)
-    var_Iplus = dark_dic['Iplus'].var(axis=-1)
+    var_Iminus = dark_dic['Iminus'].var(axis=-1)[:,:,None]
+    var_Iplus = dark_dic['Iplus'].var(axis=-1)[:,:,None]
     Iminus = data_dic['Iminus']
     Iplus = data_dic['Iplus']
     null = data_dic['null']

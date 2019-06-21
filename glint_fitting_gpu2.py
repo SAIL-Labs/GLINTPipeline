@@ -228,8 +228,9 @@ file_path = root+'reduction/'+datafolder
 data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and not 'dark' in f and '0.0' in f][:]
 dark_list = [file_path+'dark_0001.hdf5', file_path+'dark_0002.hdf5']
 
-data = gff.load_data(data_list, wl_edges=(1550, 1555))
-dark = gff.load_data(dark_list, wl_edges=(1550, 1555))
+dark = gff.load_data(dark_list, (1550, 1555))
+data = gff.load_data(data_list, (1550, 1555), dark)
+ggg
 
 if nonoise:
     dark['photo'][:] = 0.
@@ -264,7 +265,7 @@ data_photo = data['photo']
 data_photo = (data_photo - mean_data[:,:,None]) * ((var_data[:,:,None]-var_dark[:,:,None])/var_data[:,:,None])**0.5 + mean_data[:,:,None] - mean_dark[:,:,None]
 
 combo_idx = [elt for elt in combinations(np.arange(4), 2)]
-ggg
+
 ''' Model the 6 null depths '''
 for j in range(6)[:1]:
     ''' Get histograms of intensities and dark current in the pair of photomoetry outputs '''
