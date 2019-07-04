@@ -81,8 +81,9 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
 #                        debug.append([0, k, i, j])
 #                    if abs(popt2[0]) > 1.e+4:
 #                        debug.append([1, k, i, j])
-                if j == 56 and k == 0:
-                    print('Eight on std', (np.sum((simple_gaus/simple_gaus.sum())**2))**0.5)
+                if j==46 and k == 0:
+                    print(k, i, j)
+                    print('Weight on std', (np.sum((simple_gaus/simple_gaus.sum())**2))**0.5)
                     print(slices[k,j,i][:7].std())
                     plt.figure()
                     plt.subplot(211)
@@ -120,7 +121,7 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
 class File(object):
     ''' Management of the HDF5 datacube'''
     
-    def __init__(self, data=None, nbimg=None, transpose=False):
+    def __init__(self, data=None, nbimg=(None, None), transpose=False):
         self.loadfile(data, nbimg, transpose)
             
             
@@ -137,13 +138,8 @@ class File(object):
         if data != None:
             with h5py.File(data) as dataFile:
                 self.data   = np.array(dataFile['imagedata'])
-                if nbimg == None:
-                    self.nbimg  = self.data.shape[0]
-                    self.index = np.arange(self.nbimg)
-                else:
-                    self.data = self.data[:nbimg]
-                    self.nbimg  = nbimg
-                    self.index = np.arange(self.nbimg)
+                self.data = self.data[nbimg[0]:nbimg[1]]
+                self.nbimg  = self.data.shape[0]
                 if transpose: 
 #                    print('Transpose')
 #                    print(self.data.shape)
@@ -156,7 +152,6 @@ class File(object):
             self.header = {}
             self.nbimg = nbimg
             self.data = np.zeros((self.nbimg,344,96))
-            self.index = np.arange(self.nbimg)
 
     def cosmeticsFrames(self, dark, nonoise=False):
         if nonoise:
@@ -414,6 +409,16 @@ class Null(File):
         self.null_raw4_err = np.sqrt(self.raw_err[:,None]**2/(self.raw[:,4][:,self.px_scale[4]])**2 * (1 + self.null_raw4**2))
         self.null_raw5_err = np.sqrt(self.raw_err[:,None]**2/(self.raw[:,7][:,self.px_scale[7]])**2 * (1 + self.null_raw5**2))
         self.null_raw6_err = np.sqrt(self.raw_err[:,None]**2/(self.raw[:,10][:,self.px_scale[10]])**2 * (1 + self.null_raw6**2))
+             
+        
+#        plop = np.where((self.null4 <0)&(self.null4 >-1))[1]
+#        if len(plop>0):
+#            print('NULL4')
+#            print(self.null4[(self.null4 <0)&(self.null4 >-1)])
+#            print(self.px_scale[6,plop])
+#            print(self.px_scale[4,plop])
+#            print(self.px_scale[2,plop])
+#            print(self.px_scale[0,plop])
         
     def getPhotometry(self):
         ''' Measure flux in a spectral channel with the different estimators'''
