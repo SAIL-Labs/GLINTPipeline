@@ -24,17 +24,17 @@ def gaussian(x, A, loc, sig):
 
 ''' Settings '''
 no_noise = False
-nb_img = None
+nb_img = (None, None)
 debug = False
-save = False
+save = True
 nb_files = None
 
 ''' Inputs '''
-datafolder = '201806_alfBoo/'
-calibration_path = '201806_wavecal'
+datafolder = 'simulation_nofluctu/'
+calibration_path = 'simulation_nofluctu'
 root = "/mnt/96980F95980F72D3/glint/"
 data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-data_list = [data_path+f for f in os.listdir(data_path) if 'dark' in f][:nb_files]
+data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f][:nb_files]
 
 ''' Output '''
 output_path = root+'reduction/'+datafolder
@@ -42,7 +42,6 @@ if not os.path.exists(output_path):
     os.makedirs(output_path)
 
 dark = np.load(output_path+'superdark.npy')
-dark[:] = 0.
 dark_per_channel = np.load(output_path+'superdarkchannel.npy')
 if no_noise:
     dark_per_channel[:] = 0.
@@ -93,20 +92,20 @@ for f in data_list:
     img = glint_classes.Null(f, nbimg=nb_img)
     
     ''' Process frames '''
-    img.cosmeticsFrames(dark, no_noise)
+    img.cosmeticsFrames(np.zeros(dark.shape), no_noise)
     
     ''' Insulating each track '''
     print('Getting channels')
     img.insulateTracks(channel_pos, sep, spatial_axis, dark=dark_per_channel)
     
+    ''' Map the spectral channels between every chosen tracks before computing 
+    the null depth'''
+    img.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff, which_tracks)
+    
     ''' Measurement of flux per frame, per spectral channel, per track '''
     list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
     img.getSpectralFlux(list_channels, spectral_axis, position_poly, width_poly, debug=debug)
 #    img.getPhotoFluctuations(spectral_axis, position_poly, width_poly)
-    
-    ''' Map the spectral channels between every chosen tracks before computing 
-    the null depth'''
-    img.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff, which_tracks)
     
     ''' Compute null depth '''
     print('Computing null depths')
@@ -184,27 +183,27 @@ for k in range(len(plop)):
     histo, bin_edges = np.histogram(photo, int(photo.size**0.5))
     binning = bin_edges[:-1] + np.diff(bin_edges)/2
     histo = histo / np.sum(histo)
-    dk = h5py.File('/mnt/96980F95980F72D3/glint/reduction/201806_alfBoo/hist_dark_slices.hdf5') 
-    dk = np.array(dk[plop_label[k]]).T
+#    dk = h5py.File('/mnt/96980F95980F72D3/glint/reduction/201806_alfBoo/hist_dark_slices.hdf5') 
+#    dk = np.array(dk[plop_label[k]]).T
     popt, pcov = curve_fit(gaussian, binning, histo, p0=[max(histo), photo.mean(), photo.std()])
     y = gaussian(binning, *popt)
-    popt2, pcov2 = curve_fit(gaussian, dk[1], dk[0], p0=[max(dk[0]), 0, 90])
-    y2 = gaussian(dk[1], *popt2)
+#    popt2, pcov2 = curve_fit(gaussian, dk[1], dk[0], p0=[max(dk[0]), 0, 90])
+#    y2 = gaussian(dk[1], *popt2)
     
     fig = plt.figure(figsize=(19.20, 10.80))
     ax = fig.add_subplot(111)
-    plt.plot(dk[1], dk[0]/dk[0].max(), 'o', label='Dark current')
+#    plt.plot(dk[1], dk[0]/dk[0].max(), 'o', label='Dark current')
     plt.plot(binning, histo/histo.max(), 'o-', label='P%s'%(k+1))
     plt.plot(binning, y/y.max(), '--', lw=4, label='Fit of P%s'%(k+1))
-    plt.plot(dk[1], y2/y2.max(), '--', lw=4, label='Fit of dark')
+#    plt.plot(dk[1], y2/y2.max(), '--', lw=4, label='Fit of dark')
     plt.grid()
     plt.legend(loc='best', fontsize=36)
     plt.xticks(size=36);plt.yticks(size=36)
     plt.xlabel('Bins', size=40)
     plt.ylabel('Counts (normalised)', size=40)
     txt = r'$\mu_{p%s} = %.3f$'%(k+1, popt[1]) + '\n' + r'$\sigma_{p%s} = %.3f$'%(k+1,popt[2])
-    txt2 = r'$\mu_{dk} = %.3f$'%(popt2[1]) + '\n' + r'$\sigma_{dk} = %.3f$'%(popt2[2])
-    plt.text(0.05,0.3, txt+'\n'+txt2, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+#    txt2 = r'$\mu_{dk} = %.3f$'%(popt2[1]) + '\n' + r'$\sigma_{dk} = %.3f$'%(popt2[2])
+#    plt.text(0.05,0.3, txt+'\n'+txt2, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
 
 for k in range(len(plop)):
     plt.figure(figsize=(19.20, 10.80))
