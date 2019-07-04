@@ -16,10 +16,11 @@ import os
 
 switch_dark = False
 ''' Settings '''
-nb_files = None # Number of data files to read. None = all files
+nb_files = 2 # Number of data files to read. None = all files
 root = "/mnt/96980F95980F72D3/glint/" # Root path containing the reduced data
-datafolder = '201810_labdata/' # Folder of the data to explore
-wl_path = root+'reduction/201806_wavecal/px_to_wl.npy'
+datafolder = '201806_alfBoo/' # Folder of the data to explore
+wl_path = root+'reduction/simulation_nofluctu/px_to_wl.npy'
+#wl_path = root+'reduction/201806_wavecal/px_to_wl.npy'
 output_path = root+'reduction/'+datafolder # Path to reduced data
 dark_path = output_path+'superdark.npy'
 
@@ -29,7 +30,7 @@ data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f][:nb_
 try:
     dark = np.load(dark_path)
 except FileNotFoundError:
-    print('No dark found. Create a new one')
+    print('No dark found. Create a new one.')
     switch_dark = True
 
 if switch_dark:
@@ -39,6 +40,7 @@ if switch_dark:
         dark = np.transpose(dark, axes=(0,2,1))
         dark = dark.mean(axis=0)    
     
+print('Load data.')
 for f in data_list:
     with h5py.File(f) as dataFile:
         data = np.array(dataFile['imagedata'])
@@ -61,6 +63,7 @@ except:
     wl_scale = np.tile(np.arange(96), (16, 1))*(-1)
     switch_wl = True
     
+print('Let\'s go!')
 p1, p2, p3, p4 = stack[:,328], stack[:,288], stack[:,72], stack[:,33]
 n1, n2, n3, n4, n5, n6 = stack[:,249], stack[:,92], stack[:,52], stack[:,151], stack[:,131], stack[:,190]
 an1, an2, an3, an4, an5, an6 = stack[:,210], stack[:,269], stack[:,308], stack[:,111], stack[:,170], stack[:,229]
@@ -140,4 +143,4 @@ def run2(k):
             text_null1, text_null2, text_null3, text_null4, text_null5, text_null6,\
             text_antinull1, text_antinull2, text_antinull3, text_antinull4, text_antinull5, text_antinull6]
 
-anim3 = animation.FuncAnimation(fig, run2, init_func=init3, frames=stack.shape[0], interval=200, blit=True)
+anim = animation.FuncAnimation(fig, run2, init_func=init3, frames=stack.shape[0], interval=200, blit=True)
