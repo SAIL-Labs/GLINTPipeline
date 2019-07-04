@@ -148,7 +148,7 @@ def computeCdfCupy(rv, x_axis):
 #    accum_pdf = cp.asnumpy(accum_pdf)
 #    return accum_pdf.ravel()
 
-def MCfunction(bins, visibility, mu_opd, sig_opd):
+def MCfunction(bins, visibility, mu_opd, sig_opd, A):
     '''
     For now, this function deals with polychromatic for one baseline
     '''
@@ -158,12 +158,18 @@ def MCfunction(bins, visibility, mu_opd, sig_opd):
     global mode, nonoise
 
     sig_opd = abs(sig_opd)
+    A = abs(A)
 
     count += 1
-    print(count, visibility, mu_opd, sig_opd)     
+    print(int(count), visibility, mu_opd, sig_opd, A)     
     accum_pdf = cp.zeros((wl_scale.size, bins.size), dtype=cp.float32)
     
-    rv_opd = cp.random.normal(mu_opd, sig_opd, n_samp)
+#    rv_opd = cp.random.normal(mu_opd, sig_opd, n_samp)
+#    rv_opd = rv_opd.astype(cp.float32)
+    opd_axis = cp.linspace(0, 2000, 2000, endpoint=False, dtype=cp.float32)
+    cdf_opd = gff.doubleGaussCdf(opd_axis, mu_opd, sig_opd, A)
+    cdf_opd = cdf_opd.astype(cp.float32)
+    rv_opd = gff.rv_generator(opd_axis, cdf_opd, n_samp)
     rv_opd = rv_opd.astype(cp.float32)
 
     for k in range(wl_scale.size):
@@ -178,10 +184,10 @@ def MCfunction(bins, visibility, mu_opd, sig_opd):
             
         ''' Generate random values from these pdf '''
         rv_IA = gff.rv_generator(data_IA_axis[k], cdf_data_IA[k], n_samp)
-        rv_IA[rv_IA<0] = 0
+#        rv_IA[rv_IA<0] = 0
         
         rv_IB = gff.rv_generator(data_IB_axis[k], cdf_data_IB[k], n_samp)
-        rv_IB[rv_IB<0] = 0
+#        rv_IB[rv_IB<0] = 0
         
 #        print('Synth IA', rv_IA.max(), rv_IA.min(), rv_IA.mean(), rv_IA.std())
 #        print('Synth IB', rv_IB.max(), rv_IB.min(), rv_IB.mean(), rv_IB.std())
@@ -213,6 +219,7 @@ def error_function(params, x, y):
     print(count, params)
     return y - MCfunction(x, *params)
 
+#plt.ioff()
 ''' Settings '''  
 n_samp = int(1e+8) # number of samples per loop
 mode = 'cuda'
@@ -222,15 +229,14 @@ nonoise = False
 # Real data
 # =============================================================================
 ''' Import real data '''
-datafolder = 'simulation_lownull/'
+datafolder = '201806_alfBoo/'
 root = "/mnt/96980F95980F72D3/glint/"
 file_path = root+'reduction/'+datafolder
-data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and not 'dark' in f and '0.0' in f][:]
-dark_list = [file_path+'dark_0001.hdf5', file_path+'dark_0002.hdf5']
+data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and not 'dark' in f][:]
+dark_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'dark' in f]
 
-dark = gff.load_data(dark_list, (1550, 1555))
-data = gff.load_data(data_list, (1550, 1555), dark)
-ggg
+dark = gff.load_data(dark_list, (1550, 1600))
+data = gff.load_data(data_list, (1550, 1600), dark)
 
 if nonoise:
     dark['photo'][:] = 0.
@@ -267,7 +273,7 @@ data_photo = (data_photo - mean_data[:,:,None]) * ((var_data[:,:,None]-var_dark[
 combo_idx = [elt for elt in combinations(np.arange(4), 2)]
 
 ''' Model the 6 null depths '''
-for j in range(6)[:1]:
+for j in [0, 2, 3, 5]:
     ''' Get histograms of intensities and dark current in the pair of photomoetry outputs '''
     idx = combo_idx[j]
     kappa = kappa_l[j]
@@ -275,8 +281,8 @@ for j in range(6)[:1]:
     split_IB = split_l[idx[1], idx[0]]
     
     data_IA, data_IB = data_photo[idx[0]], data_photo[idx[1]]
-    print('IA', data_IA.max(), data_IA.min(), data_IA.mean(), data_IA.std())
-    print('IB', data_IB.max(), data_IB.min(), data_IB.mean(), data_IB.std())
+#    print('IA', data_IA.max(), data_IA.min(), data_IA.mean(), data_IA.std())
+#    print('IB', data_IB.max(), data_IB.min(), data_IB.mean(), data_IB.std())
 
     data_IA *= split_IA[:,None]
     data_IB *= split_IB[:,None]
@@ -302,9 +308,10 @@ for j in range(6)[:1]:
 
 
     ''' Make the survival function '''
-    data_null = data['null'][j]        
-    sz = np.size(np.unique(data_null[0]))
-    null_axis, null_axis_width = np.linspace(0., 1., sz, endpoint=False, retstep=True, dtype=np.float32)
+    data_null = data['null'][j]
+    data_null_err = data['null_err'][j]
+    sz = max([np.size(np.unique(d)) for d in data_null])
+    null_axis, null_axis_width = np.linspace(data_null.min(), data_null.max(), sz, retstep=True, dtype=np.float32)
     
     null_cdf = []
     for wl in range(len(wl_scale)):
@@ -317,57 +324,111 @@ for j in range(6)[:1]:
             cdf = computeCdfCupy(data_null_gpu, cp.asarray(null_axis, dtype=cp.float32))
             null_cdf.append(cp.asnumpy(cdf))
         else:
-            cdf = computeCdf(data_null, null_axis)
+            cdf = computeCdf(np.sort(data_null[wl]), null_axis)
             null_cdf.append(cdf)
             
+    print('Computing error of SF')
     null_cdf = np.array(null_cdf)
+    null_cdf_err = cp.asnumpy(gff.getErrorCDF(cp.asarray(data_null), cp.asarray(data_null_err), cp.asarray(null_axis)))
+    null_cdf_err[null_cdf_err==0] = 1e-32
+    null_cdf_err2 = null_cdf_err.copy()
+    null_cdf_err2[null_cdf_err>=null_cdf] = null_cdf[null_cdf_err>=null_cdf]*0.9999
 
+#    f = plt.figure(1)
+#    plt.errorbar(null_axis, null_cdf[0], yerr=null_cdf_err2[0], fmt='.', markersize=10)
+#    plt.grid(True)
+#    plt.legend(loc='best', fontsize=35)
+#    plt.xlabel('Threshold', size=40)
+#    plt.ylabel('P(Null depth > T)', size=40)
+#    plt.xticks(size=35);plt.yticks(size=35)
+#    plt.xlim(-0.4, 1);plt.ylim(1e-5, 2)
+#    plt.legend(['no OPD fluctuation', r'$\sigma_{OPD}=40$ nm'],fontsize=35)
+#    plt.yscale('log')
+#    
+#    if wl_scale.size == 10:
+#        f = plt.figure(2)
+#        count = 0
+#        for wl in range(len(wl_scale))[::-1]:
+#            plt.subplot(5,2,count+1)
+#            plt.title('%s nm'%wl_scale[wl])
+#            plt.errorbar(null_axis, null_cdf[wl], yerr=null_cdf_err2[wl], fmt='.')
+#            plt.grid(True)
+#            plt.legend(['no OPD fluctuation', r'$\sigma_{OPD}=40$ nm'], loc='best') 
+#            plt.xlabel('Null depth')
+#            plt.ylabel('Frequency')
+#            count += 1
+#    ggg
+
+            
     ''' Model fitting '''
+    print('Model fitting')
     count = 0.
-    mu_opd = 1550/4.
+    mu_opd = 1555/4.
     sig_opd = 40. # In nm
-    na = 0.01
+    na = 0.1
     visibility = np.array([(1-na)/(1+na)], dtype=np.float32)[0]
     kap_l = kappa
     
-    start = time()
-    z = MCfunction(null_axis, visibility, mu_opd, sig_opd)
-    stop = time()
-    print('test', stop-start)
+#    start = time()
+#    z = MCfunction(null_axis, visibility, mu_opd, sig_opd)
+#    stop = time()
+#    print('test', stop-start)
     
-    guess_visi = np.where(null_cdf[0].ravel() == np.max(null_cdf[0].ravel()))[0][-1]
-    guess_visi = null_axis[guess_visi%null_axis.size]
-    initial_guess = [(1-guess_visi)/(1+guess_visi), mu_opd+0.1, sig_opd-0.1]
+    guess_na = np.where(null_cdf[0].ravel() == np.max(null_cdf[0].ravel()))[0][-1]
+    guess_na = null_axis[guess_na%null_axis.size]
+    guess_na = max(0, guess_na)
+    initial_guess = [(1-guess_na)/(1+guess_na), mu_opd, sig_opd, 0.5]
     initial_guess = np.array(initial_guess, dtype=np.float32)
     
     start = time()
-    popt = curve_fit(MCfunction, null_axis, null_cdf.ravel(), p0=initial_guess, epsfcn = null_axis_width)
+    popt = curve_fit(MCfunction, null_axis, null_cdf.ravel(), p0=initial_guess, epsfcn = null_axis_width, sigma=null_cdf_err.ravel(), absolute_sigma=True)
     stop = time()
     print('Duration:', stop - start)
     out = MCfunction(null_axis, *popt[0])
+    uncertainties = np.diag(popt[1])**0.5
+    chi2 = 1/(null_cdf.size-popt[0].size) * np.sum((null_cdf.ravel() - out)**2/null_cdf_err.ravel()**2)
+    print('chi2', chi2)
     
-    real_params = np.array([visibility, mu_opd, sig_opd])
+    real_params = np.array([visibility, mu_opd, sig_opd, 0.5])
     rel_err = (real_params - popt[0]) / real_params * 100
     print('rel diff', rel_err)
     na_opt = (1-popt[0][0])/(1+popt[0][0])
     
-    f = plt.figure()
-    ax = f.add_subplot(111)
-    plt.semilogy(null_axis, null_cdf[0], 'o', markersize=10, label='Data')
-    plt.semilogy(null_axis, out.reshape((wl_scale.size,-1))[0], '-', lw=5, alpha=0.8, label='Fit')
-    plt.semilogy(null_axis, z.reshape((wl_scale.size,-1))[0], '--', lw=4, alpha=0.8, label='Expected')
-    plt.grid()
-    plt.legend(loc='lower left', fontsize=35)
-    plt.xlabel('Null depth', size=40)
-    plt.ylabel('Frequency', size=40)
-    plt.xticks(size=35);plt.yticks(size=35)
-    txt1 = 'Fitted values:(Last = %.3f s)\n'%(stop-start) + 'Na = %.5f (%.3f%%)'%(na_opt, rel_err[0]) + '\n' + r'$\mu_{OPD} = %.3f$ nm (%.3f%%)'%(popt[0][1], rel_err[1]) + '\n' + r'$\sigma_{OPD} = %.3f$ nm (%.3f%%)'%(popt[0][2], rel_err[2])
-    txt2 = 'Expected Values:\n' + 'Na = %.5f'%(na) + '\n' + r'$\mu_{OPD} = %.3f$ nm'%(mu_opd) + '\n' + r'$\sigma_{OPD} = %.3f$ nm'%(sig_opd)
-    plt.text(0.55,0.85, txt2, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
-    plt.text(0.55,0.55, txt1, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
-#    plt.tight_layout()
-
-
+    if len(wl_scale) != 10:
+        f = plt.figure(figsize=(19.20,10.80))
+        ax = f.add_subplot(111)
+        plt.semilogy(null_axis, null_cdf[0], 'o', markersize=10, label='Data')
+        plt.semilogy(null_axis, out.reshape((wl_scale.size,-1))[0], '-', lw=5, alpha=0.8, label='Fit')
+#        plt.semilogy(null_axis, z.reshape((wl_scale.size,-1))[0], '--', lw=4, alpha=0.8, label='Expected')
+        plt.grid()
+        plt.legend(loc='lower left', fontsize=35)
+        plt.xlabel('Null depth', size=40)
+        plt.ylabel('Frequency', size=40)
+        plt.xticks(size=35);plt.yticks(size=35)
+        txt1 = 'Fitted values:(Last = %.3f s)\n'%(stop-start) + 'Na = %.5f (%.3f%%)'%(na_opt, rel_err[0]) + '\n' + r'$\mu_{OPD} = %.3f$ nm (%.3f%%)'%(popt[0][1], rel_err[1]) + '\n' + r'$\sigma_{OPD} = %.3f$ nm (%.3f%%)'%(popt[0][2], rel_err[2])
+#        txt2 = 'Expected Values:\n' + 'Na = %.5f'%(na) + '\n' + r'$\mu_{OPD} = %.3f$ nm'%(mu_opd) + '\n' + r'$\sigma_{OPD} = %.3f$ nm'%(sig_opd)
+#        plt.text(0.55,0.85, txt2, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+        plt.text(0.55,0.55, txt1, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+#        plt.tight_layout()
+    else:
+        f = plt.figure(figsize=(19.20,10.80))
+        txt3 = 'Fitted values: ' + 'Na$ = %.2E \pm %.2E$, '%(na_opt, uncertainties[0]) + \
+        r'$\mu_{OPD} = %.2E \pm %.2E$ nm, '%(popt[0][1], uncertainties[1]) + \
+        r'$\sigma_{OPD} = %.2E \pm %.2E$ nm'%(popt[0][2], uncertainties[2])+' (Last = %.3f s)'%(stop-start)
+        count = 0
+        for wl in range(len(wl_scale))[::-1]:
+            ax = f.add_subplot(5,2,count+1)
+            plt.title('%s nm'%wl_scale[wl])
+            plt.semilogy(null_axis, null_cdf[wl], 'o', markersize=10, label='Data')
+            plt.semilogy(null_axis, out.reshape((wl_scale.size,-1))[wl], '-', lw=5, alpha=0.8, label='Fit')
+            plt.grid()
+            plt.legend(loc='best')
+            plt.xlabel('Null depth')
+            plt.ylabel('Frequency')
+            count += 1
+        ax.text(-0.5, -0.5, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+    
+#plt.show()
 #data_IA_axis = cp.array(np.linspace(data_IA[0].min(), data_IA[0].max(), np.size(np.unique(data_IA[0]))), dtype=cp.float32)
 #cdf_data_IA = gff.computeCdf(data_IA_axis, data_IA[0], 'cdf', False)
 #

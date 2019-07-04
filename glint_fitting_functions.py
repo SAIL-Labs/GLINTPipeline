@@ -13,6 +13,7 @@ from scipy.optimize import curve_fit, leastsq, least_squares
 from timeit import default_timer as time
 import h5py
 import os
+from cupyx.scipy.special.statistics import ndtr
 
 interpolate_kernel = cp.ElementwiseKernel(
     'float32 x_new, raw float32 xp, int32 xp_size, raw float32 yp', 
@@ -139,7 +140,7 @@ def load_data(data, wl_edges, *args):
     wl_scale = []
     
     for d in data:
-        with h5py.File(d) as data_file:
+        with h5py.File(d, 'r') as data_file:
             wl_scale.append(np.array(data_file['wl_scale']))
             
             for i in range(6):
@@ -299,5 +300,44 @@ def getErrorNull(data_dic, dark_dic):
     
     std_null = (null**2 * (var_Iminus/Iminus**2 + var_Iplus/Iplus**2))**0.5
     return std_null
-        
+ 
+
+def getErrorCDF(data_null, data_null_err, null_axis):
+    var_null_hist = cp.zeros((data_null.shape[0], null_axis.size))
+    for wl in range(data_null.shape[0]):
+        for k in range(null_axis.size):
+            weight = ndtr((null_axis[k]-data_null[wl])/data_null_err[wl])
+            var_null_hist[wl, k] = cp.sum(weight * (1-weight))
+            var_null_hist[wl, k] = var_null_hist[wl, k] / data_null.shape[1]**2
+                   
+    return cp.sqrt(var_null_hist)
     
+def doubleGaussCdf(x, mu, sig, A):
+    return 1/(1+A) * ndtr((x-mu)/(sig)) + A/(1+A) * ndtr((x-3*mu)/(sig))
+
+#x, step = cp.linspace(-100,100, 10000, endpoint=False, retstep=True)
+#mu1, sig1 = 10, 2
+#A = 2
+#
+#cdf = doubleGaussCdf(x, mu1, sig1, A)
+#rv = cp.asnumpy(rv_generator(cp.asarray(x, dtype=cp.float32), cp.asarray(cdf, dtype=cp.float32), 1000000))
+#edges = x - step/2
+#edges = np.append(edges, edges[-1]+step)
+#
+#hist, bin_edges = np.histogram(rv, edges, density=True)
+#
+#def doubleGaus(x, mu1, sig1, A):
+#    out = 1/((2*np.pi)**0.5*(sig1+A*sig1)) * (np.exp(-(x-mu1)**2/(2*sig1**2)) + A*np.exp(-(x-3*mu1)**2/(2*sig1**2)))
+#    return out 
+#
+#popt, pcov = curve_fit(doubleGaus, x, hist, [mu1, sig1, A])
+#print(popt)
+#
+#plt.figure()
+#plt.plot(x, cdf)
+#plt.grid()
+#
+#plt.figure()
+#plt.plot(x, hist)
+#plt.plot(x, doubleGaus(x, *popt))
+#plt.grid()
