@@ -30,11 +30,11 @@ save = True
 nb_files = None
 
 ''' Inputs '''
-datafolder = 'simulation_nofluctu/'
-calibration_path = 'simulation_nofluctu'
+datafolder = '201907_Data/'
+calibration_path = '201806_wavecal'
 root = "/mnt/96980F95980F72D3/glint/"
 data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f][:nb_files]
+data_list = [data_path+f for f in os.listdir(data_path) if 'p4' in f][:nb_files]
 
 ''' Output '''
 output_path = root+'reduction/'+datafolder
@@ -114,7 +114,7 @@ for f in data_list:
     null_depths_err = np.array([img.null1_err, img.null2_err, img.null3_err, img.null4_err, img.null5_err, img.null6_err])
     
     ''' Measure flux in photometric channels '''
-    img.getPhotometry()
+    img.getIntensities()
     p1.append(img.p1)
     p2.append(img.p2)
     p3.append(img.p3)
@@ -176,10 +176,10 @@ p4 = np.array([selt for elt in p4 for selt in elt])
 fluxes = fluxes[1:]
 
 ''' Miscellaneous '''
-plop = [p1[:,56], p2[:,56], p3[:,56], p4[:,56]]
-plop_label = ['p1' ,'p2', 'p3', 'p4']
-for k in range(len(plop)):
-    photo = plop[k]
+photometries = [p1[:,56], p2[:,56], p3[:,56], p4[:,56]]
+photometries_label = ['p1' ,'p2', 'p3', 'p4']
+for k in range(len(photometries)):
+    photo = photometries[k]
     histo, bin_edges = np.histogram(photo, int(photo.size**0.5))
     binning = bin_edges[:-1] + np.diff(bin_edges)/2
     histo = histo / np.sum(histo)
@@ -202,12 +202,11 @@ for k in range(len(plop)):
     plt.xlabel('Bins', size=40)
     plt.ylabel('Counts (normalised)', size=40)
     txt = r'$\mu_{p%s} = %.3f$'%(k+1, popt[1]) + '\n' + r'$\sigma_{p%s} = %.3f$'%(k+1,popt[2])
-#    txt2 = r'$\mu_{dk} = %.3f$'%(popt2[1]) + '\n' + r'$\sigma_{dk} = %.3f$'%(popt2[2])
-#    plt.text(0.05,0.3, txt+'\n'+txt2, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+    plt.text(0.05,0.3, txt, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
 
-for k in range(len(plop)):
+for k in range(len(photometries)):
     plt.figure(figsize=(19.20, 10.80))
-    plt.plot(np.arange(plop[k].size)[::100], plop[k][::100])
+    plt.plot(np.arange(photometries[k].size)[::100], photometries[k][::100])
     plt.grid()
     plt.xlabel('Frame/100', size=30)
     plt.ylabel('Fitted amplitude', size=30)

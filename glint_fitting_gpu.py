@@ -157,7 +157,7 @@ var_null_hist = var_null_hist**0.5
 var_null_hist2 = var_null_hist.copy()
     
 null_hist = null_hist / np.sum(null_hist, axis=-1)[:,:,None]
-var_null_hist2[var_null_hist>=null_hist] = null_hist[var_null_hist>=null_hist]*0.9999
+var_null_hist2[var_null_hist>=null_hist] = null_hist[var_null_hist>=null_hist]*0.9999 # for log-scaled plot
 
 #null_hist_gpu = cp.asarray(null_hist, dtype=cp.float32)
 #null_bins_edges_gpu = cp.asarray(null_bins_edges, dtype=cp.float32)

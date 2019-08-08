@@ -28,10 +28,10 @@ save = True
 
 print("Getting the shape (position and width) of all tracks")
 ''' Inputs '''
-datafolder = '201810_labdata/'
+datafolder = '20190715/'
 root = "/mnt/96980F95980F72D3/glint/"
 data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f]
+data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f in f]
 
 ''' Output '''
 output_path = root+'reduction/'+datafolder
@@ -51,7 +51,7 @@ for f in data_list[:]:
     superNbImg = superNbImg + img.nbimg
 
 super_img = super_img / superNbImg
-super_img -= super_img[:,:20].mean()
+super_img -= super_img[:,:10].mean()
 
 sh_img = super_img.shape
 
@@ -63,7 +63,10 @@ nb_tracks = 16 # Number of tracks
 y_ends = [33, 329] # row of top and bottom-most Track
 sep = (y_ends[1] - y_ends[0])/(nb_tracks-1)
 
-plt.figure(0);plt.clf();plt.imshow(super_img[72-10:72+11], interpolation='none', aspect='auto');plt.colorbar()
+plt.figure(0)
+plt.clf()
+plt.imshow(super_img, interpolation='none')
+plt.colorbar()
 
 ''' Fit a gaussian on every track and spectral channel
     to get their positions, widths and amplitude '''
@@ -122,12 +125,12 @@ for i in range(nb_tracks)[:]:
     color = next(ax._get_lines.prop_cycler)['color']
     marker, marker2 = '+-', '.'
     plt.subplot(221)
-    plt.plot(spectral_axis[:], params[:,i,1], marker, lw=3, label='Track '+str(i+1))
-    plt.plot(spectral_axis[:], fitted_pos, marker2, label='Poly '+str(i+1))
+    plt.plot(spectral_axis[:], params[:,i,1], marker, lw=3, label='Position')
+    plt.plot(spectral_axis[:], fitted_pos, marker2, label='Fit')
     plt.grid()
     plt.legend(loc='best', ncol=4)
     plt.ylim(fitted_pos.min()*0.999, fitted_pos.max()*1.001)
-    plt.title('x0 / Track')
+    plt.title('x0 / Track '+str(i+1))
     plt.ylabel('x0')
     plt.xlabel('Wavelength')
     plt.subplot(223)
@@ -137,11 +140,11 @@ for i in range(nb_tracks)[:]:
     plt.ylabel('Residual (%)')
     plt.ylim(-1, 1)
     plt.subplot(222)
-    plt.plot(spectral_axis, params[:,i,2], marker, lw=3, label='Track '+str(i+1))
-    plt.plot(spectral_axis, width_poly[i](spectral_axis), marker2, label='Poly '+str(i+1))
+    plt.plot(spectral_axis, params[:,i,2], marker, lw=3, label='Width')
+    plt.plot(spectral_axis, width_poly[i](spectral_axis), marker2, label='Fit')
     plt.grid()
     plt.legend(loc='best', ncol=4)
-    plt.title('sig / Track')
+    plt.title('sig / Track'+str(i+1))
     plt.ylabel('Sig')
     plt.xlabel('Wavelength')
     plt.xlim(0)

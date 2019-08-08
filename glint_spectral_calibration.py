@@ -73,7 +73,7 @@ for elt in data_list[:]:
     superNbImg = 0.
      
     for f in elt:
-        img = glint_classes.File(f, transpose=True)        
+        img = glint_classes.File(f)        
         img.data = img.data - dark
         super_img = super_img + img.data.sum(axis=0)
         superNbImg = superNbImg + img.nbimg
@@ -102,21 +102,29 @@ for elt in data_list[:]:
     ygrid = np.array([np.around(p(spectral_axis)) for p in position_poly], dtype=np.int)
     xgrid = np.meshgrid(spectral_axis, spectral_axis)[0][:nb_tracks]
     tracks = super_img[ygrid, xgrid]
-    wl_pos = []
+    wl_pos = [] # Position of the spectral lines on the detector for each channel
     for i in range(nb_tracks):
         popt, pcov = curve_fit(gaussian, spectral_axis, tracks[i], p0=[100., spectral_axis[np.argmax(tracks[i])], 1.])
         wl_pos.append(popt[1:])
+        if i ==2:
+            plt.figure();plt.plot(spectral_axis, tracks[i]);plt.plot(spectral_axis, gaussian(spectral_axis, *popt));plt.grid()
     calib_pos.append(wl_pos)
 
 calib_pos = np.array(calib_pos)
 
-coeff_poly_wl_to_px = np.array([np.polyfit(wavelength, calib_pos[:,i,0], deg=1) for i in range(nb_tracks)]) # detector ersolution is around 5 nm/px
+coeff_poly_wl_to_px = np.array([np.polyfit(wavelength, calib_pos[:,i,0], deg=1) for i in range(nb_tracks)]) # detector resolution is around 5 nm/px
 coeff_poly_px_to_wl = np.array([np.polyfit(calib_pos[:,i,0], wavelength, deg=1) for i in range(nb_tracks)])
 poly_wl = [np.poly1d(coeff_poly_wl_to_px[i]) for i in range(nb_tracks)]
+poly_px = [np.poly1d(coeff_poly_px_to_wl[i]) for i in range(nb_tracks)]
+
+spectral_psf_pos = np.array([poly_px[i](calib_pos[:,i,0]) for i in range(16)]).T
+spectral_psf_sig = calib_pos[:,:,1] * abs(coeff_poly_px_to_wl[None,:,0])
+spectral_psf = np.stack([spectral_psf_pos, spectral_psf_sig], axis=2)
 
 if save:
     np.save(output_path+'wl_to_px', coeff_poly_wl_to_px)
     np.save(output_path+'px_to_wl', coeff_poly_px_to_wl)
+    np.save(output_path+'spectral_psf', spectral_psf)
 
 fwhm = 2 * np.sqrt(2*np.log(2)) * calib_pos[:,:,1] * abs(coeff_poly_px_to_wl[None,:,0])
 print('Spectral resolution for')

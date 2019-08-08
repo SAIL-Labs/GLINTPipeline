@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import os
 import glint_classes
 import h5py
-from timeit import default_timer as time
+from timeit import default_timer as timer
 from scipy.optimize import curve_fit
 
 def gaus(x, a, x0, sig):
@@ -73,11 +73,11 @@ nb_files = None
 edge_min, edge_max = -300, 300
 
 ''' Inputs '''
-datafolder = '201806_alfBoo/'
+datafolder = '20190718/20190718_scan_bl/'
 root = "/mnt/96980F95980F72D3/glint_data/"
 data_path = root+datafolder
 dark_list = [data_path+f for f in os.listdir(data_path) if 'dark' in f][:nb_files]
-date = '2018-06-01'
+date = '2019-07-18'
 
 ''' Output '''
 output_path = '/mnt/96980F95980F72D3/glint/reduction/'+datafolder
@@ -132,22 +132,22 @@ if superNbImg != 0.:
         np.save(output_path+'superdark', superDark)
         np.save(output_path+'superdarkchannel', superDarkChannel)
 
-bin_hist, step = np.linspace(edge_min-0.5, edge_max+0.5, edge_max-edge_min+1, retstep=True)
-bin_hist_cent = bin_hist[:-1] + step/2
-hist_slices = []
-list_hist = []
-
-for f in dark_list:
-    print("Histogram of : %s (%d / %d)" %(f, dark_list.index(f)+1, len(dark_list)))
-    dark = glint_classes.Null(f)
-    spatial_axis = np.arange(dark.data.shape[0])
-    hist = np.histogram(np.ravel(dark.data - dark.data.mean(axis=(1,2))[:,None,None]), bins=bin_hist)
-    list_hist.append(hist[0])
+if monitor:
+    bin_hist, step = np.linspace(edge_min-0.5, edge_max+0.5, edge_max-edge_min+1, retstep=True)
+    bin_hist_cent = bin_hist[:-1] + step/2
+    hist_slices = []
+    list_hist = []
     
-    dark.insulateTracks(channel_pos, sep, spatial_axis)
-    dark.slices = dark.slices - superDarkChannel
-    
-    if monitor:
+    for f in dark_list:
+        print("Histogram of : %s (%d / %d)" %(f, dark_list.index(f)+1, len(dark_list)))
+        dark = glint_classes.Null(f)
+        spatial_axis = np.arange(dark.data.shape[0])
+        hist = np.histogram(np.ravel(dark.data - dark.data.mean(axis=(1,2))[:,None,None]), bins=bin_hist)
+        list_hist.append(hist[0])
+        
+        dark.insulateTracks(channel_pos, sep, spatial_axis)
+        dark.slices = dark.slices - superDarkChannel
+        
         try:
             dark_current = np.vstack((dark_current, dark.slices.mean(axis=(1,3))))
             dk56 = np.vstack((dk56, np.reshape(dark.slices[:,56,15,:].mean(axis=-1), (-1,1))))
@@ -157,131 +157,168 @@ for f in dark_list:
             dark_current = dark.slices.mean(axis=(1,3))
             dk56 = np.reshape(dark.slices[:,56,15,:].mean(axis=-1), (-1,1))
             dk56bis = np.reshape(dark.slices[:,56,15,10].mean(axis=-1), (-1,1))
-
-    histo_per_file = []
-    for k in range(16):
-        histo_per_file.append(getHistogram(np.ravel(dark.slices[:,:,k,:]), bin_hist))
-    hist_slices.append(histo_per_file)
-
-list_hist = np.array(list_hist)    
-hist_slices = np.array(hist_slices)
-super_hist = np.sum(hist_slices, axis=0)
-super_hist = super_hist / np.sum(super_hist, axis=1)[:,None] 
-
-list_hist = np.sum(list_hist, axis=0)
-list_hist = list_hist / np.sum(list_hist)
-
-params = []
-for i in range(16):
-    popt, pcov = curve_fit(gaus, bin_hist_cent, super_hist[i], p0=[max(super_hist[i]), 0., 50])
-    params.append(popt)
-params = np.array(params)
-
-hist_to_save = np.empty((super_hist.shape[0], super_hist.shape[1], 2))
-hist_to_save[:,:,0] = super_hist
-hist_to_save[:,:,1] = bin_hist[:-1]
-
-if save:
-    saveFile(output_path+'hist_dark_params.hdf5', params, date)
-    saveFile(output_path+'hist_dark_slices.hdf5', hist_to_save, date)
-    saveFile(output_path+'hist_dark.hdf5', np.array([list_hist, bin_hist[:-1]]), date, 'global')
-
-popt, pcov = curve_fit(gaus, bin_hist_cent, list_hist, p0=[max(list_hist), 0, 50])
-f = plt.figure(figsize=(19.20, 10.80))
-ax = f.add_subplot(111)
-plt.plot(bin_hist_cent, list_hist, lw=5)
-plt.plot(bin_hist_cent, gaus(bin_hist_cent, *popt), lw=4, alpha=0.8)
-plt.grid()
-plt.xlabel('Dark current', size=40)
-plt.ylabel('Counts (normalised)', size=40)
-plt.xticks(size=35);plt.yticks(size=35);
-txt = r'$\mu = %.3f$'%(popt[1]) + '\n' + r'$\sigma = %.3f$'%(popt[2])
-plt.text(0.05,0.6, txt, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
-
-plt.figure(figsize=(19.20, 10.80))
-for i in range(16):
-    plt.subplot(4,4,i+1)
-    plt.plot(bin_hist_cent, super_hist[i])
-    plt.plot(bin_hist_cent, gaus(bin_hist_cent, *params[i]), label=r'$\mu = $%.3f'%params[i,1]+'\n'+r'$\sigma = $%.3f'%params[i,2])
-    plt.grid()
-    plt.xlabel('Dark current (ADU)')
-    plt.ylabel('Count')
-    plt.legend(loc='upper left')
-#    plt.xticks(size=36);plt.yticks(size=36)
-plt.suptitle('Histogram of the background noise')
-
-plt.figure(figsize=(19.20, 10.80))
-for i in range(16):
-    plt.subplot(4,4,i+1)
-    plt.semilogy(bin_hist_cent, super_hist[i])
-    plt.semilogy(bin_hist_cent, gaus(bin_hist_cent, *params[i]), label=r'$\mu = $%.3f'%params[i,1]+'\n'+r'$\sigma = $%.3f'%params[i,2])
-    plt.grid()
-    plt.xlabel('Dark current (ADU)')
-    plt.ylabel('Count')
-    plt.legend(loc='upper left')
-    plt.ylim(1e-8,10)
-#    plt.xlim(-1000,1000)
-#    plt.xticks(size=36);plt.yticks(size=36)
-plt.suptitle('Histogram of the background noise')
-
-
-''' Inspecting non-uniformities '''
-if monitor:
-    hist_dk56, bin_dk56 = np.histogram(dk56, bins=int(len(dk56)**0.5))    
-    bin_dk56_cent = bin_dk56[:-1] + np.diff(bin_dk56)/2
-    hist_dk56 = hist_dk56 / np.sum(hist_dk56)
-        
-    popt, pcov = curve_fit(gaus, bin_dk56_cent, hist_dk56, p0=[max(hist_dk56), dk56.mean(), dk56.std()])
+    
+        histo_per_file = []
+        for k in range(16):
+            histo_per_file.append(getHistogram(np.ravel(dark.slices[:,:,k,:]), bin_hist))
+        hist_slices.append(histo_per_file)
+    
+    list_hist = np.array(list_hist)    
+    hist_slices = np.array(hist_slices)
+    super_hist = np.sum(hist_slices, axis=0)
+    super_hist = super_hist / np.sum(super_hist, axis=1)[:,None] 
+    
+    list_hist = np.sum(list_hist, axis=0)
+    list_hist = list_hist / np.sum(list_hist)
+    
+    params = []
+    for i in range(16):
+        popt, pcov = curve_fit(gaus, bin_hist_cent, super_hist[i], p0=[max(super_hist[i]), 0., 50])
+        params.append(popt)
+    params = np.array(params)
+    
+    hist_to_save = np.empty((super_hist.shape[0], super_hist.shape[1], 2))
+    hist_to_save[:,:,0] = super_hist
+    hist_to_save[:,:,1] = bin_hist[:-1]
+    
+    if save:
+        saveFile(output_path+'hist_dk_params.hdf5', params, date)
+        saveFile(output_path+'hist_dk_slices.hdf5', hist_to_save, date)
+        saveFile(output_path+'hist_dk.hdf5', np.array([list_hist, bin_hist[:-1]]), date, 'global')
+    
+    popt, pcov = curve_fit(gaus, bin_hist_cent, list_hist, p0=[max(list_hist), 0, 50])
     f = plt.figure(figsize=(19.20, 10.80))
     ax = f.add_subplot(111)
-    plt.title('Histogram of dark current of P1 at 56th column of pixel', size=40)
-    plt.semilogy(bin_dk56_cent, hist_dk56, lw=5, label='Histogram')
-    plt.semilogy(bin_dk56_cent, gaus(bin_dk56_cent, *popt), lw=3, alpha=0.8, label='Gaussian fit')
+    plt.plot(bin_hist_cent, list_hist, lw=5)
+    plt.plot(bin_hist_cent, gaus(bin_hist_cent, *popt), lw=4, alpha=0.8)
     plt.grid()
     plt.xlabel('Dark current', size=40)
     plt.ylabel('Counts (normalised)', size=40)
-    plt.xticks(size=40);plt.yticks(size=40)
+    plt.xticks(size=35);plt.yticks(size=35);
     txt = r'$\mu = %.3f$'%(popt[1]) + '\n' + r'$\sigma = %.3f$'%(popt[2])
-    plt.text(0.5,0.1, txt, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
-
-    hist_dk56bis, bin_dk56bis = np.histogram(dk56bis, bins=int(len(dk56bis)**0.5))    
-    bin_dk56bis_cent = bin_dk56bis[:-1] + np.diff(bin_dk56bis)/2
-    hist_dk56bis = hist_dk56bis / np.sum(hist_dk56bis)
-        
-    popt, pcov = curve_fit(gaus, bin_dk56bis_cent, hist_dk56bis, p0=[max(hist_dk56bis), dk56bis.mean(), dk56bis.std()])
-    f = plt.figure(figsize=(19.20, 10.80))
-    ax = f.add_subplot(111)
-    plt.title('Histogram of dark current of center of P1 at 56th column of pixel', size=40)
-    plt.semilogy(bin_dk56bis_cent, hist_dk56bis, lw=5, label='Histogram')
-    plt.semilogy(bin_dk56bis_cent, gaus(bin_dk56bis_cent, *popt), lw=3, alpha=0.8, label='Gaussian fit')
-    plt.grid()
-    plt.xlabel('Dark current', size=40)
-    plt.ylabel('Count (normalised)', size=40)
-    plt.xticks(size=40);plt.yticks(size=40)
-    txt = r'$\mu = %.3f$'%(popt[1]) + '\n' + r'$\sigma = %.3f$'%(popt[2])
-    plt.text(0.5,0.1, txt, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+    plt.text(0.05,0.6, txt, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
     
     plt.figure(figsize=(19.20, 10.80))
     for i in range(16):
         plt.subplot(4,4,i+1)
-        plt.plot(np.arange(dark_current.shape[0])[::500], dark_current[::500,i])
+        plt.plot(bin_hist_cent, super_hist[i])
+        plt.plot(bin_hist_cent, gaus(bin_hist_cent, *params[i]), label=r'$\mu = $%.3f'%params[i,1]+'\n'+r'$\sigma = $%.3f'%params[i,2])
         plt.grid()
-        plt.title('Track %s'%(i+1))
-        plt.xlabel('Frame/500')
-        plt.ylabel('Avg dark current')
- 
-    plt.figure(figsize=(19.20, 10.80))
-    plt.plot(np.arange(dk56.size)[::100], dk56[::100])
-    plt.grid()
-    plt.xlabel('Frame/100', size=30)
-    plt.ylabel('Avg amplitude', size=30)
-    plt.xticks(size=30);plt.yticks(size=30)
-    plt.title('Avg dark current in P1 at 56th column of pixels', size=35)
+        plt.xlabel('Dark current (ADU)')
+        plt.ylabel('Count')
+        plt.legend(loc='upper left')
+    #    plt.xticks(size=36);plt.yticks(size=36)
+    plt.suptitle('Histogram of the background noise')
     
     plt.figure(figsize=(19.20, 10.80))
-    plt.plot(np.arange(dk56bis.size)[::100], dk56[::100])
-    plt.grid()
-    plt.xlabel('Frame/100', size=30)
-    plt.ylabel('Avg amplitude', size=30)
-    plt.xticks(size=30);plt.yticks(size=30)
-    plt.title('Dark current at center of P1 at 56th column of pixels', size=35)    
+    for i in range(16):
+        plt.subplot(4,4,i+1)
+        plt.semilogy(bin_hist_cent, super_hist[i])
+        plt.semilogy(bin_hist_cent, gaus(bin_hist_cent, *params[i]), label=r'$\mu = $%.3f'%params[i,1]+'\n'+r'$\sigma = $%.3f'%params[i,2])
+        plt.grid()
+        plt.xlabel('Dark current (ADU)')
+        plt.ylabel('Count')
+        plt.legend(loc='upper left')
+        plt.ylim(1e-8,10)
+    #    plt.xlim(-1000,1000)
+    #    plt.xticks(size=36);plt.yticks(size=36)
+    plt.suptitle('Histogram of the background noise')
+    
+    
+    ''' Inspecting non-uniformities '''
+    if monitor:
+        hist_dk56, bin_dk56 = np.histogram(dk56, bins=int(len(dk56)**0.5))    
+        bin_dk56_cent = bin_dk56[:-1] + np.diff(bin_dk56)/2
+        hist_dk56 = hist_dk56 / np.sum(hist_dk56)
+            
+        popt, pcov = curve_fit(gaus, bin_dk56_cent, hist_dk56, p0=[max(hist_dk56), dk56.mean(), dk56.std()])
+        f = plt.figure(figsize=(19.20, 10.80))
+        ax = f.add_subplot(111)
+        plt.title('Histogram of dark current of P1 at 56th column of pixel', size=40)
+        plt.semilogy(bin_dk56_cent, hist_dk56, lw=5, label='Histogram')
+        plt.semilogy(bin_dk56_cent, gaus(bin_dk56_cent, *popt), lw=3, alpha=0.8, label='Gaussian fit')
+        plt.grid()
+        plt.xlabel('Dark current', size=40)
+        plt.ylabel('Counts (normalised)', size=40)
+        plt.xticks(size=40);plt.yticks(size=40)
+        txt = r'$\mu = %.3f$'%(popt[1]) + '\n' + r'$\sigma = %.3f$'%(popt[2])
+        plt.text(0.5,0.1, txt, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+    
+        hist_dk56bis, bin_dk56bis = np.histogram(dk56bis, bins=int(len(dk56bis)**0.5))    
+        bin_dk56bis_cent = bin_dk56bis[:-1] + np.diff(bin_dk56bis)/2
+        hist_dk56bis = hist_dk56bis / np.sum(hist_dk56bis)
+            
+        popt, pcov = curve_fit(gaus, bin_dk56bis_cent, hist_dk56bis, p0=[max(hist_dk56bis), dk56bis.mean(), dk56bis.std()])
+        f = plt.figure(figsize=(19.20, 10.80))
+        ax = f.add_subplot(111)
+        plt.title('Histogram of dark current of center of P1 at 56th column of pixel', size=40)
+        plt.semilogy(bin_dk56bis_cent, hist_dk56bis, lw=5, label='Histogram')
+        plt.semilogy(bin_dk56bis_cent, gaus(bin_dk56bis_cent, *popt), lw=3, alpha=0.8, label='Gaussian fit')
+        plt.grid()
+        plt.xlabel('Dark current', size=40)
+        plt.ylabel('Count (normalised)', size=40)
+        plt.xticks(size=40);plt.yticks(size=40)
+        txt = r'$\mu = %.3f$'%(popt[1]) + '\n' + r'$\sigma = %.3f$'%(popt[2])
+        plt.text(0.5,0.1, txt, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+        
+        plt.figure(figsize=(19.20, 10.80))
+        for i in range(16):
+            time = np.arange(dark_current.shape[0])
+            shape = dark_current.shape
+            binning = 10
+            new_shape = int(shape[0]//binning*binning)
+            time_binned = np.reshape(time[:new_shape], (int(new_shape/binning), binning))
+            time_binned = np.mean(time_binned, axis=1)
+            dark_current_binned = np.reshape(dark_current[:new_shape,i], (int(new_shape/binning), binning))
+            dark_current_binned = np.mean(dark_current_binned, axis=1)
+            print(dark_current_binned.std())
+            popt = np.polyfit(time_binned, dark_current_binned, 1)
+            p = np.poly1d(popt)
+            plt.subplot(4,4,i+1)
+            plt.plot(time[::500], dark_current[::500,i], alpha=0.5, label='Data (subsampled)')
+            plt.plot(time_binned, dark_current_binned, label='Binned data (%s)'%binning)
+            plt.plot(time[::500], p(time[::500]), label='Fit')
+            plt.grid()
+            plt.ylim(-4.5, 4.5)
+            plt.title('Track %s (Drift = %.3E/frame)'%(i+1,popt[0]))
+            plt.xlabel('Frame')
+            plt.ylabel('Avg dark current')
+            if i ==0: plt.legend(loc='best')
+     
+        plt.figure(figsize=(19.20, 10.80))
+        plt.plot(np.arange(dk56.size)[::100], dk56[::100])
+        plt.grid()
+        plt.xlabel('Frame/100', size=30)
+        plt.ylabel('Avg amplitude', size=30)
+        plt.xticks(size=30);plt.yticks(size=30)
+        plt.title('Avg dark current in P1 at 56th column of pixels', size=35)
+        
+        plt.figure(figsize=(19.20, 10.80))
+        plt.plot(np.arange(dk56bis.size)[::100], dk56[::100])
+        plt.grid()
+        plt.xlabel('Frame/100', size=30)
+        plt.ylabel('Avg amplitude', size=30)
+        plt.xticks(size=30);plt.yticks(size=30)
+        plt.title('Dark current at center of P1 at 56th column of pixels', size=35)
+        
+        plt.figure(figsize=(19.20, 10.80))
+        avg_dark = np.reshape(avg_dark, (-1,))
+        time = np.arange(avg_dark.size)
+        shape = avg_dark.shape
+        binning = 10
+        new_shape = int(shape[0]//binning*binning)
+        time_binned = np.reshape(time[:new_shape], (-1, binning))
+        avg_dark_binned = np.reshape(avg_dark[:new_shape], (-1, binning))
+        time_binned = np.mean(time_binned, axis=1)
+        avg_dark_binned = np.mean(avg_dark_binned, axis=1)
+        popt = np.polyfit(time_binned, avg_dark_binned, 1)
+        p = np.poly1d(popt)        
+        plt.plot(time[::100], avg_dark[::100], lw=3, alpha=0.5, label='Data')
+        plt.plot(time_binned, avg_dark_binned, lw=3, label='Binned data (%s)'%binning)
+        plt.plot(time[::100], p(time[::100]), lw=2, alpha=0.8, label='Fit')
+        plt.grid()
+        plt.xlabel('Frame', size=30)
+        plt.ylabel('Avg dark current', size=30)
+        plt.xticks(size=30);plt.yticks(size=30)
+        plt.title('Average dark current on whole frame (Drift = %.3E/frame)'%popt[0], size=35)       
+        plt.legend(loc='best')

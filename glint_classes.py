@@ -187,7 +187,7 @@ class File(object):
 
 class Null(File):
     ''' Getting the null and photometries'''
-    
+        
     def insulateTracks(self, channel_pos, sep, spatial_axis, **kwargs):
         ''' 
         Insulating each track 
@@ -420,7 +420,7 @@ class Null(File):
 #            print(self.px_scale[2,plop])
 #            print(self.px_scale[0,plop])
         
-    def getPhotometry(self):
+    def getIntensities(self):
         ''' Measure flux in a spectral channel with the different estimators'''
         
         # With amplitude
@@ -556,4 +556,45 @@ class Null(File):
                 f['null%s/Iminus'%(i+1)].attrs['comment'] = 'python dim : (nb frame, wl channel)'
                 f['null%s/Iplus'%(i+1)].attrs['comment'] = 'python dim : (nb frame, wl channel)'
                 
-                
+
+class ChipProperties(Null):
+            
+    def getRatioCoeff(self, beam, zeta_coeff):
+        beam = int(beam)
+        if beam == 1:
+            zeta_coeff['b1null1'] = self.Iminus1 / self.p1
+            zeta_coeff['b1null5'] = self.Iminus5 / self.p1
+            zeta_coeff['b1null3'] = self.Iminus3 / self.p1
+            zeta_coeff['b1null7'] = self.Iplus1 / self.p1
+            zeta_coeff['b1null11'] = self.Iplus5 / self.p1
+            zeta_coeff['b1null9'] = self.Iplus3 / self.p1
+            
+        elif beam == 2:
+            zeta_coeff['b2null1'] = self.Iminus1 / self.p2
+            zeta_coeff['b2null2'] = self.Iminus2 / self.p2
+            zeta_coeff['b2null6'] = self.Iminus6 / self.p2
+            zeta_coeff['b2null7'] = self.Iplus1 / self.p2
+            zeta_coeff['b2null8'] = self.Iplus2 / self.p2
+            zeta_coeff['b2null12'] = self.Iplus6 / self.p2
+            
+        elif beam == 3:
+            zeta_coeff['b3null5'] = self.Iminus5 / self.p3
+            zeta_coeff['b3null2'] = self.Iminus2 / self.p3
+            zeta_coeff['b3null4'] = self.Iminus4 / self.p3
+            zeta_coeff['b3null11'] = self.Iplus5 / self.p3
+            zeta_coeff['b3null8'] = self.Iplus2 / self.p3
+            zeta_coeff['b3null10'] = self.Iplus4 / self.p3
+            
+        elif beam == 4:
+            zeta_coeff['b4null3'] = self.Iminus3 / self.p4
+            zeta_coeff['b4null6'] = self.Iminus6 / self.p4
+            zeta_coeff['b4null4'] = self.Iminus4 / self.p4
+            zeta_coeff['b4null9'] = self.Iplus3 / self.p4
+            zeta_coeff['b4null12'] = self.Iplus6 / self.p4
+            zeta_coeff['b4null10'] = self.Iplus4 / self.p4
+            
+        else:
+            raise AssertionError('No beam selected (beam = 1..4)')  
+            
+        return zeta_coeff
+    
