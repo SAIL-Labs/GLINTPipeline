@@ -14,6 +14,7 @@ from timeit import default_timer as time
 import h5py
 import os
 from cupyx.scipy.special.statistics import ndtr
+import scipy.special as sp
 
 interpolate_kernel = cp.ElementwiseKernel(
     'float32 x_new, raw float32 xp, int32 xp_size, raw float32 yp', 
@@ -56,19 +57,19 @@ computeCdfCuda = cp.ElementwiseKernel(
     'raw float32 cdf',
     '''
     int low = 0;
-    int high = rv_sz - 1;
+    int high = rv_sz;
     int mid = 0;
     
-    while(low <= high){
+    while(low < high){
         mid = (low + high) / 2;
         if(rv[mid] <= x_axis){
             low = mid + 1;
         }
         else{
-            high = mid - 1;
+            high = mid;
         }
     }
-    cdf[i] = high + 1
+    cdf[i] = high;
     '''
     )
 
@@ -144,19 +145,18 @@ def load_data(data, wl_edges, *args):
             wl_scale.append(np.array(data_file['wl_scale']))
             
             for i in range(6):
-                null_data[i].append(np.array(data_file['null%s/null'%(i+1)]))
-                Iminus_data[i].append(np.array(data_file['null%s/Iminus'%(i+1)]))
-                Iplus_data[i].append(np.array(data_file['null%s/Iplus'%(i+1)]))
-                if data.index(d) == 0: beams_couple.append(data_file['null%s'%(i+1)].attrs['comment'])
+                null_data[i].append(np.array(data_file['null%s'%(i+1)]))
+                Iminus_data[i].append(np.array(data_file['Iminus%s'%(i+1)]))
+                Iplus_data[i].append(np.array(data_file['Iplus%s'%(i+1)]))
                 
-            photo_data[0].append(np.array(data_file['null1/pA'])) # Fill with beam 1 intensity
-            photo_data[1].append(np.array(data_file['null1/pB'])) # Fill with beam 2 intensity
-            photo_data[2].append(np.array(data_file['null4/pA'])) # Fill with beam 3 intensity
-            photo_data[3].append(np.array(data_file['null4/pB'])) # Fill with beam 4 intensity
-            photo_err_data[0].append(np.array(data_file['null1/pA_err'])) # Fill with beam 1 error
-            photo_err_data[1].append(np.array(data_file['null1/pB_err'])) # Fill with beam 2 error
-            photo_err_data[2].append(np.array(data_file['null4/pA_err'])) # Fill with beam 3 error
-            photo_err_data[3].append(np.array(data_file['null4/pB_err'])) # Fill with beam 4 error          
+            photo_data[0].append(np.array(data_file['p1'])) # Fill with beam 1 intensity
+            photo_data[1].append(np.array(data_file['p2'])) # Fill with beam 2 intensity
+            photo_data[2].append(np.array(data_file['p3'])) # Fill with beam 3 intensity
+            photo_data[3].append(np.array(data_file['p4'])) # Fill with beam 4 intensity
+            photo_err_data[0].append(np.array(data_file['p1err'])) # Fill with beam 1 error
+            photo_err_data[1].append(np.array(data_file['p2err'])) # Fill with beam 2 error
+            photo_err_data[2].append(np.array(data_file['p3err'])) # Fill with beam 3 error
+            photo_err_data[3].append(np.array(data_file['p4err'])) # Fill with beam 4 error          
             
     # Merge data along frame axis
     for i in range(6):
@@ -167,23 +167,23 @@ def load_data(data, wl_edges, *args):
         if i < 4:
             photo_data[i] = [selt for elt in photo_data[i] for selt in elt]
             photo_err_data[i] = [selt for elt in photo_err_data[i] for selt in elt]
-            
+        
     null_data = np.array(null_data)
     Iminus_data = np.array(Iminus_data)
     Iplus_data = np.array(Iplus_data)
     photo_data = np.array(photo_data)
     photo_err_data = np.array(photo_err_data)
-    wl_scale = np.array(wl_scale)[0]
+    wl_scale = wl_scale[0] #All the wl scale are supposed to be the same, just pick up the first of the list
     mask = np.arange(wl_scale.size)
     
     wl_min, wl_max = wl_edges
-    mask = np.arange(wl_scale.size)[(wl_scale>=wl_min)&(wl_scale <= wl_max)]
+    mask = mask[(wl_scale>=wl_min)&(wl_scale < wl_max)]
         
     null_data = null_data[:,:,mask[0]:mask[-1]+1]
     Iminus_data = Iminus_data[:,:,mask[0]:mask[-1]+1]
     Iplus_data = Iplus_data[:,:,mask[0]:mask[-1]+1]
     photo_data = photo_data[:,:,mask[0]:mask[-1]+1]
-    wl_scale = wl_scale[mask[0]:mask[-1]+1]
+    wl_scale = wl_scale[mask]
     
     null_data = np.transpose(null_data, axes=(0,2,1))
     photo_data = np.transpose(photo_data, axes=(0,2,1))
@@ -226,24 +226,46 @@ def getHistogramOfIntensities(data, bins, split, target='cpu'):
     
     return  pdf_I_interf, bins_cent
 
-def computeNullDepth(I1, I2, wavelength, opd, visibility, dark_null, dark_antinull, kappa_l):
+def computeNullDepth(IA, IB, wavelength, offset_opd, dopd, phase_bias, visibility, dark_null, dark_antinull, 
+                     zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B, step, oversampling_switch):
+    
     wave_number = 1./wavelength
-    Iminus = I1*np.sin(kappa_l)**2 + I2*np.cos(kappa_l)**2 - \
-        np.sqrt(I1 * I2) * np.sin(2*kappa_l) * visibility * np.sin(2*np.pi*wave_number*opd) + dark_null
-    Iplus = I1*np.cos(kappa_l)**2 + I2*np.sin(kappa_l)**2 + \
-        np.sqrt(I1 * I2) * np.sin(2*kappa_l) * visibility * np.sin(2*np.pi*wave_number*opd) + dark_antinull
+    sine = cp.sin(2*np.pi*wave_number*(offset_opd + dopd) + phase_bias)
+    if oversampling_switch:
+        delta_wave_number = abs(1/(wavelength + step/2) - 1/(wavelength - step/2))
+        arg = np.pi*delta_wave_number * (offset_opd + dopd)
+        sinc = cp.sin(arg) / arg
+        sine = sine * sinc
+        
+    Iminus = IA*zeta_minus_A + IB*zeta_minus_B - \
+        2 * np.sqrt(IA * IB) * np.sqrt(zeta_minus_A*zeta_minus_B) * visibility * sine + \
+        dark_null
+    Iplus = IA*zeta_plus_A + IB*zeta_plus_B + \
+        2 * np.sqrt(IA * IB) * np.sqrt(zeta_plus_A*zeta_plus_B) * visibility *sine + \
+        dark_antinull
     null = Iminus / Iplus
     return null
 
-def get_splitting_coeff(path, wl_idx):
-    if path == 'mock':
-        split = np.ones((4,4,96))
-    else:
-        split = path
+def get_zeta_coeff(path, wl_scale, plot=False):
+    coeff_new = {}
+    with h5py.File(path, 'r') as coeff:
+        wl = np.array(coeff['wl_scale'])[::-1]
         
-    split = split[:,:,wl_idx[0]:wl_idx[-1]+1]
-        
-    return split
+        for key in coeff.keys():
+            if key != 'wl_scale':
+                interp_zeta = np.interp(wl_scale[::-1], wl, np.array(coeff[key])[::-1])
+                coeff_new[key] = interp_zeta[::-1]
+            else:
+                coeff_new[key] = wl_scale
+                
+        if plot:
+            plt.figure()
+            plt.plot(np.array(coeff['wl_scale']), np.array(coeff['b1null1']), 'o-')
+            plt.plot(coeff_new['wl_scale'], coeff_new['b1null1'], '+-')
+            plt.grid()
+            plt.ylim(-1,10)
+    
+    return coeff_new
 
 def flattop(x):
     y = 2/(np.pi * x**2) * (np.cos(x/2) - np.cos(x))
@@ -303,41 +325,49 @@ def getErrorNull(data_dic, dark_dic):
  
 
 def getErrorCDF(data_null, data_null_err, null_axis):
-    var_null_hist = cp.zeros((data_null.shape[0], null_axis.size))
-    for wl in range(data_null.shape[0]):
-        for k in range(null_axis.size):
-            weight = ndtr((null_axis[k]-data_null[wl])/data_null_err[wl])
-            var_null_hist[wl, k] = cp.sum(weight * (1-weight))
-            var_null_hist[wl, k] = var_null_hist[wl, k] / data_null.shape[1]**2
+    var_null_cdf = []
+    for k in range(null_axis.size):
+        prob = sp.ndtr((null_axis[k]-data_null)/data_null_err)
+        variance = np.sum(prob * (1-prob))
+        var_null_cdf.append(variance)
+    var_null_cdf = np.array(var_null_cdf) / data_null.size**2
                    
-    return cp.sqrt(var_null_hist)
-    
-def doubleGaussCdf(x, mu, sig, A):
-    return 1/(1+A) * ndtr((x-mu)/(sig)) + A/(1+A) * ndtr((x-3*mu)/(sig))
+    return np.sqrt(var_null_cdf)
 
-#x, step = cp.linspace(-100,100, 10000, endpoint=False, retstep=True)
-#mu1, sig1 = 10, 2
-#A = 2
-#
-#cdf = doubleGaussCdf(x, mu1, sig1, A)
-#rv = cp.asnumpy(rv_generator(cp.asarray(x, dtype=cp.float32), cp.asarray(cdf, dtype=cp.float32), 1000000))
-#edges = x - step/2
-#edges = np.append(edges, edges[-1]+step)
-#
-#hist, bin_edges = np.histogram(rv, edges, density=True)
-#
-#def doubleGaus(x, mu1, sig1, A):
-#    out = 1/((2*np.pi)**0.5*(sig1+A*sig1)) * (np.exp(-(x-mu1)**2/(2*sig1**2)) + A*np.exp(-(x-3*mu1)**2/(2*sig1**2)))
-#    return out 
-#
-#popt, pcov = curve_fit(doubleGaus, x, hist, [mu1, sig1, A])
-#print(popt)
-#
-#plt.figure()
-#plt.plot(x, cdf)
-#plt.grid()
-#
-#plt.figure()
-#plt.plot(x, hist)
-#plt.plot(x, doubleGaus(x, *popt))
-#plt.grid()
+def getErrorPDF(data_null, data_null_err, null_axis):
+    var_null_hist = []
+    for k in range(null_axis.size-1):
+        prob = sp.ndtr((null_axis[k+1]-data_null)/data_null_err) - sp.ndtr((null_axis[k]-data_null)/data_null_err)
+        variance = np.sum(prob * (1-prob))
+        var_null_hist.append(variance)
+    var_null_hist = np.array(var_null_hist) / data_null.size**2
+                   
+    return np.sqrt(var_null_hist)
+   
+def doubleGaussCdf(x, mu1, mu2, sig, A):
+    return 1/(1+A) * ndtr((x-mu1)/(sig)) + A/(1+A) * ndtr((x-mu2)/(sig))
+
+def rv_gen_doubleGauss(nsamp, mu1, mu2, sig1, A, target):
+    x, step = cp.linspace(-2500,2500, 10000, endpoint=False, retstep=True, dtype=cp.float32)
+    cdf = doubleGaussCdf(x, mu1, mu2, sig1, A)
+    cdf = cp.asarray(cdf, dtype=cp.float32)
+    if target == 'cpu':
+        rv = cp.asnumpy(rv_generator(x, cdf, nsamp))
+    else:
+        rv = rv_generator(x, cdf, nsamp)
+        rv = cp.array(rv, dtype=cp.float32)
+    return rv
+
+if __name__ == '__main__':
+    offset_opd = (0.39999938011169434 - (-1.500000000000056843e-02))*1000
+    phase_bias = -0.9801769079200153
+    a = computeNullDepth(1, 1, 1552, offset_opd, 0, phase_bias, 1, 0, 0, 1, 1, 1, 1)
+    print(a)
+    
+    rv_opd = rv_gen_doubleGauss(1000000, 0, 0+1602/2, 100, 0.5, 'cpu')
+    
+    hist, bin_edges = np.histogram(rv_opd, 1000, density=True)
+        
+    plt.figure()
+    plt.plot(bin_edges[:-1], hist)
+    plt.grid()    
