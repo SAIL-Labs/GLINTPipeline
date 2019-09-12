@@ -92,7 +92,7 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
 #                        debug.append([0, k, i, j])
 #                    if abs(popt2[0]) > 1.e+4:
 #                        debug.append([1, k, i, j])
-                if j==46 and k == 0:
+                if j==47 and k == 0:
                     print(k, i, j)
                     print('Weight on std', (np.sum((simple_gaus/simple_gaus.sum())**2))**0.5)
                     print(slices[k,j,i][:7].std())
@@ -538,37 +538,79 @@ class Null(File):
         '''
         
         beams_couple = {'null1':'Beams 1/2', 'null2':'Beams 2/3', 'null3':'Beams 1/4',\
-                        'null4':'Beams 3/4', 'null5':'Beams 1/3', 'null6':'Beams 2/4'}
+                        'null4':'Beams 3/4', 'null5':'Beams 3/1', 'null6':'Beams 4/2'}
         
         if mode == 'amplitude':
-            arrs = [[self.null1, self.null1_err, self.p1, self.p1_err, self.p2, self.p2_err, self.Iminus1, self.Iplus1],\
-                [self.null2, self.null2_err, self.p2, self.p2_err, self.p3, self.p3_err, self.Iminus2, self.Iplus2],\
-                [self.null3, self.null3_err, self.p1, self.p1_err, self.p4, self.p4_err, self.Iminus3, self.Iplus3],\
-                [self.null4, self.null4_err, self.p3, self.p3_err, self.p4, self.p4_err, self.Iminus4, self.Iplus4],\
-                [self.null5, self.null5_err, self.p1, self.p1_err, self.p3, self.p3_err, self.Iminus5, self.Iplus5],\
-                [self.null6, self.null6_err, self.p2, self.p2_err, self.p4, self.p4_err, self.Iminus5, self.Iplus6]]
+            dictio = {'p1':self.p1, 'p1err':self.p1_err,
+                      'p2':self.p2, 'p2err':self.p2_err,
+                      'p3':self.p3, 'p3err':self.p3_err,
+                      'p4':self.p4, 'p4err':self.p4_err,
+                      'null1':self.null1, 'null1err':self.null1_err,
+                      'null2':self.null2, 'null2err':self.null2_err,
+                      'null3':self.null3, 'null3err':self.null3_err,
+                      'null4':self.null4, 'null4err':self.null4_err,
+                      'null5':self.null5, 'null5err':self.null5_err,
+                      'null6':self.null6, 'null6err':self.null6_err,
+                      'Iminus1':self.Iminus1, 'Iplus1':self.Iplus1,
+                      'Iminus2':self.Iminus2, 'Iplus2':self.Iplus2,
+                      'Iminus3':self.Iminus3, 'Iplus3':self.Iplus3,
+                      'Iminus4':self.Iminus4, 'Iplus4':self.Iplus4,
+                      'Iminus5':self.Iminus5, 'Iplus5':self.Iplus5,
+                      'Iminus6':self.Iminus6, 'Iplus6':self.Iplus6}
+                        
         elif mode == 'model':
-            arrs = [[self.null_model1, self.null_model1_err, self.p1_model, self.p1_model_err, self.p2_model, self.p2_model_err, self.Iminus_model1, self.Iplus_model1],\
-                [self.null_model2, self.null_model2_err, self.p2_model, self.p2_model_err, self.p3_model, self.p3_model_err, self.Iminus_model2, self.Iplus_model2],\
-                [self.null_model3, self.null_model3_err, self.p1_model, self.p1_model_err, self.p4_model, self.p4_model_err, self.Iminus_model3, self.Iplus_model3],\
-                [self.null_model4, self.null_model4_err, self.p3_model, self.p3_model_err, self.p4_model, self.p4_model_err, self.Iminus_model4, self.Iplus_model4],\
-                [self.null_model5, self.null_model5_err, self.p1_model, self.p1_model_err, self.p3_model, self.p3_model_err, self.Iminus_model5, self.Iplus_model5],\
-                [self.null_model6, self.null_model6_err, self.p2_model, self.p2_model_err, self.p4_model, self.p4_model_err, self.Iminus_model6, self.Iplus_model6]]
+            dictio = {'p1':self.p1_model, 'p1err':self.p1_model_err,
+                      'p2':self.p2_model, 'p2err':self.p2_model_err,
+                      'p3':self.p3_model, 'p3err':self.p3_model_err,
+                      'p4':self.p4_model, 'p4err':self.p4_model_err,
+                      'null1':self.null_model1, 'null1err':self.null_model1_err,
+                      'null2':self.null_model2, 'null2err':self.null_model2_err,
+                      'null3':self.null_model3, 'null3err':self.null_model3_err,
+                      'null4':self.null_model4, 'null4err':self.null_model4_err,
+                      'null5':self.null_model5, 'null5err':self.null_model5_err,
+                      'null6':self.null_model6, 'null6err':self.null_model6_err,
+                      'Iminus1':self.Iminus_model1, 'Iplus1':self.Iplus_model1,
+                      'Iminus2':self.Iminus_model2, 'Iplus2':self.Iplus_model2,
+                      'Iminus3':self.Iminus_model3, 'Iplus3':self.Iplus_model3,
+                      'Iminus4':self.Iminus_model4, 'Iplus4':self.Iplus_model4,
+                      'Iminus5':self.Iminus_model5, 'Iplus5':self.Iplus_model5,
+                      'Iminus6':self.Iminus_model6, 'Iplus6':self.Iplus_model6}
+            
         elif mode == 'windowed':
-            arrs = [[self.null_windowed1, self.null_windowed1_err, self.p1_windowed, self.p1_windowed_err, self.p2_windowed, self.p2_windowed_err, self.Iminus_windowed1, self.Iplus_windowed1],\
-                [self.null_windowed2, self.null_windowed2_err, self.p2_windowed, self.p2_windowed_err, self.p3_windowed, self.p3_windowed_err, self.Iminus_windowed2, self.Iplus_windowed2],\
-                [self.null_windowed3, self.null_windowed3_err, self.p1_windowed, self.p1_windowed_err, self.p4_windowed, self.p4_windowed_err, self.Iminus_windowed3, self.Iplus_windowed3],\
-                [self.null_windowed4, self.null_windowed4_err, self.p3_windowed, self.p3_windowed_err, self.p4_windowed, self.p4_windowed_err, self.Iminus_windowed4, self.Iplus_windowed4],\
-                [self.null_windowed5, self.null_windowed5_err, self.p1_windowed, self.p1_windowed_err, self.p3_windowed, self.p3_windowed_err, self.Iminus_windowed5, self.Iplus_windowed5],\
-                [self.null_windowed6, self.null_windowed6_err, self.p2_windowed, self.p2_windowed_err, self.p4_windowed, self.p4_windowed_err, self.Iminus_windowed6, self.Iplus_windowed6]]
+            dictio = {'p1':self.p1_windowed, 'p1err':self.p1_windowed_err,
+                      'p2':self.p2_windowed, 'p2err':self.p2_windowed_err,
+                      'p3':self.p3_windowed, 'p3err':self.p3_windowed_err,
+                      'p4':self.p4_windowed, 'p4err':self.p4_windowed_err,
+                      'null1':self.null_windowed1, 'null1err':self.null_windowed1_err,
+                      'null2':self.null_windowed2, 'null2err':self.null_windowed2_err,
+                      'null3':self.null_windowed3, 'null3err':self.null_windowed3_err,
+                      'null4':self.null_windowed4, 'null4err':self.null_windowed4_err,
+                      'null5':self.null_windowed5, 'null5err':self.null_windowed5_err,
+                      'null6':self.null_windowed6, 'null6err':self.null_windowed6_err,
+                      'Iminus1':self.Iminus_windowed1, 'Iplus1':self.Iplus_windowed1,
+                      'Iminus2':self.Iminus_windowed2, 'Iplus2':self.Iplus_windowed2,
+                      'Iminus3':self.Iminus_windowed3, 'Iplus3':self.Iplus_windowed3,
+                      'Iminus4':self.Iminus_windowed4, 'Iplus4':self.Iplus_windowed4,
+                      'Iminus5':self.Iminus_windowed5, 'Iplus5':self.Iplus_windowed5,
+                      'Iminus6':self.Iminus_windowed6, 'Iplus6':self.Iplus_windowed6}
         else:
-            arrs = [[self.null_raw1, self.null_raw1_err, self.p1_raw, self.p1_raw_err, self.p2_raw, self.p2_raw_err, self.Iminus_raw1, self.Iplus_raw1],\
-                [self.null_raw2, self.null_raw2_err, self.p2_raw, self.p2_raw_err, self.p3_raw, self.p3_raw_err, self.Iminus_raw2, self.Iplus_raw2],\
-                [self.null_raw3, self.null_raw3_err, self.p1_raw, self.p1_raw_err, self.p4_raw, self.p4_raw_err, self.Iminus_raw3, self.Iplus_raw3],\
-                [self.null_raw4, self.null_raw4_err, self.p3_raw, self.p3_raw_err, self.p4_raw, self.p4_raw_err, self.Iminus_raw4, self.Iplus_raw4],\
-                [self.null_raw5, self.null_raw5_err, self.p1_raw, self.p1_raw_err, self.p3_raw, self.p3_raw_err, self.Iminus_raw5, self.Iplus_raw5],\
-                [self.null_raw6, self.null_raw6_err, self.p2_raw, self.p2_raw_err, self.p4_raw, self.p4_raw_err, self.Iminus_raw6, self.Iplus_raw6]]
-
+            dictio = {'p1':self.p1_raw, 'p1err':self.p1_raw_err,
+                      'p2':self.p2_raw, 'p2err':self.p2_raw_err,
+                      'p3':self.p3_raw, 'p3err':self.p3_raw_err,
+                      'p4':self.p4_raw, 'p4err':self.p4_raw_err,
+                      'null1':self.null_raw1, 'null1err':self.null_raw1_err,
+                      'null2':self.null_raw2, 'null2err':self.null_raw2_err,
+                      'null3':self.null_raw3, 'null3err':self.null_raw3_err,
+                      'null4':self.null_raw4, 'null4err':self.null_raw4_err,
+                      'null5':self.null_raw5, 'null5err':self.null_raw5_err,
+                      'null6':self.null_raw6, 'null6err':self.null_raw6_err,
+                      'Iminus1':self.Iminus_raw1, 'Iplus1':self.Iplus_raw1,
+                      'Iminus2':self.Iminus_raw2, 'Iplus2':self.Iplus_raw2,
+                      'Iminus3':self.Iminus_raw3, 'Iplus3':self.Iplus_raw3,
+                      'Iminus4':self.Iminus_raw4, 'Iplus4':self.Iplus_raw4,
+                      'Iminus5':self.Iminus_raw5, 'Iplus5':self.Iplus_raw5,
+                      'Iminus6':self.Iminus_raw6, 'Iplus6':self.Iplus_raw6}
+            
         # Check if saved file exist
         if os.path.exists(path):
             opening_mode = 'w' # Overwright the whole existing file.
@@ -578,32 +620,18 @@ class Null(File):
         with h5py.File(path, opening_mode) as f:
             f.attrs['date'] = date
             f.attrs['nbimg'] = self.nbimg
+            f.attrs['array shape'] = 'python ndim : (nb frame, wl channel)'
             
             f.create_dataset('wl_scale', data=self.wl_scale.mean(axis=0))
             f['wl_scale'].attrs['comment'] = 'wl in nm'
             
-            for i in range(6):
-                f.create_group('null%s'%(i+1))
-                f.create_dataset('null%s/null'%(i+1), data=arrs[i][0])
-                f.create_dataset('null%s/null_err'%(i+1), data=arrs[i][1])
-                f.create_dataset('null%s/pA'%(i+1), data=arrs[i][2])
-                f.create_dataset('null%s/pA_err'%(i+1), data=arrs[i][3])
-                f.create_dataset('null%s/pB'%(i+1), data=arrs[i][4])
-                f.create_dataset('null%s/pB_err'%(i+1), data=arrs[i][5])
-                f.create_dataset('null%s/Iminus'%(i+1), data=arrs[i][6])
-                f.create_dataset('null%s/Iplus'%(i+1), data=arrs[i][7])
+            for key in dictio.keys():
+                f.create_dataset(key, data=dictio[key])
+                try:
+                    f[key].attrs['comment'] = beams_couple[key]
+                except KeyError:
+                    pass
                 
-                f['null%s'%(i+1)].attrs['comment'] = beams_couple['null%s'%(i+1)]
-                f['null%s/null'%(i+1)].attrs['comment'] = 'python dim : (nb frame, wl channel)'
-                f['null%s/null_err'%(i+1)].attrs['comment'] = 'python dim : (nb frame, wl channel)'
-                f['null%s/pA'%(i+1)].attrs['comment'] = 'python ndim : (nb frame, wl channel)'
-                f['null%s/pA_err'%(i+1)].attrs['comment'] = 'python dim : (nb frame, wl channel)'
-                f['null%s/pB'%(i+1)].attrs['comment'] = 'python ndim : (nb frame, wl channel)'
-                f['null%s/pB_err'%(i+1)].attrs['comment'] = 'python dim : (nb frame, wl channel)'
-                f['null%s/Iminus'%(i+1)].attrs['comment'] = 'python dim : (nb frame, wl channel)'
-                f['null%s/Iplus'%(i+1)].attrs['comment'] = 'python dim : (nb frame, wl channel)'
-                
-
 class ChipProperties(Null):
             
     def getRatioCoeff(self, beam, zeta_coeff):
