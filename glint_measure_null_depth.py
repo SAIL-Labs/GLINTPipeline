@@ -27,34 +27,37 @@ no_noise = False
 nb_img = (None, None)
 debug = False
 save = True
-nb_files = None
+nb_files = (None,None)
 
 ''' Inputs '''
-datafolder = '201907_Data/'
-calibration_path = '201806_wavecal'
+datafolder = '20190718/20190718_turbulence3/'
 root = "/mnt/96980F95980F72D3/glint/"
+calibration_path = root+'reduction/'+'calibration_params/'
 data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-data_list = [data_path+f for f in os.listdir(data_path) if 'p4' in f][:nb_files]
+data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f and 'n5n6' in f][nb_files[0]:nb_files[1]]
 
 ''' Output '''
 output_path = root+'reduction/'+datafolder
 if not os.path.exists(output_path):
     os.makedirs(output_path)
 
-dark = np.load(output_path+'superdark.npy')
-dark_per_channel = np.load(output_path+'superdarkchannel.npy')
+
 if no_noise:
-    dark_per_channel[:] = 0.
+    dark = np.zeros((344,96))
+    dark_per_channel = np.zeros((96,16,20))
+else:
+    dark = np.load(output_path+'superdark.npy')
+    dark_per_channel = np.load(output_path+'superdarkchannel.npy')
 
 ''' Set processing configuration and load instrumental calibration data '''
 nb_tracks = 16 # Number of tracks
 which_tracks = np.arange(16) # Tracks to process
-coeff_pos = np.load(output_path+'coeff_position_poly.npy')
-coeff_width = np.load(output_path+'coeff_width_poly.npy')
+coeff_pos = np.load(calibration_path+'coeff_position_poly.npy')
+coeff_width = np.load(calibration_path+'coeff_width_poly.npy')
 position_poly = [np.poly1d(coeff_pos[i]) for i in range(nb_tracks)]
 width_poly = [np.poly1d(coeff_width[i]) for i in range(nb_tracks)]
-wl_to_px_coeff = np.load(root+'reduction/'+calibration_path+'/wl_to_px.npy')
-px_to_wl_coeff = np.load(root+'reduction/'+calibration_path+'/px_to_wl.npy')
+wl_to_px_coeff = np.load(calibration_path+'wl_to_px.npy')
+px_to_wl_coeff = np.load(calibration_path+'px_to_wl.npy')
 
 
 spatial_axis = np.arange(dark.shape[0])
@@ -203,6 +206,7 @@ for k in range(len(photometries)):
     plt.ylabel('Counts (normalised)', size=40)
     txt = r'$\mu_{p%s} = %.3f$'%(k+1, popt[1]) + '\n' + r'$\sigma_{p%s} = %.3f$'%(k+1,popt[2])
     plt.text(0.05,0.3, txt, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+    plt.savefig(output_path+'plot_histo_p%s.png'%(k+1))
 
 for k in range(len(photometries)):
     plt.figure(figsize=(19.20, 10.80))
@@ -234,33 +238,27 @@ if debug:
         plt.ylim(-50, 800)
         plt.grid()
 
-for i in range(1):
+for i in range(5):
     plt.figure()
     plt.suptitle('Null')
     plt.subplot(321)
     plt.plot(img.wl_scale[0], null[i][0], '-')
     plt.grid()
-    plt.ylim(-2,3)
     plt.subplot(322)
     plt.plot(img.wl_scale[0], null[i][1], '-')
     plt.grid()
-    plt.ylim(-2,3)
     plt.subplot(323)
     plt.plot(img.wl_scale[0], null[i][2], '-')
     plt.grid()
-    plt.ylim(-2,3)
     plt.subplot(324)
     plt.plot(img.wl_scale[0], null[i][3], '-')
     plt.grid()
-    plt.ylim(-2,3)
     plt.subplot(325)
     plt.plot(img.wl_scale[0], null[i][4], '-')
     plt.grid()
-    plt.ylim(-2,3)
     plt.subplot(326)
     plt.plot(img.wl_scale[0], null[i][5], '-')
     plt.grid()
-    plt.ylim(-2,3)
     
 #amplitude0 = np.load('amplitude.npy')
 #integ_raw0 = np.load('integ_raw.npy')
