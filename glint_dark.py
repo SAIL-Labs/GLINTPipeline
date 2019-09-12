@@ -68,16 +68,16 @@ def getHistogram(data, bins):
            
 ''' Settings '''
 save = True
-monitor = True # Set True to map the average, variance of relative difference of set of dark current datacubes
+monitor = False # Set True to map the average, variance of relative difference of set of dark current datacubes
 nb_files = None
 edge_min, edge_max = -300, 300
 
 ''' Inputs '''
-datafolder = '20190718/20190718_scan_bl/'
+datafolder = 'simulation_nophase_noopd_nozeta_nooversampling/'
 root = "/mnt/96980F95980F72D3/glint_data/"
 data_path = root+datafolder
 dark_list = [data_path+f for f in os.listdir(data_path) if 'dark' in f][:nb_files]
-date = '2019-07-18'
+date = '2019-08-22'
 
 ''' Output '''
 output_path = '/mnt/96980F95980F72D3/glint/reduction/'+datafolder
@@ -294,7 +294,7 @@ if monitor:
         plt.title('Avg dark current in P1 at 56th column of pixels', size=35)
         
         plt.figure(figsize=(19.20, 10.80))
-        plt.plot(np.arange(dk56bis.size)[::100], dk56[::100])
+        plt.plot(np.arange(dk56bis.size)[::100], dk56bis[::100])
         plt.grid()
         plt.xlabel('Frame/100', size=30)
         plt.ylabel('Avg amplitude', size=30)

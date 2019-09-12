@@ -16,33 +16,39 @@ import os
 from skimage.measure import moments
 from scipy.optimize import curve_fit
 
-switch_dark = False
+nonoise_switch = False
 ''' Settings '''
-nb_files = 1 # Number of data files to read. None = all files
+nb_files = (0,100) # Number of data files to read. None = all files
 root = "/mnt/96980F95980F72D3/glint/" # Root path containing the reduced data
-datafolder = '20190719/' # Folder of the data to explore
-wl_path = root+'reduction/201806_wavecal/px_to_wl.npy'
+datafolder = '20190718/20190718_turbulence3/' # Folder of the data to explore
+wl_path = root+'reduction/calibration_params/px_to_wl.npy'
 #wl_path = root+'reduction/201806_wavecal/px_to_wl.npy'
 output_path = root+'reduction/'+datafolder # Path to reduced data
 dark_path = output_path+'superdark.npy'
-wl_min, wl_max = 1300,2000
-fps = 1394.03633
+wl_min, wl_max = 1400,1650
+fps = 1
 
 ''' Running script '''
 data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder # Full path to the data
-data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f][:nb_files]
-try:
-    dark = np.load(dark_path)
-except FileNotFoundError:
-    print('No dark found. Create a new one.')
-    switch_dark = True
+data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f and 'n1n4' in f][nb_files[0]:nb_files[1]]
 
-if switch_dark:
-    dark_list = [data_path+f for f in os.listdir(data_path) if 'dark' in f][:1]
-    with h5py.File(dark_list[0]) as dataFile:
-        dark = np.array(dataFile['imagedata'])
-        dark = np.transpose(dark, axes=(0,2,1))
-        dark = dark.mean(axis=0)    
+if not nonoise_switch:
+    switch_dark = False
+    try:
+        dark = np.load(dark_path)
+    except FileNotFoundError:
+        print('No dark found. Create a new one.')
+        switch_dark = True
+    
+    if switch_dark:
+        dark_list = [data_path+f for f in os.listdir(data_path) if 'dark' in f][:1]
+        with h5py.File(dark_list[0]) as dataFile:
+            dark = np.array(dataFile['imagedata'])
+            dark = np.transpose(dark, axes=(0,2,1))
+            dark = dark.mean(axis=0)    
+else:
+    print('No-noise data')
+    dark = np.zeros((344,96))
     
 print('Load data.')
 for f in data_list:
@@ -78,9 +84,9 @@ except:
     switch_wl = True
     
 print('Let\'s go!')
-p1, p2, p3, p4 = stack[:,328], stack[:,288], stack[:,72], stack[:,33]
-n1, n2, n3, n4, n5, n6 = stack[:,249], stack[:,92], stack[:,52], stack[:,151], stack[:,131], stack[:,190]
-an1, an2, an3, an4, an5, an6 = stack[:,210], stack[:,269], stack[:,308], stack[:,111], stack[:,170], stack[:,229]
+p1, p2, p3, p4 = stack[:,329], stack[:,289], stack[:,73], stack[:,34]
+n1, n2, n3, n4, n5, n6 = stack[:,250], stack[:,93], stack[:,53], stack[:,152], stack[:,132], stack[:,191]
+an1, an2, an3, an4, an5, an6 = stack[:,211], stack[:,270], stack[:,309], stack[:,112], stack[:,171], stack[:,230]
 spectrum = p1 / p1.sum(axis=1)[:,None]
 
 #data = np.array([p1, n1, n2, n3,\
@@ -93,7 +99,7 @@ data = np.array([p1, p2, p3, p4,\
         n5, an5, n6, an6])    
 data = np.transpose(data, axes=(1,0,2))
 #data /= spectrum[:,None,:]
-data = np.array([np.mean(data, axis=0)])
+#data = np.array([np.mean(data, axis=0)])
 
 wl_px = np.tile(np.arange(96), (16, 1))
 
@@ -121,7 +127,7 @@ for i in range(4):
         axs.append(fig.add_subplot(grid[i, j]))
 
 lines = [elt.plot([], [], lw=2)[0] for elt in axs[1:]] + \
-    [axs[0].imshow(np.zeros(stack[0].shape), interpolation='none', vmin=stack.min(), vmax=stack.max(), extent=[abs(wl_scale.max()), abs(wl_scale.min()), 344, 0], aspect='auto')]
+    [axs[0].imshow(np.zeros(stack[0].shape), interpolation='none', vmin=stack.min(), vmax=stack.max())]#, extent=[abs(wl_scale.max()), abs(wl_scale.min()), 344, 0], aspect='auto')]
 lines2 = [elt.plot([], [], 'o')[0] for elt in axs[1:]]
 lines3 = [elt.plot([], [])[0] for elt in axs[1:]]
 
@@ -187,41 +193,61 @@ def run2(k):
             text_null1, text_null2, text_null3, text_null4, text_null5, text_null6,\
             text_antinull1, text_antinull2, text_antinull3, text_antinull4, text_antinull5, text_antinull6]
 
-anim = animation.FuncAnimation(fig, run2, init_func=init3, frames=data.shape[0], interval=1/fps)#, blit=True)
+anim = animation.FuncAnimation(fig, run2, init_func=init3, frames=data.shape[0], interval=100)#, blit=True)
 
-def gaussian(x, A, x0, sig):
-    return A * np.exp(-(x-x0)**2/(2*sig**2))
+plt.figure(figsize=(19.20,10.80))
+for i in range(16):
+    if i<4: 
+        plt.subplot(4,4,i+1)
+        plt.plot(data[:,i,40:75].sum(axis=-1))
+        plt.grid()
+        plt.title(titles_photo[i])
+    elif i%2==0:
+        plt.subplot(4,4,i+1)
+        plt.plot(data[:,i,40:75].sum(axis=-1))
+        plt.plot(data[:,i+1,40:75].sum(axis=-1))
+#        plt.plot(data[:,i,33:34].sum(axis=-1)/data[:,i+1,33:34].sum(axis=-1))
+        plt.grid()
+        plt.title('Flux in '+titles_photo[i]+' and '+titles_photo[i+1])
+plt.tight_layout()        
+plt.figure(figsize=(19.20,10.80))
+for i in range(16):
+    if i<4: 
+        plt.subplot(4,4,i+1)
+        plt.plot(data[:,i,40:75].sum(axis=-1))
+        plt.grid()
+        plt.title(titles_photo[i])
+    elif i%2==0:
+        plt.subplot(4,4,i+1)
+        plt.plot(data[:,i,50:51].sum(axis=-1)/data[:,i+1,50:51].sum(axis=-1))
+        plt.grid()
+        plt.title(titles_photo[i]+' and '+titles_photo[i+1])
+plt.tight_layout()  
 
-com_wl2 = np.reshape(com_wl, (-1,4,4))
-histogram, edges = [], []
-bin_edges0 = np.linspace(wl_scale.min(), wl_scale.max(), int(com_wl.shape[0]**0.5))
-for i in range(4):
-    temp_h, temp_e = [], []
-    for j in range(4):
-        hist, bin_edges = np.histogram(com_wl2[:,i,j], bin_edges0, density=True)  
-        temp_h.append(hist)
-        temp_e.append(bin_edges[:-1])
-        try:
-            mini, maxi = min(mini, bin_edges[0]), max(maxi, bin_edges[-2])
-        except:
-            mini, maxi = bin_edges[0], bin_edges[-2]
-    histogram.append(temp_h)
-    edges.append(temp_e)
-   
-histogram = np.array(histogram)         
-edges = np.array(edges)
+plt.figure(figsize=(19.20,10.80))
+for i in range(16):
+    plt.subplot(4,4,i+1)
+    b = com_wl[:,i]
+    histo = np.histogram(b, int(b.size**0.5))
+    plt.plot(histo[1][:-1], histo[0], 'o-')
+    plt.grid()
+    plt.title('Histogram of COM of '+titles_photo[i])
+plt.tight_layout()
+    
+plt.figure(figsize=(19.20,10.80))
+for i in range(16):
+    plt.subplot(4,4,i+1)
+    plt.plot(com_wl[:,i], 'o-')
+    plt.grid()
+    plt.title('Center of mass of '+titles_photo[i])
+plt.tight_layout()
 
-#grid = plt.GridSpec(4, 4, wspace=0.2, hspace=0.55)
-#fig2 = plt.figure()
-#for i in range(4):
-#    for j in range(4):
-#        ax = fig2.add_subplot(grid[i, j])
-#        popt, pcov = curve_fit(gaussian, edges[i,j], histogram[i,j], p0=[histogram[i,j].max(), edges[i,j][np.argmax(histogram[i,j])], 50])
-#        plt.plot(edges[i,j], histogram[i,j], 'o')
-#        plt.plot(edges[i,j], gaussian(edges[i,j], *popt))
-#        plt.grid()
-#        plt.xlim(mini, maxi)
-#        plt.xlabel('Center of mass ['+str(wl_min)+' - '+str(wl_max)+' nm] (nm)')
-#        plt.title(np.array(titles_photo).reshape(4,4)[i,j])
-#        txt = r'$\mu = %.3f$ nm'%(popt[1]) + '\n' + r'$\sigma = %.3f$ nm'%(popt[2])
-#        plt.text(0.7,0.7, txt, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+plt.figure(figsize=(19.20,10.80))
+for i in range(16):
+    plt.subplot(4,4,i+1)
+    b = data[:,i,40:75].sum(axis=-1)
+    histo = np.histogram(b, int(b.size**0.5))
+    plt.plot(histo[1][:-1], histo[0], 'o-')
+    plt.grid()
+    plt.title('Histogram of flux of '+titles_photo[i])
+plt.tight_layout()
