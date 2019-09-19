@@ -15,6 +15,7 @@ import h5py
 import os
 from cupyx.scipy.special.statistics import ndtr
 import scipy.special as sp
+from scipy.stats import norm
 
 interpolate_kernel = cp.ElementwiseKernel(
     'float32 x_new, raw float32 xp, int32 xp_size, raw float32 yp', 
@@ -124,49 +125,46 @@ def rv_generator(absc, cdf, nsamp):
     interpolate_kernel(rv_uniform, cdf, cdf.size, cdf_absc, output_samples)
     
     return output_samples
-
-def load_dark(data, channel):
-    data_file = h5py.File(data)
-    params = np.array(data_file[channel])[1:]
-    data_file.close()
-    return params
     
-def load_data(data, wl_edges, *args):
-    null_data = [[],[],[],[],[],[]]
-    Iminus_data = [[],[],[],[],[],[]]
-    Iplus_data = [[],[],[],[],[],[]]
-    beams_couple = []
-    photo_data = [[],[],[],[]]
-    photo_err_data = [[],[],[],[]]
+def load_data(data, wl_edges, null_key, *args):
+    # Null table for getting the null and associated photometries in the intermediate data
+    # Structure = Chosen null:[number of null, photometry A and photometry B]
+    null_table = {'null1':[1,1,2], 'null2':[2,2,3], 'null3':[3,1,4], \
+                  'null4':[4,3,4], 'null5':[5,3,1], 'null6':[6,4,2]}
+    
+    indexes = null_table[null_key]
+
+    null_data = []
+    Iminus_data = []
+    Iplus_data = []
+    photo_data = [[],[]]
+    photo_err_data = [[],[]]
     wl_scale = []
     
     for d in data:
         with h5py.File(d, 'r') as data_file:
             wl_scale.append(np.array(data_file['wl_scale']))
             
-            for i in range(6):
-                null_data[i].append(np.array(data_file['null%s'%(i+1)]))
-                Iminus_data[i].append(np.array(data_file['Iminus%s'%(i+1)]))
-                Iplus_data[i].append(np.array(data_file['Iplus%s'%(i+1)]))
+            null_data.append(np.array(data_file['null%s'%(indexes[0])]))
+            Iminus_data.append(np.array(data_file['Iminus%s'%(indexes[0])]))
+            Iplus_data.append(np.array(data_file['Iplus%s'%(indexes[0])]))
                 
-            photo_data[0].append(np.array(data_file['p1'])) # Fill with beam 1 intensity
-            photo_data[1].append(np.array(data_file['p2'])) # Fill with beam 2 intensity
-            photo_data[2].append(np.array(data_file['p3'])) # Fill with beam 3 intensity
-            photo_data[3].append(np.array(data_file['p4'])) # Fill with beam 4 intensity
-            photo_err_data[0].append(np.array(data_file['p1err'])) # Fill with beam 1 error
-            photo_err_data[1].append(np.array(data_file['p2err'])) # Fill with beam 2 error
-            photo_err_data[2].append(np.array(data_file['p3err'])) # Fill with beam 3 error
-            photo_err_data[3].append(np.array(data_file['p4err'])) # Fill with beam 4 error          
+            photo_data[0].append(np.array(data_file['p%s'%(indexes[1])])) # Fill with beam A intensity
+            photo_data[1].append(np.array(data_file['p%s'%(indexes[2])])) # Fill with beam B intensity
+            photo_err_data[0].append(np.array(data_file['p%serr'%(indexes[1])])) # Fill with beam A error
+            photo_err_data[1].append(np.array(data_file['p%serr'%(indexes[2])])) # Fill with beam B error        
             
+
     # Merge data along frame axis
-    for i in range(6):
-        null_data[i] = [selt for elt in null_data[i] for selt in elt]
-        Iminus_data[i] = [selt for elt in Iminus_data[i] for selt in elt]
-        Iplus_data[i] = [selt for elt in Iplus_data[i] for selt in elt]
+    null_data = [selt for elt in null_data for selt in elt]
+    Iminus_data = [selt for elt in Iminus_data for selt in elt]
+    Iplus_data = [selt for elt in Iplus_data for selt in elt]
         
-        if i < 4:
-            photo_data[i] = [selt for elt in photo_data[i] for selt in elt]
-            photo_err_data[i] = [selt for elt in photo_err_data[i] for selt in elt]
+    for i in range(2):
+        photo_data[i] = [selt for elt in photo_data[i] for selt in elt]
+        photo_err_data[i] = [selt for elt in photo_err_data[i] for selt in elt]
+
+
         
     null_data = np.array(null_data)
     Iminus_data = np.array(Iminus_data)
@@ -179,19 +177,19 @@ def load_data(data, wl_edges, *args):
     wl_min, wl_max = wl_edges
     mask = mask[(wl_scale>=wl_min)&(wl_scale < wl_max)]
         
-    null_data = null_data[:,:,mask[0]:mask[-1]+1]
-    Iminus_data = Iminus_data[:,:,mask[0]:mask[-1]+1]
-    Iplus_data = Iplus_data[:,:,mask[0]:mask[-1]+1]
+    null_data = null_data[:,mask[0]:mask[-1]+1]
+    Iminus_data = Iminus_data[:,mask[0]:mask[-1]+1]
+    Iplus_data = Iplus_data[:,mask[0]:mask[-1]+1]
     photo_data = photo_data[:,:,mask[0]:mask[-1]+1]
     wl_scale = wl_scale[mask]
     
-    null_data = np.transpose(null_data, axes=(0,2,1))
+    null_data = np.transpose(null_data)
     photo_data = np.transpose(photo_data, axes=(0,2,1))
-    Iminus_data = np.transpose(Iminus_data, axes=(0,2,1))
-    Iplus_data = np.transpose(Iplus_data, axes=(0,2,1))
+    Iminus_data = np.transpose(Iminus_data)
+    Iplus_data = np.transpose(Iplus_data)
     
     out = {'null':null_data, 'photo':photo_data, 'wl_scale':wl_scale,\
-            'photo_err':photo_err_data, 'beams couples':beams_couple, 'wl_idx':mask, 'Iminus':Iminus_data, 'Iplus':Iplus_data}
+            'photo_err':photo_err_data, 'wl_idx':mask, 'Iminus':Iminus_data, 'Iplus':Iplus_data}
     
     if len(args) > 0:
         null_err_data = getErrorNull(out, args[0])
@@ -201,6 +199,15 @@ def load_data(data, wl_edges, *args):
     
     return out
 
+def getErrorNull(data_dic, dark_dic):
+    var_Iminus = dark_dic['Iminus'].var(axis=-1)[:,None]
+    var_Iplus = dark_dic['Iplus'].var(axis=-1)[:,None]
+    Iminus = data_dic['Iminus']
+    Iplus = data_dic['Iplus']
+    null = data_dic['null']
+    
+    std_null = (null**2 * (var_Iminus/Iminus**2 + var_Iplus/Iplus**2))**0.5
+    return std_null
 
 def getHistogram(data, bins, density, target='cpu'):
     pdf, bin_edges = np.histogram(data, bins=bins, density=density)
@@ -226,11 +233,11 @@ def getHistogramOfIntensities(data, bins, split, target='cpu'):
     
     return  pdf_I_interf, bins_cent
 
-def computeNullDepth(IA, IB, wavelength, offset_opd, dopd, phase_bias, visibility, dark_null, dark_antinull, 
+def computeNullDepth(IA, IB, wavelength, offset_opd, dopd, phase_bias, dphase_bias, visibility, dark_null, dark_antinull, 
                      zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B, step, oversampling_switch):
     
     wave_number = 1./wavelength
-    sine = cp.sin(2*np.pi*wave_number*(offset_opd + dopd) + phase_bias)
+    sine = cp.sin(2*np.pi*wave_number*(offset_opd + dopd) + phase_bias + dphase_bias)
     if oversampling_switch:
         delta_wave_number = abs(1/(wavelength + step/2) - 1/(wavelength - step/2))
         arg = np.pi*delta_wave_number * (offset_opd + dopd)
@@ -312,40 +319,47 @@ def pdfDeconvolution(bins, histo_photo, histo_noise, bandwidth, plots=False):
         plt.ylabel('Count (normalised)')
         
     return deconv
-
-def getErrorNull(data_dic, dark_dic):
-    var_Iminus = dark_dic['Iminus'].var(axis=-1)[:,:,None]
-    var_Iplus = dark_dic['Iplus'].var(axis=-1)[:,:,None]
-    Iminus = data_dic['Iminus']
-    Iplus = data_dic['Iplus']
-    null = data_dic['null']
-    
-    std_null = (null**2 * (var_Iminus/Iminus**2 + var_Iplus/Iplus**2))**0.5
-    return std_null
  
 
 def getErrorCDF(data_null, data_null_err, null_axis):
-    var_null_cdf = []
+    data_null = cp.asarray(data_null)
+    data_null_err = cp.asarray(data_null_err)
+    null_axis = cp.asarray(null_axis)
+    var_null_cdf = cp.zeros(null_axis.size, dtype=cp.float32)
     for k in range(null_axis.size):
-        prob = sp.ndtr((null_axis[k]-data_null)/data_null_err)
-        variance = np.sum(prob * (1-prob))
-        var_null_cdf.append(variance)
-    var_null_cdf = np.array(var_null_cdf) / data_null.size**2
+        prob = ndtr((null_axis[k]-data_null)/data_null_err)
+        variance = cp.sum(prob * (1-prob), axis=-1)
+        var_null_cdf[k] = variance / data_null.size**2
                    
-    return np.sqrt(var_null_cdf)
+    std = cp.sqrt(var_null_cdf)
+    return cp.asnumpy(std)
 
 def getErrorPDF(data_null, data_null_err, null_axis):
-    var_null_hist = []
+    data_null = cp.asarray(data_null)
+    data_null_err = cp.asarray(data_null_err)
+    null_axis = cp.asarray(null_axis)
+    var_null_hist = cp.zeros(null_axis.size-1, dtype=cp.float32)
     for k in range(null_axis.size-1):
-        prob = sp.ndtr((null_axis[k+1]-data_null)/data_null_err) - sp.ndtr((null_axis[k]-data_null)/data_null_err)
-        variance = np.sum(prob * (1-prob))
-        var_null_hist.append(variance)
-    var_null_hist = np.array(var_null_hist) / data_null.size**2
-                   
-    return np.sqrt(var_null_hist)
+        prob = ndtr((null_axis[k+1]-data_null)/data_null_err) - ndtr((null_axis[k]-data_null)/data_null_err)
+        variance = cp.sum(prob * (1-prob))
+        var_null_hist[k] = variance / data_null.size**2
+    
+    std = cp.sqrt(var_null_hist)
+    return cp.asnumpy(std)
    
 def doubleGaussCdf(x, mu1, mu2, sig, A):
     return 1/(1+A) * ndtr((x-mu1)/(sig)) + A/(1+A) * ndtr((x-mu2)/(sig))
+
+def getErrorBinomNorm(cdf, data_size):
+    cdf_err = ((cdf * (1 - cdf))/data_size)**0.5 # binom-norm
+    cdf_err[cdf_err==0] = cdf_err[cdf_err!=0].min()
+    return cdf_err
+
+def getErrorWilson(cdf, data_size, confidence):
+    z = norm.ppf((1+confidence)/2)
+    cdf_err = z / (1 + z**2/data_size) * np.sqrt(cdf*(1-cdf)/data_size + z**2/(4*data_size**2))# Wilson
+    return cdf_err
+
 
 def rv_gen_doubleGauss(nsamp, mu1, mu2, sig1, A, target):
     x, step = cp.linspace(-2500,2500, 10000, endpoint=False, retstep=True, dtype=cp.float32)
