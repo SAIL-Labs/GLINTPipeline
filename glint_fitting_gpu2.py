@@ -30,6 +30,8 @@ import glint_fitting_functions as gff
 from scipy.special import erf
 from itertools import combinations
 from scipy.io import loadmat
+from scipy.stats import norm
+from astropy.stats import bootstrap
 
 computeCdfCuda = cp.ElementwiseKernel(
     'float32 x_axis, raw float32 rv, float32 rv_sz',
@@ -91,7 +93,7 @@ def computeCdfCupy(rv, x_axis):
     return 1-cdf
         
 
-def MCfunction(bins0, visibility, mu_opd, sig_opd):#, A):
+def MCfunction(bins0, visibility, mu_opd, sig_opd):
     '''
     For now, this function deals with polychromatic for one baseline
     '''
@@ -105,17 +107,16 @@ def MCfunction(bins0, visibility, mu_opd, sig_opd):#, A):
     global oversampling_switch, nonoise
 
 #    sig_opd = 100.
-    A = 0
 #    mu_opd = 0
 
     sig_opd = abs(sig_opd)
-    A = abs(A)
+    dphase_bias = 0
     
     nloop = 10
         
 #    bins = cp.asarray(bins, dtype=cp.float32)
     count += 1
-    print(int(count), visibility, mu_opd, sig_opd, A)     
+    print(int(count), visibility, mu_opd, sig_opd, dphase_bias)     
 #    accum = cp.zeros((wl_scale.size, bins.size), dtype=cp.float32)
     if not mode_histo:
         accum = cp.zeros(bins0.shape, dtype=cp.float32)
@@ -125,7 +126,6 @@ def MCfunction(bins0, visibility, mu_opd, sig_opd):#, A):
     
     rv_opd = cp.random.normal(mu_opd, sig_opd, n_samp)
     rv_opd = rv_opd.astype(cp.float32)
-#    rv_opd = gff.rv_gen_doubleGauss(n_samp, mu_opd, mu_opd+1602/2, sig_opd, A, 'gpu')
     
     step = np.mean(np.diff(wl_scale))
 
@@ -145,7 +145,7 @@ def MCfunction(bins0, visibility, mu_opd, sig_opd):#, A):
             rv_IA = gff.rv_generator(data_IA_axis[k], cdf_data_IA[k], n_samp)           
             rv_IB = gff.rv_generator(data_IB_axis[k], cdf_data_IB[k], n_samp)
             
-            rv_null = gff.computeNullDepth(rv_IA, rv_IB, wl_scale[k], offset_opd, rv_opd, phase_bias, visibility, rv_dark_Iminus, rv_dark_Iplus, \
+            rv_null = gff.computeNullDepth(rv_IA, rv_IB, wl_scale[k], offset_opd, rv_opd, phase_bias, dphase_bias, visibility, rv_dark_Iminus, rv_dark_Iplus, \
                                            zeta_minus_A[k], zeta_minus_B[k], zeta_plus_A[k], zeta_plus_B[k], step, oversampling_switch)
 
             rv_null = rv_null[~np.isnan(rv_null)] # Remove NaNs
@@ -185,75 +185,100 @@ def map_error(params, x, y):
     chi2 = np.sum(residuals**2) / (y.size-len(params))
     return chi2
 
+def bootstrap_pdf(rv, axis, bootnum):
+    bootstr = bootstrap(rv, bootnum)
+    liste = []
+    for k in range(bootnum):
+        pdf = np.histogram(bootstr[k], axis)[0]
+        pdf = pdf / np.sum(pdf)
+        liste.append(pdf)
+        
+    liste = np.array(liste)
+    std = liste.std(axis=0)
+    std[std==0] = std[std!=0].min()
+    return std
+
+def bootstrap_cdf(rv, axis, bootnum):
+    bootstr = bootstrap(rv, bootnum)
+    liste = []
+    for k in range(bootnum):
+        cdf = gff.computeCdf(axis, bootstr[k], 'ccdf', True)
+        liste.append(cp.asnumpy(cdf))
+        
+    liste = np.array(liste)
+    std = liste.std(axis=0)
+    std[std==0] = std[std!=0].min()
+    return std
+    
 plt.ioff()
-chi2_list0 = []
-#liste = []
-for supercount in range(1,2):
+
+''' Settings '''  
+wl_min = 1550
+wl_max = 1600
+n_samp = int(1e+7) # number of samples per loop
+mode = 'cuda'
+nonoise = False
+phase_bias_switch = True
+opd_bias_switch = True
+zeta_switch = True
+oversampling_switch = False
+skip_fit = False
+chi2_map_switch = False
+mode_histo = False
+nb_blocks = (None, None)
+
+''' Import real data '''
+datafolder = '20190718/20190718_turbulence2/'
+darkfolder = '20190718/20190718_dark_turbulence/'
+root = "/mnt/96980F95980F72D3/glint/"
+file_path = root+'reduction/'+datafolder
+data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and not 'dark' in f and 'n1n4' in f][nb_blocks[0]:nb_blocks[1]]
+dark_list = [root+'reduction/'+darkfolder+f for f in os.listdir(root+'reduction/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_blocks[0]:nb_blocks[1]]
+calib_params_path = '/mnt/96980F95980F72D3/glint/reduction/calibration_params/'
+zeta_coeff_path = calib_params_path + 'zeta_coeff.hdf5'
+instrumental_offsets_path = calib_params_path + '4WG_opd0_and_phase.txt'
+segment_positions = loadmat(calib_params_path+'N1N4_opti2.mat')['PTTPositionOn'][:,0]*1000
+
+instrumental_offsets = np.loadtxt(instrumental_offsets_path)
+if not opd_bias_switch:
+#    opd0 = np.array([ 400.5,  400.5, 1201.5,  400.5,  -801. ,  -801. ]) * (-1)
+#    opd0 = np.array([801., 801., 2403., 801., 1602., 1602.])*(-1)
+#    opd0 = np.ones(6) * (-1) * 400.5
+#    instrumental_offsets[:,0] = opd0
+    instrumental_offsets[:,0] = -instrumental_offsets[:,0]
+    segment_positions[:] = 0.  
+if not phase_bias_switch:
+    instrumental_offsets[:,1] = 0.
+
+
+# List in dictionary: indexes of null, beam A and beam B, zeta label for antinull, segment id
+null_table = {'null1':[0,[0,1], 'null7', [28,34]], 'null2':[1,[1,2], 'null8', [34,25]], 'null3':[2,[0,3], 'null9', [28,23]], \
+              'null4':[3,[2,3], 'null10', [25,23]], 'null5':[4,[2,0], 'null11',[25,28]], 'null6':[5,[3,1], 'null12', [23,34]]}
+
+mu_opd0 = np.ones(6,)*200
+sig_opd0 = np.ones(6,)*200 # In nm
+na0 = np.ones(6,)*0
+dphase_bias = 0.
+
+results = {}
+print('starting loop')
+total_time_start = time()
+for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
 #    plt.ioff()
 #    plt.close('all')
-    ''' Settings '''  
-    wl_min = 1550
-    wl_max = 1555
-    n_samp = int(1e+7) # number of samples per loop
-    mode = 'cuda'
-    nonoise = False
-    phase_bias_switch = True
-    opd_bias_switch = True
-    zeta_switch = True
-    oversampling_switch = False
-    skip_fit = False
-    chi2_map_switch = False
-    mode_histo = False
-    nb_blocks = (None, None)
-    
-    # model fitting initial guess
-    mu_opd0 = np.ones(6,)*100
-    sig_opd0 = np.ones(6,)*100 # In nm
-    na = 0.
-    A = 0.
-    
-    # =============================================================================
-    # Real data
-    # =============================================================================
-    ''' Import real data '''
-    datafolder = '20190718/20190718_turbulence3/'
-    darkfolder = '20190718/20190718_dark_turbulence/'
-    root = "/mnt/96980F95980F72D3/glint/"
-    file_path = root+'reduction/'+datafolder
-    data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and not 'dark' in f and 'n1n4' in f][nb_blocks[0]:nb_blocks[1]]
-    dark_list = [root+'reduction/'+darkfolder+f for f in os.listdir(root+'reduction/'+darkfolder) if '.hdf5' in f and 'dark' in f]
-    calib_params_path = '/mnt/96980F95980F72D3/glint/reduction/calibration_params/'
-    zeta_coeff_path = calib_params_path + 'zeta_coeff.hdf5'
-    instrumental_offsets_path = calib_params_path + '4WG_opd0_and_phase.txt'
-    segment_positions = loadmat(calib_params_path+'N1N4_opti2.mat')['PTTPositionOn'][:,0]*1000
-    
+   
     if nonoise:
         data = gff.load_data(data_list, (wl_min, wl_max))
-    else:    
-        dark = gff.load_data(dark_list, (wl_min, wl_max))
-        data = gff.load_data(data_list, (wl_min, wl_max), dark)
-    
+    else:   
+        dark = gff.load_data(dark_list, (wl_min, wl_max), key)
+        data = gff.load_data(data_list, (wl_min, wl_max), key, dark)
         
     wl_scale = data['wl_scale']
-    label_photo = ['p1', 'p2', 'p3', 'p4']
     zeta_coeff = gff.get_zeta_coeff(zeta_coeff_path, wl_scale, False)
     if not zeta_switch:
         for key in zeta_coeff.keys():
             if key != 'wl_scale':
                 zeta_coeff[key][:] = 1.
-        
-    instrumental_offsets = np.loadtxt(instrumental_offsets_path)
-
-    if not opd_bias_switch:
-    #    opd0 = np.array([ 400.5,  400.5, 1201.5,  400.5,  -801. ,  -801. ]) * (-1)
-    #    opd0 = np.array([801., 801., 2403., 801., 1602., 1602.])*(-1)
-    #    opd0 = np.ones(6) * (-1) * 400.5
-    #    instrumental_offsets[:,0] = opd0
-        instrumental_offsets[:,0] = -instrumental_offsets[:,0]
-        segment_positions[:] = 0.
-        
-    if not phase_bias_switch:
-        instrumental_offsets[:,1] = 0.
     
     data_photo = data['photo'].copy()
     if not nonoise:
@@ -264,144 +289,162 @@ for supercount in range(1,2):
             
         # Substract variance of dark fluctuations to the variance of the photometric ones
         data_photo = (data_photo - mean_data[:,:,None]) * \
-            ((var_data[:,:,None]-var_dark[:,:,None])/var_data[:,:,None])**0.5 + mean_data[:,:,None] - mean_dark[:,:,None] 
-    
-    # List in dictionary: indexes of null, beam A and beam B, zeta label for antinull, segment id
-    null_table = {'null1':[0,[0,1], 'null7', [28,34]], 'null2':[1,[1,2], 'null8', [34,25]], 'null3':[2,[0,3], 'null9', [28,23]], \
-                  'null4':[3,[2,3], 'null10', [25,23]], 'null5':[4,[2,0], 'null11',[25,28]], 'null6':[5,[3,1], 'null12', [23,34]]}
-    
-    chi2_list = []
-    ''' Model the 6 null depths '''
-    for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
-        print('-------------')
-        print('Fitting '+key)
-        ''' Get histograms of intensities and dark current in the pair of photomoetry outputs '''
-        idx_null = null_table[key][0] 
-        idx_photo = null_table[key][1]
-        key_antinull = null_table[key][2]
-        segment_id_A, segment_id_B = null_table[key][3]
-        data_IA, data_IB = data_photo[idx_photo[0]], data_photo[idx_photo[1]]
-        zeta_minus_A, zeta_minus_B = zeta_coeff['b%s%s'%(idx_photo[0]+1, key)], zeta_coeff['b%s%s'%(idx_photo[1]+1, key)]
-        zeta_plus_A, zeta_plus_B = zeta_coeff['b%s%s'%(idx_photo[0]+1, key_antinull)], zeta_coeff['b%s%s'%(idx_photo[1]+1, key_antinull)]
-        offset_opd, phase_bias = instrumental_offsets[idx_null]
-        offset_opd = (segment_positions[segment_id_A] - segment_positions[segment_id_B]) - offset_opd
-    #    print('IA', data_IA.max(), data_IA.min(), data_IA.mean(), data_IA.std())
-    #    print('IB', data_IB.max(), data_IB.min(), data_IB.mean(), data_IB.std())
-        
-        mu_opd = mu_opd0[idx_null]
-        sig_opd = sig_opd0[idx_null]
-        
-        if nonoise:
-            dark_Iminus_axis = cp.zeros(np.size(np.unique(data_IA[0])))
-            dark_Iminus_cdf = cp.zeros(np.size(np.unique(data_IA[0])))
-            dark_Iplus_axis = cp.zeros(np.size(np.unique(data_IA[0])))
-            dark_Iplus_cdf = cp.zeros(np.size(np.unique(data_IA[0])))
-        else:
-            dark_Iminus_axis = cp.array([np.linspace(dark['Iminus'][idx_null,i].min(), dark['Iminus'][idx_null,i].max(), \
-                                                     np.size(np.unique(dark['Iminus'][idx_null,i])), endpoint=False) for i in range(len(wl_scale))], \
-                                                     dtype=cp.float32)
-        
-            dark_Iminus_cdf = cp.array([cp.asnumpy(gff.computeCdf(dark_Iminus_axis[i], dark['Iminus'][idx_null,i], 'cdf', True)) \
-                                        for i in range(len(wl_scale))], dtype=cp.float32)
-        
-            dark_Iplus_axis = cp.array([np.linspace(dark['Iplus'][idx_null,i].min(), dark['Iplus'][idx_null,i].max(), \
-                                                    np.size(np.unique(dark['Iplus'][idx_null,i])), endpoint=False) for i in range(len(wl_scale))], \
-                                                    dtype=cp.float32)
-        
-            dark_Iplus_cdf = cp.array([cp.asnumpy(gff.computeCdf(dark_Iplus_axis[i], dark['Iplus'][idx_null,i], 'cdf', True)) \
-                                       for i in range(len(wl_scale))], dtype=cp.float32)
-    
-    
-        data_IA_axis = cp.array([np.linspace(data_IA[i].min(), data_IA[i].max(), np.size(np.unique(data_IA[i]))) \
-                                 for i in range(len(wl_scale))], dtype=cp.float32)
-    
-        cdf_data_IA = cp.array([cp.asnumpy(gff.computeCdf(data_IA_axis[i], data_IA[i], 'cdf', True)) \
-                                for i in range(len(wl_scale))], dtype=cp.float32)
-    
-        data_IB_axis = cp.array([np.linspace(data_IB[i].min(), data_IB[i].max(), np.size(np.unique(data_IB[i]))) \
-                                 for i in range(len(wl_scale))], dtype=cp.float32)
-    
-        cdf_data_IB = cp.array([cp.asnumpy(gff.computeCdf(data_IB_axis[i], data_IB[i], 'cdf', True)) \
-                                for i in range(len(wl_scale))], dtype=cp.float32)
-    
-    #    plt.figure()
-    #    plt.plot(cp.asnumpy(dark_Iminus_axis[0]), cp.asnumpy(dark_Iminus_cdf[0]))
-    #    plt.plot(cp.asnumpy(dark_Iplus_axis[0]), cp.asnumpy(dark_Iplus_cdf[0]))
-    #    plt.grid()
-    #    plt.figure()
-    #    plt.plot(cp.asnumpy(data_IA_axis[0]), cp.asnumpy(cdf_data_IA[0]))
-    #    plt.plot(cp.asnumpy(data_IB_axis[0]), cp.asnumpy(cdf_data_IB[0]))
-    #    plt.grid()
-    
-    
-        ''' Make the survival function '''
-        data_null = data['null'][idx_null]
-    #    n_samp = int(data_null.shape[1])
-    #    data_null = data_null
-        data_null_err = data['null_err'][idx_null]
-        sz = max([np.size(np.unique(d)) for d in data_null])
-        null_axis = np.array([np.linspace(data_null[i].min(), data_null[i].max(), int(sz**0.5), retstep=False, dtype=np.float32) for i in range(data_null.shape[0])])
-#        sz = max([np.size(d[(d>=-0.5)&(d<=150)]) for d in data_null])
-#        null_axis = np.array([np.linspace(-0.5, 150, int(sz**0.5), retstep=False, dtype=np.float32) for elt in data_null])
-        null_axis_width = np.mean(np.diff(null_axis, axis=-1))
-        
-        null_cdf = []
-        null_cdf_err = []
-        if not mode_histo:
-            for wl in range(len(wl_scale)):
-#                data_null_gpu = cp.array(data_null[wl], dtype=cp.float32)
-#                data_null_gpu = cp.sort(data_null_gpu, axis=-1)
-                if mode == 'cuda':
-                    cdf = gff.computeCdf(null_axis[wl], data_null[wl], 'ccdf', True)
-                    null_cdf.append(cp.asnumpy(cdf))
-                elif mode == 'cupy':
-                    cdf = computeCdfCupy(data_null[wl], cp.asarray(null_axis[wl], dtype=cp.float32))
-                    null_cdf.append(cp.asnumpy(cdf))
-                else:
-                    cdf = computeCdf(np.sort(data_null[wl]), null_axis[wl])
-                    null_cdf.append(cdf)
-                    
-                start = time()
-                cdf_err = gff.getErrorCDF(data_null[wl], data_null_err[wl], null_axis[wl])
-                stop = time()
-                print('Time CDF error=', stop-start)
-                null_cdf_err.append(cdf_err)
+            ((var_data[:,:,None]-var_dark[:,:,None])/var_data[:,:,None])**0.5 + mean_data[:,:,None] - mean_dark[:,:,None]
             
-        else:
-            for wl in range(len(wl_scale)):
-                pdf = np.histogram(data_null[wl], null_axis[wl])[0]
-                pdf = pdf / np.sum(pdf)
-                start = time()
-                pdf_err = gff.getErrorPDF(data_null[wl], data_null_err[wl], null_axis[wl])
-                stop = time()
-                print('Time PDF error=', stop-start)
-                null_cdf.append(pdf)
-                null_cdf_err.append(pdf_err)
-                
-        null_cdf = np.array(null_cdf)
-        null_cdf_err = np.array(null_cdf_err)
+
+    ''' Get histograms of intensities and dark current in the pair of photomoetry outputs '''
+    idx_null = null_table[key][0] 
+    idx_photo = null_table[key][1]
+    key_antinull = null_table[key][2]
+    segment_id_A, segment_id_B = null_table[key][3]
+    data_IA, data_IB = data_photo[0], data_photo[1]
     
-        f = plt.figure(figsize=(19.20,10.80))
-        count = 0
-        wl_idx = np.arange(wl_scale.size)
-        wl_idx = wl_idx[wl_scale>=1550]
-        for wl in wl_idx[::-1][:10]:
-            if len(wl_idx) > 1:
-                ax = f.add_subplot(5,2,count+1)
+    zeta_minus_A, zeta_minus_B = zeta_coeff['b%s%s'%(idx_photo[0]+1, key)], zeta_coeff['b%s%s'%(idx_photo[1]+1, key)]
+    zeta_plus_A, zeta_plus_B = zeta_coeff['b%s%s'%(idx_photo[0]+1, key_antinull)], zeta_coeff['b%s%s'%(idx_photo[1]+1, key_antinull)]
+    offset_opd, phase_bias = instrumental_offsets[idx_null]
+    offset_opd = (segment_positions[segment_id_A] - segment_positions[segment_id_B]) - offset_opd
+    
+    if nonoise:
+        dark_Iminus_axis = cp.zeros(np.size(np.unique(data_IA[0])))
+        dark_Iminus_cdf = cp.zeros(np.size(np.unique(data_IA[0])))
+        dark_Iplus_axis = cp.zeros(np.size(np.unique(data_IA[0])))
+        dark_Iplus_cdf = cp.zeros(np.size(np.unique(data_IA[0])))
+    else:   
+        dark_Iminus_axis = cp.array([np.linspace(dark['Iminus'][i].min(), dark['Iminus'][i].max(), \
+                                                 np.size(np.unique(dark['Iminus'][i])), endpoint=False) for i in range(len(wl_scale))], \
+                                                 dtype=cp.float32)
+    
+        dark_Iminus_cdf = cp.array([cp.asnumpy(gff.computeCdf(dark_Iminus_axis[i], dark['Iminus'][i], 'cdf', True)) \
+                                    for i in range(len(wl_scale))], dtype=cp.float32)
+    
+        dark_Iplus_axis = cp.array([np.linspace(dark['Iplus'][i].min(), dark['Iplus'][i].max(), \
+                                                np.size(np.unique(dark['Iplus'][i])), endpoint=False) for i in range(len(wl_scale))], \
+                                                dtype=cp.float32)
+    
+        dark_Iplus_cdf = cp.array([cp.asnumpy(gff.computeCdf(dark_Iplus_axis[i], dark['Iplus'][i], 'cdf', True)) \
+                                   for i in range(len(wl_scale))], dtype=cp.float32)
+
+
+    data_IA_axis = cp.array([np.linspace(data_IA[i].min(), data_IA[i].max(), np.size(np.unique(data_IA[i]))) \
+                             for i in range(len(wl_scale))], dtype=cp.float32)
+
+    cdf_data_IA = cp.array([cp.asnumpy(gff.computeCdf(data_IA_axis[i], data_IA[i], 'cdf', True)) \
+                            for i in range(len(wl_scale))], dtype=cp.float32)
+
+    data_IB_axis = cp.array([np.linspace(data_IB[i].min(), data_IB[i].max(), np.size(np.unique(data_IB[i]))) \
+                             for i in range(len(wl_scale))], dtype=cp.float32)
+
+    cdf_data_IB = cp.array([cp.asnumpy(gff.computeCdf(data_IB_axis[i], data_IB[i], 'cdf', True)) \
+                            for i in range(len(wl_scale))], dtype=cp.float32)
+    
+    ''' Make the survival function '''
+    print('Compute survival function and error bars')
+    data_null = data['null']
+#    n_samp = int(data_null.shape[1])
+#    data_null = data_null
+    data_null_err = data['null_err']
+    sz = max([np.size(np.unique(d)) for d in data_null])
+    null_axis = np.array([np.linspace(data_null[i].min(), data_null[i].max(), int(sz**0.5), retstep=False, dtype=np.float32) for i in range(data_null.shape[0])])
+#    sz = max([np.size(d[(d>=-0.5)&(d<=150)]) for d in data_null])
+#    null_axis = np.array([np.linspace(-0.5, 150, int(sz**0.5), retstep=False, dtype=np.float32) for elt in data_null])
+    null_axis_width = np.mean(np.diff(null_axis, axis=-1))
+    
+    null_cdf = []
+    null_cdf_err = []
+    for wl in range(len(wl_scale)):
+        if not mode_histo:
+            if mode == 'cuda':
+                cdf = gff.computeCdf(null_axis[wl], data_null[wl], 'ccdf', True)
+                null_cdf.append(cp.asnumpy(cdf))
+            elif mode == 'cupy':
+                cdf = computeCdfCupy(data_null[wl], cp.asarray(null_axis[wl], dtype=cp.float32))
+                null_cdf.append(cp.asnumpy(cdf))
             else:
-                ax = f.add_subplot(1,1,count+1)
-            plt.title('%s nm'%wl_scale[wl])
-            if not mode_histo:
-                plt.errorbar(null_axis[wl], null_cdf[wl], yerr=null_cdf_err[wl], fmt='.')
-            else:
-                plt.errorbar(null_axis[wl][:-1], null_cdf[wl], yerr=null_cdf_err[wl], fmt='.')
-            plt.grid()
-            plt.xlabel('Null depth')
-            plt.ylabel('Frequency')
-            plt.tight_layout()
-            count += 1
-        continue
-                
+                cdf = computeCdf(np.sort(data_null[wl]), null_axis[wl])
+                null_cdf.append(cdf)
+                    
+            start = time()
+#            cdf_err = gff.getErrorCDF(data_null[wl], data_null_err[wl], null_axis[wl]) # Barnaby
+            cdf_err = gff.getErrorBinomNorm(cp.asnumpy(cdf), data_null[wl].size)
+#            cdf_err = gff.getErrorWilson(cp.asnumpy(cdf), data_null[wl].size, norm.cdf(1) - norm.cdf(-1))
+            stop = time()
+            print('Time CDF error=', stop-start)
+            null_cdf_err.append(cdf_err)
+
+        else:
+            pdf = np.histogram(data_null[wl], null_axis[wl])[0]
+            pdf = pdf / np.sum(pdf)
+            null_cdf.append(pdf)
+            
+            start = time()
+            pdf_err = gff.getErrorPDF(data_null[wl], data_null_err[wl], null_axis[wl]) # Barnaby
+#            pdf_err = gff.getErrorBinomNorm(pdf, data_null[wl].size)
+#            pdf_err = gff.getErrorWilson(pdf, data_null[wl].size, norm.cdf(1) - norm.cdf(-1))
+            stop = time()
+            print('Time PDF error=', stop-start)
+            null_cdf_err.append(pdf_err)
+        
+#        liste = []
+#        niter = 10
+#        step = data_null.shape[1] // niter
+#        for i in range(niter):
+#            lb = i*step
+#            ub = (i+1)*step
+#            if data_null.shape[1] - ub <= data_null.shape[1] % step:
+#                ub = None
+#                
+#            if not mode_histo:
+#                cdf = gff.computeCdf(null_axis[wl], data_null[wl][lb:ub], 'ccdf', True)
+#                liste.append(cp.asnumpy(cdf))
+#            else:
+#                pdf = np.histogram(data_null[wl][i*step:(i+1)*step], null_axis[wl])[0]
+#                pdf = pdf / np.sum(pdf)
+#                liste.append(pdf)
+#        liste = np.array(liste)
+#        liste2 = liste.std(axis=0)
+#        liste2[liste2==0] = liste2[liste2!=0].min()
+#        null_cdf_err.append(liste2)
+                                    
+    null_cdf = np.array(null_cdf)
+    null_cdf_err = np.array(null_cdf_err)
+
+#    f = plt.figure(figsize=(19.20,10.80))
+#    count = 0
+#    wl_idx = np.arange(wl_scale.size)
+#    wl_idx = wl_idx[wl_scale>=1550]
+#    for wl in wl_idx[::-1][:10]:
+#        if len(wl_idx) > 1:
+#            ax = f.add_subplot(5,2,count+1)
+#        else:
+#            ax = f.add_subplot(1,1,count+1)
+#        plt.title('%s nm'%wl_scale[wl])
+#        if not mode_histo:
+#            plt.errorbar(null_axis[wl], null_cdf[wl], yerr=null_cdf_err[wl], fmt='.')
+#        else:
+#            plt.errorbar(null_axis[wl][:-1], null_cdf[wl], yerr=null_cdf_err[wl], fmt='.')
+#        plt.grid()
+#        plt.xlabel('Null depth')
+#        plt.ylabel('Frequency')
+#        plt.tight_layout()
+#        count += 1
+
+    chi2_liste = []
+    popt_liste = []
+    uncertainties_liste = []
+    init_liste = []
+    for basin_hopping_count in range(100):
+        print('-------------')
+        print('Fitting '+key)  
+        # model fitting initial guess
+        if basin_hopping_count == 0:
+            mu_opd = mu_opd0[idx_null]
+            sig_opd = sig_opd0[idx_null]
+            na = na0[idx_null]
+        else:
+            mu_opd = abs(np.random.normal(mu_opd0[idx_null], 300))
+            sig_opd = abs(np.random.normal(sig_opd0[idx_null], 100))
+            na = abs(np.random.normal(na0[idx_null], 0.1))
+        
         ''' Model fitting '''
         if not chi2_map_switch:
             if skip_fit:    
@@ -409,7 +452,7 @@ for supercount in range(1,2):
                 visibility = np.array([(1-na)/(1+na)], dtype=np.float32)[0]
                 
                 start = time()
-                z = MCfunction(null_axis, visibility, mu_opd, sig_opd)#, A)
+                z = MCfunction(null_axis, visibility, mu_opd, sig_opd, dphase_bias)
                 stop = time()
                 print('test', stop-start)
                 out = z.reshape(null_cdf.shape)
@@ -418,25 +461,13 @@ for supercount in range(1,2):
                 popt = np.array([[(1-na)/(1+na), mu_opd, sig_opd]])
                 chi2 = 1/(null_cdf.size-popt[0].size) * np.sum((null_cdf.ravel() - z)**2)
             
-            else:
-                print('Computing error of survival function')
-                start = time()
-#                null_cdf_err = cp.asnumpy(gff.getErrorCDF(cp.asarray(data_null), cp.asarray(data_null_err), cp.asarray(null_axis)))
-#                null_cdf_err[null_cdf_err==0] = 1e-32
-#                null_cdf_err2 = null_cdf_err.copy()
-#                null_cdf_err2[null_cdf_err>=null_cdf] = null_cdf[null_cdf_err>=null_cdf]*0.9999
-                null_cdf_err = np.ones(null_cdf.shape)
-                stop = time()
-                print('Duration: %.3f s'%(stop-start))
-            
+            else:            
                 print('Model fitting')    
                 count = 0.
-                guess_na = np.where(null_cdf[0].ravel() == np.max(null_cdf[0].ravel()))[0][-1]
-#                guess_na = null_axis[guess_na%null_axis.size]
-                guess_na = max(0, guess_na)
                 guess_na = na
-                initial_guess = [(1-guess_na)/(1+guess_na), mu_opd, sig_opd, A][:-1]
+                initial_guess = [(1-guess_na)/(1+guess_na), mu_opd, sig_opd]
                 initial_guess = np.array(initial_guess, dtype=np.float32)
+                init_liste.append([guess_na]+list(initial_guess[1:]))
                 
                 start = time()
                 popt = curve_fit(MCfunction, null_axis, null_cdf.ravel(), p0=initial_guess, epsfcn = null_axis_width, sigma=null_cdf_err.ravel(), absolute_sigma=True)
@@ -444,10 +475,11 @@ for supercount in range(1,2):
                 print('Duration:', stop - start)
                 out = MCfunction(null_axis, *popt[0])
                 uncertainties = np.diag(popt[1])**0.5
+                uncertainties[0] = 2/(1+popt[0][0])**2 * uncertainties[0]
                 chi2 = 1/(null_cdf.size-popt[0].size) * np.sum((null_cdf.ravel() - out)**2/null_cdf_err.ravel()**2)
                 print('chi2', chi2)
                 
-                real_params = np.array([(1-na)/(1+na), mu_opd, sig_opd])#, A])
+                real_params = np.array([(1-na)/(1+na), mu_opd, sig_opd])
                 rel_err = (real_params - popt[0]) / real_params * 100
                 print('rel diff', rel_err)
                 na_opt = (1-popt[0][0])/(1+popt[0][0])
@@ -456,52 +488,60 @@ for supercount in range(1,2):
                 print('******')
             
             
-            chi2_list.append(chi2)
-            f = plt.figure(figsize=(19.20,10.80))
-            txt3 = '%s '%key+'Fitted values: ' + 'Na$ = %.2E \pm %.2E$, '%(na_opt, uncertainties[0]) + \
-            r'$\mu_{OPD} = %.2E \pm %.2E$ nm, '%(popt[0][1], uncertainties[1]) + \
-            r'$\sigma_{OPD} = %.2E \pm %.2E$ nm,'%(popt[0][2], uncertainties[2])+' Chi2 = %.2E '%(chi2)+'(Last = %.3f s)'%(stop-start)
-            count = 0
-            wl_idx = np.arange(wl_scale.size)
-            wl_idx = wl_idx[wl_scale>=1550]
-            for wl in wl_idx[::-1][:10]:
-                if len(wl_idx) > 1:
-                    ax = f.add_subplot(5,2,count+1)
-                else:
-                    ax = f.add_subplot(1,1,count+1)
-                plt.title('%s nm'%wl_scale[wl])
-                if not mode_histo:
-                    plt.plot(null_axis[wl], null_cdf[wl], '.', markersize=5, label='Data')
-                    plt.plot(null_axis[wl], out.reshape((wl_scale.size,-1))[wl], '+', markersize=5, lw=5, alpha=0.8, label='Fit')
-                else:
-                    plt.plot(null_axis[wl][:-1], null_cdf[wl], '.', markersize=5, label='Data')
-                    plt.plot(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], '+', markersize=5, lw=5, alpha=0.8, label='Fit')                    
-                plt.grid()
-                plt.legend(loc='best')
-                plt.xlabel('Null depth')
-                plt.ylabel('Frequency')
-#                plt.ylim(1e-8, 10)
-#                plt.xlim(-0.86, 6)
-                count += 1
-            if len(wl_idx) > 1:
-                ax.text(-0.8, -0.5, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
-            else:
-                ax.text(0.025, 0.05, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+            chi2_liste.append(chi2)
+            popt_liste.append([na_opt]+[elt for elt in popt[0][1:]])
+            uncertainties_liste.append(uncertainties)
+                        
+            
+#            f = plt.figure(figsize=(19.20,10.80))
+#            txt3 = '%s '%key+'Fitted values: ' + 'Na$ = %.2E \pm %.2E$, '%(na_opt, uncertainties[0]) + \
+#            r'$\mu_{OPD} = %.2E \pm %.2E$ nm, '%(popt[0][1], uncertainties[1]) + \
+#            r'$\sigma_{OPD} = %.2E \pm %.2E$ nm,'%(popt[0][2], uncertainties[2])+' Chi2 = %.2E '%(chi2)+'(Last = %.3f s)'%(stop-start)
+#            count = 0
+#            wl_idx = np.arange(wl_scale.size)
+#            wl_idx = wl_idx[wl_scale>=1550]
+#            for wl in wl_idx[::-1][:10]:
+#                if len(wl_idx) > 1:
+#                    ax = f.add_subplot(5,2,count+1)
+#                else:
+#                    ax = f.add_subplot(1,1,count+1)
+#                plt.title('%s nm'%wl_scale[wl])
+#                if not mode_histo:
+##                    plt.semilogy(null_axis[wl], null_cdf[wl], '.', markersize=5, label='Data')
+##                    plt.semilogy(null_axis[wl], out.reshape((wl_scale.size,-1))[wl], '+', markersize=5, lw=5, alpha=0.8, label='Fit')
+#                    plt.errorbar(null_axis[wl], null_cdf[wl], yerr=null_cdf_err[wl], fmt='.', markersize=5, label='Data')
+#                    plt.errorbar(null_axis[wl], out.reshape((wl_scale.size,-1))[wl], fmt='+', markersize=5, lw=5, alpha=0.8, label='Fit')
+#                else:
+##                    plt.semilogy(null_axis[wl][:-1], null_cdf[wl], '.', markersize=5, label='Data')
+##                    plt.semilogy(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], '+', markersize=5, lw=5, alpha=0.8, label='Fit')
+#                    plt.errorbar(null_axis[wl][:-1], null_cdf[wl], yerr=null_cdf_err[wl], fmt='.', markersize=5, label='Data')
+#                    plt.errorbar(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], fmt='+', markersize=5, lw=5, alpha=0.8, label='Fit')                    
+#                plt.grid()
+#                plt.legend(loc='best')
+#                plt.xlabel('Null depth')
+#                plt.ylabel('Frequency')
+##                plt.ylim(1e-8, 10)
+##                plt.xlim(-0.86, 6)
+#                count += 1
+#            if len(wl_idx) > 1:
+#                ax.text(-0.8, -0.5, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+#            else:
+#                ax.text(0.025, 0.05, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
 #            plt.tight_layout()
-            string = key+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(os.path.dirname(datafolder))
-            if nonoise: string = string + '_nodarkinmodel'
-            if not oversampling_switch: string = string + '_nooversamplinginmodel'
-            if not zeta_switch: string = string + '_nozetainmodel'
-            if not skip_fit: 
-                if not mode_histo:
-                    string = 'fit_cdf_' + string
-                else:
-                    string = 'fit_pdf_' + string
-#            string = str(np.diff(nb_blocks)[0])+'blocks_'+string
-    #        string = 'range_'+string
-            plt.savefig('/home/mam/Documents/glint/model fitting - labdata/'+string+'.png')
-#            print(string)
-#            np.save('/home/mam/Documents/glint/model fitting - labdata/'+key+'_%08d'%n_samp+'_%03d'%(supercount)+'.npy', out)
+#            string = key+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(os.path.dirname(datafolder))
+#            if nonoise: string = string + '_nodarkinmodel'
+#            if not oversampling_switch: string = string + '_nooversamplinginmodel'
+#            if not zeta_switch: string = string + '_nozetainmodel'
+#            if not skip_fit: 
+#                if not mode_histo:
+#                    string = 'fit_cdf_' + string
+#                else:
+#                    string = 'fit_pdf_' + string
+##            string = str(np.diff(nb_blocks)[0])+'blocks_'+string
+#    #        string = 'range_'+string
+##            plt.savefig('/home/mam/Documents/glint/model fitting - labdata/'+string+'.png')
+##            print(string)
+##            np.save('/home/mam/Documents/glint/model fitting - labdata/'+key+'_%08d'%n_samp+'_%03d'%(supercount)+'.npy', out)
             
         else:
             print('Error mapping')
@@ -558,57 +598,81 @@ for supercount in range(1,2):
                 plt.title('mu %.2f'%map_mu_opd[i])
             plt.tight_layout()
             
-#        liste.append(out)
-    
-    chi2_list0.append(chi2_list)
-    
-chi2_list0 = np.array(chi2_list0)
+    results[key] = [popt_liste, uncertainties_liste, chi2_liste, init_liste]
+            
+total_time_stop = time()            
+print('Total time', total_time_stop-total_time_start)
 #np.save('/home/mam/Documents/glint/model fitting - nsamp/'+'chi2_'+'%08d'%(n_samp)+'.npy', out)        
 plt.ion()
 plt.show()
 
-#liste = np.array(liste)
-#if mode_histo:
-#    np.save('model_mode_histo_on_range_'+key, liste)
-#else:
-#    np.save('model_mode_histo_off_range_'+key, liste)
-#
-#
-##null_axis = np.load('null_axis.npy')
-#cdf = np.load('model_mode_histo_off_null5.npy')
-#pdf = np.load('model_mode_histo_on_null5.npy')
-#std_cdf = np.std(cdf, axis=0)
-#rel_std_cdf = np.std(cdf, axis=0) / np.mean(cdf, axis=0)
-#
-#std_pdf = np.std(pdf, axis=0)
-#rel_std_pdf = np.std(pdf, axis=0) / np.mean(pdf, axis=0)
-#
-#f = plt.figure(figsize=(19.20,10.80))
-#count = 0
-#for wl in wl_idx[::-1][:10]:
-#    ax = f.add_subplot(5,2,count+1)
-#    plt.title('%s nm'%wl_scale[wl])
-#    plt.semilogy(null_axis[wl], std_cdf[wl], '.', markersize=10)
-#    plt.semilogy(null_axis[wl][:-1], std_pdf[wl], '+', markersize=10)
-#    plt.grid()
-#    plt.xlabel('Measured null depth')
-##    plt.ylim(-1e-6, 1e-5)
-##    plt.xlim(null_axis[wl][0], null_axis[wl][-1])
-#    plt.ylabel('Standard deviation')
-#    count += 1
+#plt.figure(figsize=(19.20,10.80))
+#plt.plot(results['null1'][2], '.', markersize=20)
+#plt.grid()
+#plt.ylim(0, 4000)
+#plt.xticks(size=35);plt.yticks(size=35)
+#plt.xlabel('Trial', size=40)
+#plt.ylabel(r'$\chi^2$', size=40)
 #plt.tight_layout()
 #
-#f = plt.figure(figsize=(19.20,10.80))
-#count = 0
-#for wl in wl_idx[::-1][:10]:
-#    ax = f.add_subplot(5,2,count+1)
-#    plt.title('%s nm'%wl_scale[wl])
-#    plt.semilogy(null_axis[wl], rel_std_cdf[wl], '.', markersize=10)
-#    plt.semilogy(null_axis[wl][:-1], rel_std_pdf[wl], '+', markersize=10)
-#    plt.grid()
-#    plt.xlabel('Measured null depth')
-#    plt.ylim(-1, 1)
-##    plt.xlim(null_axis[wl][0], null_axis[wl][-1])
-#    if count ==4: plt.ylabel('Relative standard deviation')
-#    count += 1
+#plt.figure(figsize=(19.20,10.80))
+#plt.plot(np.array(results['null1'][0])[:,0], results['null1'][2], '.', markersize=20)
+#plt.grid()
+#plt.ylim(0, 4000)
+#plt.xlim(-0.01, 0.025)
+#plt.xticks(size=35);plt.yticks(size=35)
+#plt.xlabel('Null depth', size=40)
+#plt.ylabel(r'$\chi^2$', size=40)
+#plt.tight_layout()
+#
+#plt.figure(figsize=(19.20,10.80))
+#plt.plot(np.array(results['null1'][0])[:,1], results['null1'][2], '.', markersize=20)
+#plt.grid()
+#plt.ylim(1000, 3000)
+#plt.xlim(0, 450)
+#plt.xticks(size=35);plt.yticks(size=35)
+#plt.xlabel(r'$\mu_{OPD}$ (nm)', size=40)
+#plt.ylabel(r'$\chi^2$', size=40)
+#plt.tight_layout()
+#
+#plt.figure(figsize=(19.20,10.80))
+#plt.plot(np.array(results['null1'][0])[:,2], results['null1'][2], '.', markersize=20)
+#plt.grid()
+#plt.ylim(1000,3000)
+#plt.xlim(95,106)
+#plt.xticks(size=35);plt.yticks(size=35)
+#plt.xlabel(r'$\sigma_{OPD}$ (nm)', size=40)
+#plt.ylabel(r'$\chi^2$', size=40)
+#plt.tight_layout()
+#
+#plt.figure(figsize=(19.20,10.80))
+#plt.plot(np.array(results['null1'][-1])[:,2], np.array(results['null1'][0])[:,2], '.', markersize=20)
+#plt.grid()
+##plt.ylim(-110,150)
+##plt.xlim(95,106)
+#plt.xticks(size=35);plt.yticks(size=35)
+#plt.xlabel(r'Initial $\sigma_{OPD}$ (nm)', size=40)
+#plt.ylabel(r'Fitted $\sigma_{OPD}$ (nm)', size=40)
+#plt.tight_layout()
+#
+#plt.figure(figsize=(19.20,10.80))
+#plt.plot(np.array(results['null1'][-1])[:,1], np.array(results['null1'][0])[:,1], '.', markersize=20)
+#plt.grid()
+#plt.ylim(-50,450)
+##plt.xlim(95,106)
+#plt.xticks(size=35);plt.yticks(size=35)
+#plt.xlabel(r'Initial $\mu_{OPD}$ (nm)', size=40)
+#plt.ylabel(r'Fitted $\mu_{OPD}$ (nm)', size=40)
+#plt.tight_layout()
+#
+#temp = np.array(results['null1'][-1])[:,0]
+#temp = (1-temp)/(1+temp)
+#plt.figure(figsize=(19.20,10.80))
+#plt.plot(temp, np.array(results['null1'][0])[:,0], '.', markersize=20)
+#plt.grid()
+#plt.ylim(-0.06,0.06)
+#plt.xlim(-0.01,0.33)
+#plt.xticks(size=35);plt.yticks(size=35)
+#plt.xlabel(r'Initial null depth', size=40)
+#plt.ylabel(r'Fitted null depth', size=40)
 #plt.tight_layout()
