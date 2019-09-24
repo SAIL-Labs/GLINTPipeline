@@ -32,27 +32,7 @@ from itertools import combinations
 from scipy.io import loadmat
 from scipy.stats import norm
 from astropy.stats import bootstrap
-
-computeCdfCuda = cp.ElementwiseKernel(
-    'float32 x_axis, raw float32 rv, float32 rv_sz',
-    'raw float32 cdf',
-    '''
-    int low = 0;
-    int high = rv_sz;
-    int mid = 0;
-    
-    while(low < high){
-        mid = (low + high) / 2;
-        if(rv[mid] <= x_axis){
-            low = mid + 1;
-        }
-        else{
-            high = mid;
-        }
-    }
-    cdf[i] = high;
-    '''
-    )
+import pickle
 
 def computeCdf(rv, x_axis, normed=True):
     cdf = np.ones(x_axis.size)*rv.size
@@ -153,9 +133,6 @@ def MCfunction(bins0, visibility, mu_opd, sig_opd):
             
             if not mode_histo:
                 if mode == 'cuda':
-#                    cdf_null = cp.zeros(bins.shape, dtype=cp.float32)
-#                    computeCdfCuda(bins, rv_null, rv_null.size, cdf_null)
-#                    cdf_null = 1-cdf_null/rv_null.size
                     cdf_null = gff.computeCdf(bins, rv_null, 'ccdf', True)
                 elif mode == 'cupy':
                     cdf_null = computeCdfCupy(rv_null, bins)
@@ -171,10 +148,6 @@ def MCfunction(bins0, visibility, mu_opd, sig_opd):
         accum = accum / nloop
     else:
         accum = accum / cp.sum(accum, axis=-1, keepdims=True)
-#    if not mode_histo:
-#        accum = [elt / np.max(elt, axis=-1, keepdims=True) for elt in accum]
-#    else:
-#        accum = [elt / np.sum(elt, axis=-1, keepdims=True) for elt in accum]
         
     accum = cp.asnumpy(accum)
     return accum.ravel()
@@ -224,21 +197,31 @@ zeta_switch = True
 oversampling_switch = False
 skip_fit = False
 chi2_map_switch = False
-mode_histo = False
+mode_histo = True
 nb_blocks = (None, None)
+basin_hopping = True
+#bin_bounds = (-0.1, 3) # Boundaries1
+bin_bounds = (-0.2, 1.5)
+bin_size = 1000
+basin_hopping_nloop = 1
 
 ''' Import real data '''
-datafolder = '20190718/20190718_turbulence2/'
+datafolder = '20190718/20190718_turbulence3/'
 darkfolder = '20190718/20190718_dark_turbulence/'
+#root = "C:/Users/marc-antoine/glint/"
 root = "/mnt/96980F95980F72D3/glint/"
 file_path = root+'reduction/'+datafolder
+save_path = file_path+'output/'
 data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and not 'dark' in f and 'n1n4' in f][nb_blocks[0]:nb_blocks[1]]
 dark_list = [root+'reduction/'+darkfolder+f for f in os.listdir(root+'reduction/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_blocks[0]:nb_blocks[1]]
-calib_params_path = '/mnt/96980F95980F72D3/glint/reduction/calibration_params/'
+calib_params_path = root+'reduction/'+'calibration_params/'
 zeta_coeff_path = calib_params_path + 'zeta_coeff.hdf5'
 instrumental_offsets_path = calib_params_path + '4WG_opd0_and_phase.txt'
 segment_positions = loadmat(calib_params_path+'N1N4_opti2.mat')['PTTPositionOn'][:,0]*1000
 
+if not os.path.exists(save_path):
+    os.makedirs(save_path)
+    
 instrumental_offsets = np.loadtxt(instrumental_offsets_path)
 if not opd_bias_switch:
 #    opd0 = np.array([ 400.5,  400.5, 1201.5,  400.5,  -801. ,  -801. ]) * (-1)
@@ -255,17 +238,16 @@ if not phase_bias_switch:
 null_table = {'null1':[0,[0,1], 'null7', [28,34]], 'null2':[1,[1,2], 'null8', [34,25]], 'null3':[2,[0,3], 'null9', [28,23]], \
               'null4':[3,[2,3], 'null10', [25,23]], 'null5':[4,[2,0], 'null11',[25,28]], 'null6':[5,[3,1], 'null12', [23,34]]}
 
-mu_opd0 = np.ones(6,)*200
-sig_opd0 = np.ones(6,)*200 # In nm
-na0 = np.ones(6,)*0
+mu_opd0 = np.ones(6,)*90
+sig_opd0 = np.ones(6,)*120 # In nm
+na0 = np.ones(6,)*0.
 dphase_bias = 0.
 
 results = {}
 print('starting loop')
 total_time_start = time()
 for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
-#    plt.ioff()
-#    plt.close('all')
+    plt.ioff()
    
     if nonoise:
         data = gff.load_data(data_list, (wl_min, wl_max))
@@ -343,10 +325,11 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
 #    n_samp = int(data_null.shape[1])
 #    data_null = data_null
     data_null_err = data['null_err']
-    sz = max([np.size(np.unique(d)) for d in data_null])
-    null_axis = np.array([np.linspace(data_null[i].min(), data_null[i].max(), int(sz**0.5), retstep=False, dtype=np.float32) for i in range(data_null.shape[0])])
-#    sz = max([np.size(d[(d>=-0.5)&(d<=150)]) for d in data_null])
-#    null_axis = np.array([np.linspace(-0.5, 150, int(sz**0.5), retstep=False, dtype=np.float32) for elt in data_null])
+#    sz = max([np.size(np.unique(d)) for d in data_null])
+#    null_axis = np.array([np.linspace(data_null[i].min(), data_null[i].max(), int(sz**0.5), retstep=False, dtype=np.float32) for i in range(data_null.shape[0])])
+#    sz = max([np.size(d[(d>=bin_bounds[0])&(d<=bin_bounds[1])]) for d in data_null])
+    sz = bin_size**2
+    null_axis = np.array([np.linspace(bin_bounds[0], bin_bounds[1], int(sz**0.5), retstep=False, dtype=np.float32) for elt in data_null])
     null_axis_width = np.mean(np.diff(null_axis, axis=-1))
     
     null_cdf = []
@@ -377,8 +360,8 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
             null_cdf.append(pdf)
             
             start = time()
-            pdf_err = gff.getErrorPDF(data_null[wl], data_null_err[wl], null_axis[wl]) # Barnaby
-#            pdf_err = gff.getErrorBinomNorm(pdf, data_null[wl].size)
+#            pdf_err = gff.getErrorPDF(data_null[wl], data_null_err[wl], null_axis[wl]) # Barnaby
+            pdf_err = gff.getErrorBinomNorm(pdf, data_null[wl].size)
 #            pdf_err = gff.getErrorWilson(pdf, data_null[wl].size, norm.cdf(1) - norm.cdf(-1))
             stop = time()
             print('Time PDF error=', stop-start)
@@ -432,7 +415,10 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
     popt_liste = []
     uncertainties_liste = []
     init_liste = []
-    for basin_hopping_count in range(100):
+    termination_liste = []
+    for basin_hopping_count in range(basin_hopping_nloop):
+        print('-------------')
+        print(basin_hopping_count)
         print('-------------')
         print('Fitting '+key)  
         # model fitting initial guess
@@ -443,7 +429,7 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
         else:
             mu_opd = abs(np.random.normal(mu_opd0[idx_null], 300))
             sig_opd = abs(np.random.normal(sig_opd0[idx_null], 100))
-            na = abs(np.random.normal(na0[idx_null], 0.1))
+            na = abs(np.random.normal(na0[idx_null], 0.05))
         
         ''' Model fitting '''
         if not chi2_map_switch:
@@ -452,7 +438,7 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
                 visibility = np.array([(1-na)/(1+na)], dtype=np.float32)[0]
                 
                 start = time()
-                z = MCfunction(null_axis, visibility, mu_opd, sig_opd, dphase_bias)
+                z = MCfunction(null_axis, visibility, mu_opd, sig_opd)
                 stop = time()
                 print('test', stop-start)
                 out = z.reshape(null_cdf.shape)
@@ -470,8 +456,13 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
                 init_liste.append([guess_na]+list(initial_guess[1:]))
                 
                 start = time()
-                popt = curve_fit(MCfunction, null_axis, null_cdf.ravel(), p0=initial_guess, epsfcn = null_axis_width, sigma=null_cdf_err.ravel(), absolute_sigma=True)
+#                popt = curve_fit(MCfunction, null_axis, null_cdf.ravel(), p0=initial_guess, epsfcn = null_axis_width, sigma=null_cdf_err.ravel(), absolute_sigma=True)
+                popt = gff.curvefit(MCfunction, null_axis, null_cdf.ravel(), p0=initial_guess, sigma=null_cdf_err.ravel(), 
+                                    bounds=([0., 0, 80],[0.1, 1000, 200]), x_scale=[0.001, 100, 100], diff_step = [0.1, 0.1, 0.1])
+                res = popt[2]
+                popt = popt[:2]
                 stop = time()
+                print('Termination', res.message)
                 print('Duration:', stop - start)
                 out = MCfunction(null_axis, *popt[0])
                 uncertainties = np.diag(popt[1])**0.5
@@ -486,60 +477,62 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
                 print('******')
                 print(popt[0])
                 print('******')
-            
+
+                np.savez(save_path+os.path.basename(file_path[:-1])+'_%03d'%(basin_hopping_count),
+                         chi2=chi2, popt=[na_opt]+[elt for elt in popt[0][1:]], uncertainties=uncertainties, init=[guess_na]+list(initial_guess[1:]),
+                                         termination=np.array([res.status]))
             
             chi2_liste.append(chi2)
             popt_liste.append([na_opt]+[elt for elt in popt[0][1:]])
             uncertainties_liste.append(uncertainties)
-                        
+            termination_liste.append(res.status)
             
-#            f = plt.figure(figsize=(19.20,10.80))
-#            txt3 = '%s '%key+'Fitted values: ' + 'Na$ = %.2E \pm %.2E$, '%(na_opt, uncertainties[0]) + \
-#            r'$\mu_{OPD} = %.2E \pm %.2E$ nm, '%(popt[0][1], uncertainties[1]) + \
-#            r'$\sigma_{OPD} = %.2E \pm %.2E$ nm,'%(popt[0][2], uncertainties[2])+' Chi2 = %.2E '%(chi2)+'(Last = %.3f s)'%(stop-start)
-#            count = 0
-#            wl_idx = np.arange(wl_scale.size)
-#            wl_idx = wl_idx[wl_scale>=1550]
-#            for wl in wl_idx[::-1][:10]:
-#                if len(wl_idx) > 1:
-#                    ax = f.add_subplot(5,2,count+1)
-#                else:
-#                    ax = f.add_subplot(1,1,count+1)
-#                plt.title('%s nm'%wl_scale[wl])
-#                if not mode_histo:
-##                    plt.semilogy(null_axis[wl], null_cdf[wl], '.', markersize=5, label='Data')
-##                    plt.semilogy(null_axis[wl], out.reshape((wl_scale.size,-1))[wl], '+', markersize=5, lw=5, alpha=0.8, label='Fit')
-#                    plt.errorbar(null_axis[wl], null_cdf[wl], yerr=null_cdf_err[wl], fmt='.', markersize=5, label='Data')
-#                    plt.errorbar(null_axis[wl], out.reshape((wl_scale.size,-1))[wl], fmt='+', markersize=5, lw=5, alpha=0.8, label='Fit')
-#                else:
-##                    plt.semilogy(null_axis[wl][:-1], null_cdf[wl], '.', markersize=5, label='Data')
-##                    plt.semilogy(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], '+', markersize=5, lw=5, alpha=0.8, label='Fit')
-#                    plt.errorbar(null_axis[wl][:-1], null_cdf[wl], yerr=null_cdf_err[wl], fmt='.', markersize=5, label='Data')
-#                    plt.errorbar(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], fmt='+', markersize=5, lw=5, alpha=0.8, label='Fit')                    
-#                plt.grid()
-#                plt.legend(loc='best')
-#                plt.xlabel('Null depth')
-#                plt.ylabel('Frequency')
-##                plt.ylim(1e-8, 10)
-##                plt.xlim(-0.86, 6)
-#                count += 1
-#            if len(wl_idx) > 1:
-#                ax.text(-0.8, -0.5, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
-#            else:
-#                ax.text(0.025, 0.05, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
-#            plt.tight_layout()
-#            string = key+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(os.path.dirname(datafolder))
+            f = plt.figure(figsize=(19.20,10.80))
+            txt3 = '%s '%key+'Fitted values: ' + 'Na$ = %.2E \pm %.2E$, '%(na_opt, uncertainties[0]) + \
+            r'$\mu_{OPD} = %.2E \pm %.2E$ nm, '%(popt[0][1], uncertainties[1]) + \
+            r'$\sigma_{OPD} = %.2E \pm %.2E$ nm,'%(popt[0][2], uncertainties[2])+' Chi2 = %.2E '%(chi2)+'(Last = %.3f s)'%(stop-start)
+            count = 0
+            wl_idx = np.arange(wl_scale.size)
+            wl_idx = wl_idx[wl_scale>=1550]
+            for wl in wl_idx[::-1][:10]:
+                if len(wl_idx) > 1:
+                    ax = f.add_subplot(5,2,count+1)
+                else:
+                    ax = f.add_subplot(1,1,count+1)
+                plt.title('%s nm'%wl_scale[wl])
+                if not mode_histo:
+#                    plt.semilogy(null_axis[wl], null_cdf[wl], '.', markersize=5, label='Data')
+#                    plt.semilogy(null_axis[wl], out.reshape((wl_scale.size,-1))[wl], '+', markersize=5, lw=5, alpha=0.8, label='Fit')
+                    plt.errorbar(null_axis[wl], null_cdf[wl], yerr=null_cdf_err[wl], fmt='.', markersize=5, label='Data')
+                    plt.errorbar(null_axis[wl], out.reshape((wl_scale.size,-1))[wl], fmt='+', markersize=5, lw=5, alpha=0.8, label='Fit')
+                else:
+#                    plt.semilogy(null_axis[wl][:-1], null_cdf[wl], '.', markersize=5, label='Data')
+#                    plt.semilogy(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], '+', markersize=5, lw=5, alpha=0.8, label='Fit')
+                    plt.errorbar(null_axis[wl][:-1], null_cdf[wl], yerr=null_cdf_err[wl], fmt='.', markersize=5, label='Data')
+                    plt.errorbar(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], fmt='+', markersize=5, lw=5, alpha=0.8, label='Fit')                    
+                plt.grid()
+                plt.legend(loc='best')
+                plt.xlabel('Null depth')
+                plt.ylabel('Frequency')
+#                plt.ylim(1e-8, 10)
+#                plt.xlim(-0.86, 6)
+                count += 1
+            if len(wl_idx) > 1:
+                ax.text(-0.8, -0.5, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+            else:
+                ax.text(0.025, 0.05, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+            plt.tight_layout()
+            string = key+'_'+'%03d'%(basin_hopping_count)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])
 #            if nonoise: string = string + '_nodarkinmodel'
 #            if not oversampling_switch: string = string + '_nooversamplinginmodel'
 #            if not zeta_switch: string = string + '_nozetainmodel'
-#            if not skip_fit: 
-#                if not mode_histo:
-#                    string = 'fit_cdf_' + string
-#                else:
-#                    string = 'fit_pdf_' + string
-##            string = str(np.diff(nb_blocks)[0])+'blocks_'+string
-#    #        string = 'range_'+string
-##            plt.savefig('/home/mam/Documents/glint/model fitting - labdata/'+string+'.png')
+            if not skip_fit: 
+                if not mode_histo:
+                    string = string + '_fit_cdf'
+                else:
+                    string = string + '_fit_pdf'
+            plt.savefig(save_path+string+'.png')
+            plt.close('all')
 ##            print(string)
 ##            np.save('/home/mam/Documents/glint/model fitting - labdata/'+key+'_%08d'%n_samp+'_%03d'%(supercount)+'.npy', out)
             
@@ -597,14 +590,23 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
                 plt.xlabel('sig opd');plt.ylabel('null depth')    
                 plt.title('mu %.2f'%map_mu_opd[i])
             plt.tight_layout()
-            
-    results[key] = [popt_liste, uncertainties_liste, chi2_liste, init_liste]
+    
+    results[key] = [popt_liste, uncertainties_liste, chi2_liste, init_liste, termination_liste]
             
 total_time_stop = time()            
 print('Total time', total_time_stop-total_time_start)
 #np.save('/home/mam/Documents/glint/model fitting - nsamp/'+'chi2_'+'%08d'%(n_samp)+'.npy', out)        
 plt.ion()
 plt.show()
+
+if mode_histo:
+    pickle_name = os.path.basename(file_path[:-1])+'_pdf.pkl'
+else:
+    pickle_name = os.path.basename(file_path[:-1])+'_cdf.pkl'
+                                   
+with open(save_path+pickle_name, 'wb') as f:
+    pickle.dump(results, f)
+    
 
 #plt.figure(figsize=(19.20,10.80))
 #plt.plot(results['null1'][2], '.', markersize=20)

@@ -16,6 +16,9 @@ import os
 from cupyx.scipy.special.statistics import ndtr
 import scipy.special as sp
 from scipy.stats import norm
+from scipy.linalg import svd
+import warnings
+from scipy.optimize import OptimizeWarning
 
 interpolate_kernel = cp.ElementwiseKernel(
     'float32 x_new, raw float32 xp, int32 xp_size, raw float32 yp', 
@@ -345,6 +348,7 @@ def getErrorPDF(data_null, data_null_err, null_axis):
         var_null_hist[k] = variance / data_null.size**2
     
     std = cp.sqrt(var_null_hist)
+    std[std==0] = std[std!=0].min()
     return cp.asnumpy(std)
    
 def doubleGaussCdf(x, mu1, mu2, sig, A):
@@ -372,16 +376,88 @@ def rv_gen_doubleGauss(nsamp, mu1, mu2, sig1, A, target):
         rv = cp.array(rv, dtype=cp.float32)
     return rv
 
-if __name__ == '__main__':
-    offset_opd = (0.39999938011169434 - (-1.500000000000056843e-02))*1000
-    phase_bias = -0.9801769079200153
-    a = computeNullDepth(1, 1, 1552, offset_opd, 0, phase_bias, 1, 0, 0, 1, 1, 1, 1)
-    print(a)
+
+def _wrap_func(func, xdata, ydata, transform):
+    if transform is None:
+        def func_wrapped(params):
+            return func(xdata, *params) - ydata
+    else:
+        def func_wrapped(params):
+            return transform * (func(xdata, *params) - ydata)
+
+    return func_wrapped
+
+def curvefit(func, xdata, ydata, p0=None, sigma=None, bounds=(-np.inf,np.inf), diff_step=None, x_scale=1):
     
-    rv_opd = rv_gen_doubleGauss(1000000, 0, 0+1602/2, 100, 0.5, 'cpu')
-    
-    hist, bin_edges = np.histogram(rv_opd, 1000, density=True)
+    if p0 is None:
+        # determine number of parameters by inspecting the function
+        from scipy._lib._util import getargspec_no_self as _getargspec
+        args = _getargspec(func)[0]
+        if len(args) < 2:
+            raise ValueError("Unable to determine number of fit parameters.")
+        n = len(args) - 1
+        p0 = np.ones(n,)
+    else:
+        p0 = np.atleast_1d(p0)
         
-    plt.figure()
-    plt.plot(bin_edges[:-1], hist)
-    plt.grid()    
+    if sigma is not None:
+        sigma = np.array(sigma)
+        transform = 1/sigma
+    else:
+        transform = None
+
+    cost_func = _wrap_func(func, xdata, ydata, transform)    
+    jac = '2-point'
+    res = least_squares(cost_func, p0, jac=jac, bounds=bounds, method='trf', diff_step=diff_step, x_scale=x_scale)
+    popt = res.x
+
+    # Do Moore-Penrose inverse discarding zero singular values.
+    _, s, VT = svd(res.jac, full_matrices=False)
+    threshold = np.finfo(float).eps * max(res.jac.shape) * s[0]
+    s = s[s > threshold]
+    VT = VT[:s.size]
+    pcov = np.dot(VT.T / s**2, VT)
+    
+    warn_cov = False
+    if pcov is None:
+        # indeterminate covariance
+        pcov = np.zeros((len(popt), len(popt)), dtype=float)
+        pcov.fill(np.inf)
+        warn_cov = True
+
+
+    if warn_cov:
+        warnings.warn('Covariance of the parameters could not be estimated',
+                      category=OptimizeWarning)
+            
+    return popt, pcov, res
+
+if __name__ == '__main__':
+#    offset_opd = (0.39999938011169434 - (-1.500000000000056843e-02))*1000
+#    phase_bias = -0.9801769079200153
+#    a = computeNullDepth(1, 1, 1552, offset_opd, 0, phase_bias, 1, 0, 0, 1, 1, 1, 1)
+#    print(a)
+#    
+#    rv_opd = rv_gen_doubleGauss(1000000, 0, 0+1602/2, 100, 0.5, 'cpu')
+#    
+#    hist, bin_edges = np.histogram(rv_opd, 1000, density=True)
+#        
+#    plt.figure()
+#    plt.plot(bin_edges[:-1], hist)
+#    plt.grid()    
+
+    def model(x, a, b):
+        return a*x + b
+
+    slope, offset = 2, 5
+    x = np.arange(100)
+    y = slope * x + offset + np.random.normal(0, 0.1, x.size)
+    yerr = 0.1 * np.ones(y.shape)
+    
+    x0 = [1.,1.]
+    
+    popt, pcov, res = curvefit(model, x, y, x0, yerr, bounds=([0,0],[20,20]))
+    
+    chi2 = np.sum((y-model(x, *res.x))**2/yerr**2) * 1/(y.size-res.x.size)
+    print('chi2', chi2)
+  
