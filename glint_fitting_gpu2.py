@@ -22,58 +22,19 @@ To do:
 import numpy as np
 import cupy as cp
 import matplotlib.pyplot as plt
-from scipy.optimize import curve_fit, leastsq, least_squares
+from scipy.optimize import curve_fit, least_squares
 from timeit import default_timer as time
 import h5py
 import os
+import sys
 import glint_fitting_functions as gff
 from scipy.special import erf
-from itertools import combinations
 from scipy.io import loadmat
 from scipy.stats import norm
-from astropy.stats import bootstrap
 import pickle
 
-def computeCdf(rv, x_axis, normed=True):
-    cdf = np.ones(x_axis.size)*rv.size
-    temp = np.sort(rv)
-    idx = 0
-    for i in range(x_axis.size):
-#        idx = idx + len(np.where(temp[idx:] <= x_axis[i])[0])
-        mask = np.where(temp <= x_axis[i])[0]
-        idx = len(mask)
 
-        if len(temp[idx:]) != 0:
-            cdf[i] = idx
-        else:
-            print('pb', i, idx)
-            break
-
-    if normed:        
-        cdf /= float(rv.size)
-        return cdf
-    else:
-        return cdf, mask
-
-def computeCdfCupy(rv, x_axis):
-    cdf = cp.ones(x_axis.size, dtype=cp.float32)*rv.size
-    temp = cp.asarray(rv, dtype=cp.float32)
-    temp = cp.sort(rv)
-    idx = 0
-    for i in range(x_axis.size):
-        idx = idx + len(cp.where(temp[idx:] <= x_axis[i])[0])
-
-        if len(temp[idx:]) != 0:
-            cdf[i] = idx
-        else:
-            break
-        
-    cdf = cdf / rv.size
-    
-    return 1-cdf
-        
-
-def MCfunction(bins0, visibility, mu_opd, sig_opd):
+def MCfunction(bins0, na, mu_opd, sig_opd):
     '''
     For now, this function deals with polychromatic for one baseline
     '''
@@ -85,6 +46,7 @@ def MCfunction(bins0, visibility, mu_opd, sig_opd):
     global mode, mode_histo
     global rv_IA, rv_IB, rv_opd, rv_dark_Iminus, rv_dark_Iplus, rv_null # On GPU
     global oversampling_switch, nonoise
+    global fichier, start_iter, stop_iter
 
 #    sig_opd = 100.
 #    mu_opd = 0
@@ -94,9 +56,17 @@ def MCfunction(bins0, visibility, mu_opd, sig_opd):
     
     nloop = 10
         
+    visibility = (1 - na) / (1 + na)
 #    bins = cp.asarray(bins, dtype=cp.float32)
     count += 1
-    print(int(count), visibility, mu_opd, sig_opd, dphase_bias)     
+    stop_iter = time()
+    print(int(count), na, mu_opd, sig_opd, stop_iter-start_iter)
+    try:
+        fichier.write('%s\t%s\t%s\t%s\t%s\n'%(int(count), na, mu_opd, sig_opd, stop_iter-start_iter))
+    except:
+        pass
+    start_iter = stop_iter
+    
 #    accum = cp.zeros((wl_scale.size, bins.size), dtype=cp.float32)
     if not mode_histo:
         accum = cp.zeros(bins0.shape, dtype=cp.float32)
@@ -112,6 +82,7 @@ def MCfunction(bins0, visibility, mu_opd, sig_opd):
     for _ in range(nloop):
         for k in range(wl_scale.size):
             bins = cp.asarray(bins0[k], dtype=cp.float32)
+#            bin_width = cp.mean(cp.diff(bins), dtype=cp.float32)
             if nonoise:
                 rv_dark_Iminus = cp.zeros((n_samp,), dtype=cp.float32)
                 rv_dark_Iplus = cp.zeros((n_samp,), dtype=cp.float32)
@@ -135,19 +106,19 @@ def MCfunction(bins0, visibility, mu_opd, sig_opd):
                 if mode == 'cuda':
                     cdf_null = gff.computeCdf(bins, rv_null, 'ccdf', True)
                 elif mode == 'cupy':
-                    cdf_null = computeCdfCupy(rv_null, bins)
+                    cdf_null = gff.computeCdfCupy(rv_null, bins)
                 else:
-                    cdf_null = computeCdf(cp.asnumpy(rv_null), cp.asnumpy(bins))
+                    cdf_null = gff.computeCdfCpu(cp.asnumpy(rv_null), cp.asnumpy(bins))
                     cdf_null = cp.asarray(cdf_null)
                 accum[k] += cdf_null
             else:
                 pdf_null = cp.histogram(rv_null, bins)[0]
-                accum[k] += pdf_null / cp.sum(pdf_null)
+                accum[k] += pdf_null / cp.sum(pdf_null)#*bin_width)
     
     if not mode_histo:
         accum = accum / nloop
     else:
-        accum = accum / cp.sum(accum, axis=-1, keepdims=True)
+        accum = accum / nloop#cp.sum(accum, axis=-1, keepdims=True)
         
     accum = cp.asnumpy(accum)
     return accum.ravel()
@@ -158,31 +129,67 @@ def map_error(params, x, y):
     chi2 = np.sum(residuals**2) / (y.size-len(params))
     return chi2
 
-def bootstrap_pdf(rv, axis, bootnum):
-    bootstr = bootstrap(rv, bootnum)
-    liste = []
-    for k in range(bootnum):
-        pdf = np.histogram(bootstr[k], axis)[0]
-        pdf = pdf / np.sum(pdf)
-        liste.append(pdf)
-        
-    liste = np.array(liste)
-    std = liste.std(axis=0)
-    std[std==0] = std[std!=0].min()
-    return std
+class Logger(object):
+    def __init__(self, log_path):
+        self.orig_stdout = sys.stdout
+        self.terminal = sys.stdout
+        self.log = open(log_path, "a")
 
-def bootstrap_cdf(rv, axis, bootnum):
-    bootstr = bootstrap(rv, bootnum)
-    liste = []
-    for k in range(bootnum):
-        cdf = gff.computeCdf(axis, bootstr[k], 'ccdf', True)
-        liste.append(cp.asnumpy(cdf))
-        
-    liste = np.array(liste)
-    std = liste.std(axis=0)
-    std[std==0] = std[std!=0].min()
-    return std
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)  
+
+    def flush(self):
+        #this flush method is needed for python 3 compatibility.
+        #this handles the flush command by doing nothing.
+        #you might want to specify some extra behavior here.
+        pass
     
+    def close(self):
+        sys.stdout = self.orig_stdout
+        self.log.close()
+        print('Log closed')
+
+def basin_hoppin_values(mu_opd0, sig_opd0, na0, n_hop, bounds_mu, bounds_sig, bounds_na):
+    mu_list = []
+    sig_list = []
+    null_list = []
+    orig_seed = np.random.get_state()
+    np.random.seed(1)
+    print('Random drawing of init guesses')
+    
+    for k in range(n_hop):
+        for _ in range(1000):
+            mu_opd = abs(np.random.normal(mu_opd0, 200))
+            if mu_opd >= bounds_mu[0] and mu_opd <= bounds_mu[1]:
+                break
+            if _ == 1000-1:
+                print('mu_opd: no new guess, take initial one')
+                mu_opd = mu_opd0[idx_null]
+        mu_list.append(mu_opd)
+        
+        for _ in range(1000):
+            sig_opd = abs(np.random.normal(sig_opd0, 200))
+            if sig_opd >= bounds_sig[0] and sig_opd <= bounds_sig[1]:
+                break
+            if _ == 1000-1:
+                print('sig opd: no new guess, take initial one')
+                sig_opd = sig_opd0[idx_null]
+        sig_list.append(sig_opd)
+            
+        for _ in range(1000):
+            na = np.random.normal(na0, 0.5)
+            if na >= bounds_na[0] and na <= bounds_na[1]:
+                break
+            if _ == 1000-1:
+                print('na: no new guess, take initial one')
+                na = na0[idx_null]
+        null_list.append(na)
+            
+    print('Random drawing done')
+    np.random.set_state(orig_seed)
+    return mu_list, sig_list, null_list
+        
 plt.ioff()
 
 ''' Settings '''  
@@ -195,15 +202,17 @@ phase_bias_switch = True
 opd_bias_switch = True
 zeta_switch = True
 oversampling_switch = False
-skip_fit = False
+skip_fit = True
 chi2_map_switch = False
 mode_histo = True
 nb_blocks = (None, None)
-basin_hopping = True
 #bin_bounds = (-0.1, 3) # Boundaries1
-bin_bounds = (-0.2, 1.5)
-bin_size = 1000
-basin_hopping_nloop = 1
+bin_bounds = (-0.01, 1.)
+bin_size = 5000
+basin_hopping_nloop = 10
+bounds_mu = (150, 700)
+bounds_sig = (150, 700)
+bounds_na = (0, 1)
 
 ''' Import real data '''
 datafolder = '20190718/20190718_turbulence3/'
@@ -238,10 +247,14 @@ if not phase_bias_switch:
 null_table = {'null1':[0,[0,1], 'null7', [28,34]], 'null2':[1,[1,2], 'null8', [34,25]], 'null3':[2,[0,3], 'null9', [28,23]], \
               'null4':[3,[2,3], 'null10', [25,23]], 'null5':[4,[2,0], 'null11',[25,28]], 'null6':[5,[3,1], 'null12', [23,34]]}
 
-mu_opd0 = np.ones(6,)*90
-sig_opd0 = np.ones(6,)*120 # In nm
-na0 = np.ones(6,)*0.
+mu_opd0 = np.ones(6,)*250
+sig_opd0 = np.ones(6,)*140 # In nm
+na0 = np.ones(6,)*0.001
 dphase_bias = 0.
+
+''' Generate basin hopping values '''
+mu_list, sig_list, null_list = basin_hoppin_values(mu_opd0[0], sig_opd0[0], na0[0], basin_hopping_nloop, bounds_mu, bounds_sig, bounds_na)
+
 
 results = {}
 print('starting loop')
@@ -340,10 +353,10 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
                 cdf = gff.computeCdf(null_axis[wl], data_null[wl], 'ccdf', True)
                 null_cdf.append(cp.asnumpy(cdf))
             elif mode == 'cupy':
-                cdf = computeCdfCupy(data_null[wl], cp.asarray(null_axis[wl], dtype=cp.float32))
+                cdf = gff.computeCdfCupy(data_null[wl], cp.asarray(null_axis[wl], dtype=cp.float32))
                 null_cdf.append(cp.asnumpy(cdf))
             else:
-                cdf = computeCdf(np.sort(data_null[wl]), null_axis[wl])
+                cdf = gff.computeCdf(np.sort(data_null[wl]), null_axis[wl])
                 null_cdf.append(cdf)
                     
             start = time()
@@ -355,13 +368,14 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
             null_cdf_err.append(cdf_err)
 
         else:
-            pdf = np.histogram(data_null[wl], null_axis[wl])[0]
+            pdf = np.histogram(data_null[wl], null_axis[wl], density=False)[0]
+            bin_width = null_axis[wl][1]-null_axis[wl][0]
             pdf = pdf / np.sum(pdf)
             null_cdf.append(pdf)
             
             start = time()
 #            pdf_err = gff.getErrorPDF(data_null[wl], data_null_err[wl], null_axis[wl]) # Barnaby
-            pdf_err = gff.getErrorBinomNorm(pdf, data_null[wl].size)
+            pdf_err = gff.getErrorBinomNorm(pdf, data_null[wl].size, 1.)
 #            pdf_err = gff.getErrorWilson(pdf, data_null[wl].size, norm.cdf(1) - norm.cdf(-1))
             stop = time()
             print('Time PDF error=', stop-start)
@@ -417,6 +431,7 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
     init_liste = []
     termination_liste = []
     for basin_hopping_count in range(basin_hopping_nloop):
+        sys.stdout = Logger(save_path+'basin_hop_%02d'%(basin_hopping_count)+'.log')
         print('-------------')
         print(basin_hopping_count)
         print('-------------')
@@ -427,65 +442,78 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
             sig_opd = sig_opd0[idx_null]
             na = na0[idx_null]
         else:
-            mu_opd = abs(np.random.normal(mu_opd0[idx_null], 300))
-            sig_opd = abs(np.random.normal(sig_opd0[idx_null], 100))
-            na = abs(np.random.normal(na0[idx_null], 0.05))
-        
+            mu_opd = mu_list[basin_hopping_count]
+            sig_opd = sig_list[basin_hopping_count]
+            na = null_list[basin_hopping_count]
+                
         ''' Model fitting '''
         if not chi2_map_switch:
             if skip_fit:    
                 count = 0.
-                visibility = np.array([(1-na)/(1+na)], dtype=np.float32)[0]
-                
                 start = time()
-                z = MCfunction(null_axis, visibility, mu_opd, sig_opd)
+                start_iter = time()
+                z = MCfunction(null_axis, np.array([na], dtype=np.float32)[0], mu_opd, sig_opd)
                 stop = time()
                 print('test', stop-start)
                 out = z.reshape(null_cdf.shape)
                 na_opt = na
                 uncertainties = np.zeros(3)
-                popt = np.array([[(1-na)/(1+na), mu_opd, sig_opd]])
+                popt = np.array([[na, mu_opd, sig_opd]])
                 chi2 = 1/(null_cdf.size-popt[0].size) * np.sum((null_cdf.ravel() - z)**2)
+                term_status = None
             
             else:            
                 print('Model fitting')    
                 count = 0.
                 guess_na = na
-                initial_guess = [(1-guess_na)/(1+guess_na), mu_opd, sig_opd]
+                initial_guess = [guess_na, mu_opd, sig_opd]
                 initial_guess = np.array(initial_guess, dtype=np.float32)
                 init_liste.append([guess_na]+list(initial_guess[1:]))
                 
                 start = time()
 #                popt = curve_fit(MCfunction, null_axis, null_cdf.ravel(), p0=initial_guess, epsfcn = null_axis_width, sigma=null_cdf_err.ravel(), absolute_sigma=True)
-                popt = gff.curvefit(MCfunction, null_axis, null_cdf.ravel(), p0=initial_guess, sigma=null_cdf_err.ravel(), 
-                                    bounds=([0., 0, 80],[0.1, 1000, 200]), x_scale=[0.001, 100, 100], diff_step = [0.1, 0.1, 0.1])
+#                res = 0
+#                term_status = None
+                
+                with open(save_path+'callfunc_%02d.txt', 'w') as fichier:
+                    popt = gff.curvefit(MCfunction, null_axis, null_cdf.ravel(), p0=initial_guess, sigma=null_cdf_err.ravel(), 
+                                        bounds=([bounds_na[0], bounds_mu[0], bounds_sig[0]],[bounds_na[1], bounds_mu[1], bounds_sig[1]]), 
+                                        diff_step = [0.01, 100., 100.])
                 res = popt[2]
                 popt = popt[:2]
-                stop = time()
                 print('Termination', res.message)
+                term_status = res.status
+#                
+#                popt = curve_fit(MCfunction, null_axis, null_cdf.ravel(), p0=initial_guess, epsfcn = null_axis_width, sigma=null_cdf_err.ravel(), absolute_sigma=True, 
+#                                 full_output=True)
+#                res = popt[2:]
+#                popt = popt[:2]
+#                term_status = res[2]
+                stop = time()
+                print('Termination', term_status)
                 print('Duration:', stop - start)
+
                 out = MCfunction(null_axis, *popt[0])
                 uncertainties = np.diag(popt[1])**0.5
-                uncertainties[0] = 2/(1+popt[0][0])**2 * uncertainties[0]
                 chi2 = 1/(null_cdf.size-popt[0].size) * np.sum((null_cdf.ravel() - out)**2/null_cdf_err.ravel()**2)
                 print('chi2', chi2)
                 
-                real_params = np.array([(1-na)/(1+na), mu_opd, sig_opd])
+                real_params = np.array([na, mu_opd, sig_opd])
                 rel_err = (real_params - popt[0]) / real_params * 100
                 print('rel diff', rel_err)
-                na_opt = (1-popt[0][0])/(1+popt[0][0])
+                na_opt = popt[0][0]
                 print('******')
                 print(popt[0])
                 print('******')
 
                 np.savez(save_path+os.path.basename(file_path[:-1])+'_%03d'%(basin_hopping_count),
                          chi2=chi2, popt=[na_opt]+[elt for elt in popt[0][1:]], uncertainties=uncertainties, init=[guess_na]+list(initial_guess[1:]),
-                                         termination=np.array([res.status]))
+                                         termination=np.array([term_status]))
             
             chi2_liste.append(chi2)
             popt_liste.append([na_opt]+[elt for elt in popt[0][1:]])
             uncertainties_liste.append(uncertainties)
-            termination_liste.append(res.status)
+            termination_liste.append(term_status)
             
             f = plt.figure(figsize=(19.20,10.80))
             txt3 = '%s '%key+'Fitted values: ' + 'Na$ = %.2E \pm %.2E$, '%(na_opt, uncertainties[0]) + \
@@ -532,7 +560,8 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
                 else:
                     string = string + '_fit_pdf'
             plt.savefig(save_path+string+'.png')
-            plt.close('all')
+            if basin_hopping_nloop>5:
+                plt.close('all')
 ##            print(string)
 ##            np.save('/home/mam/Documents/glint/model fitting - labdata/'+key+'_%08d'%n_samp+'_%03d'%(supercount)+'.npy', out)
             
@@ -540,14 +569,13 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
             print('Error mapping')
             count = 0
             map_na, step_na = np.linspace(-0.1,1.1,10, endpoint=False, retstep=True)
-            map_visi = (1 - map_na) / (1 + map_na)
             map_mu_opd, step_mu = np.linspace(-100, 100, 10, endpoint=False, retstep=True)
             map_sig_opd, step_sig = np.linspace(1, 201, 10, endpoint=False, retstep=True)
         #    map_sig_opd = np.array([100])
             map_A = np.array([0.5])
             chi2map = []
             start = time()
-            for visi in map_visi:
+            for visi in map_na:
                 temp1 = []
                 for o in map_mu_opd:
                     temp2 = []
@@ -607,6 +635,7 @@ else:
 with open(save_path+pickle_name, 'wb') as f:
     pickle.dump(results, f)
     
+sys.stdout.close()
 
 #plt.figure(figsize=(19.20,10.80))
 #plt.plot(results['null1'][2], '.', markersize=20)

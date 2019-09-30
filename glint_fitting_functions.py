@@ -128,6 +128,44 @@ def rv_generator(absc, cdf, nsamp):
     interpolate_kernel(rv_uniform, cdf, cdf.size, cdf_absc, output_samples)
     
     return output_samples
+
+def computeCdfCpu(rv, x_axis, normed=True):
+    cdf = np.ones(x_axis.size)*rv.size
+    temp = np.sort(rv)
+    idx = 0
+    for i in range(x_axis.size):
+#        idx = idx + len(np.where(temp[idx:] <= x_axis[i])[0])
+        mask = np.where(temp <= x_axis[i])[0]
+        idx = len(mask)
+
+        if len(temp[idx:]) != 0:
+            cdf[i] = idx
+        else:
+            print('pb', i, idx)
+            break
+
+    if normed:        
+        cdf /= float(rv.size)
+        return cdf
+    else:
+        return cdf, mask
+
+def computeCdfCupy(rv, x_axis):
+    cdf = cp.ones(x_axis.size, dtype=cp.float32)*rv.size
+    temp = cp.asarray(rv, dtype=cp.float32)
+    temp = cp.sort(rv)
+    idx = 0
+    for i in range(x_axis.size):
+        idx = idx + len(cp.where(temp[idx:] <= x_axis[i])[0])
+
+        if len(temp[idx:]) != 0:
+            cdf[i] = idx
+        else:
+            break
+        
+    cdf = cdf / rv.size
+    
+    return 1-cdf
     
 def load_data(data, wl_edges, null_key, *args):
     # Null table for getting the null and associated photometries in the intermediate data
@@ -354,8 +392,8 @@ def getErrorPDF(data_null, data_null_err, null_axis):
 def doubleGaussCdf(x, mu1, mu2, sig, A):
     return 1/(1+A) * ndtr((x-mu1)/(sig)) + A/(1+A) * ndtr((x-mu2)/(sig))
 
-def getErrorBinomNorm(cdf, data_size):
-    cdf_err = ((cdf * (1 - cdf))/data_size)**0.5 # binom-norm
+def getErrorBinomNorm(cdf, data_size, width):
+    cdf_err = ((cdf * (1 - cdf*width))/(data_size**width))**0.5 # binom-norm
     cdf_err[cdf_err==0] = cdf_err[cdf_err!=0].min()
     return cdf_err
 
@@ -408,7 +446,8 @@ def curvefit(func, xdata, ydata, p0=None, sigma=None, bounds=(-np.inf,np.inf), d
 
     cost_func = _wrap_func(func, xdata, ydata, transform)    
     jac = '2-point'
-    res = least_squares(cost_func, p0, jac=jac, bounds=bounds, method='trf', diff_step=diff_step, x_scale=x_scale)
+    res = least_squares(cost_func, p0, jac=jac, bounds=bounds, method='trf', diff_step=diff_step, x_scale=x_scale, loss='huber', 
+                        xtol=None, verbose=2)
     popt = res.x
 
     # Do Moore-Penrose inverse discarding zero singular values.
