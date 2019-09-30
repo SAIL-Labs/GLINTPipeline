@@ -18,7 +18,7 @@ from scipy.optimize import curve_fit
 
 nonoise_switch = False
 ''' Settings '''
-nb_files = (0,100) # Number of data files to read. None = all files
+nb_files = (62,70) # Number of data files to read. None = all files
 root = "/mnt/96980F95980F72D3/glint/" # Root path containing the reduced data
 datafolder = '20190718/20190718_turbulence3/' # Folder of the data to explore
 wl_path = root+'reduction/calibration_params/px_to_wl.npy'
@@ -26,7 +26,7 @@ wl_path = root+'reduction/calibration_params/px_to_wl.npy'
 output_path = root+'reduction/'+datafolder # Path to reduced data
 dark_path = output_path+'superdark.npy'
 wl_min, wl_max = 1400,1650
-fps = 1
+fps = 10
 
 ''' Running script '''
 data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder # Full path to the data
@@ -210,44 +210,44 @@ for i in range(16):
         plt.grid()
         plt.title('Flux in '+titles_photo[i]+' and '+titles_photo[i+1])
 plt.tight_layout()        
-plt.figure(figsize=(19.20,10.80))
-for i in range(16):
-    if i<4: 
-        plt.subplot(4,4,i+1)
-        plt.plot(data[:,i,40:75].sum(axis=-1))
-        plt.grid()
-        plt.title(titles_photo[i])
-    elif i%2==0:
-        plt.subplot(4,4,i+1)
-        plt.plot(data[:,i,50:51].sum(axis=-1)/data[:,i+1,50:51].sum(axis=-1))
-        plt.grid()
-        plt.title(titles_photo[i]+' and '+titles_photo[i+1])
-plt.tight_layout()  
-
-plt.figure(figsize=(19.20,10.80))
-for i in range(16):
-    plt.subplot(4,4,i+1)
-    b = com_wl[:,i]
-    histo = np.histogram(b, int(b.size**0.5))
-    plt.plot(histo[1][:-1], histo[0], 'o-')
-    plt.grid()
-    plt.title('Histogram of COM of '+titles_photo[i])
-plt.tight_layout()
-    
-plt.figure(figsize=(19.20,10.80))
-for i in range(16):
-    plt.subplot(4,4,i+1)
-    plt.plot(com_wl[:,i], 'o-')
-    plt.grid()
-    plt.title('Center of mass of '+titles_photo[i])
-plt.tight_layout()
-
-plt.figure(figsize=(19.20,10.80))
-for i in range(16):
-    plt.subplot(4,4,i+1)
-    b = data[:,i,40:75].sum(axis=-1)
-    histo = np.histogram(b, int(b.size**0.5))
-    plt.plot(histo[1][:-1], histo[0], 'o-')
-    plt.grid()
-    plt.title('Histogram of flux of '+titles_photo[i])
-plt.tight_layout()
+#plt.figure(figsize=(19.20,10.80))
+#for i in range(16):
+#    if i<4: 
+#        plt.subplot(4,4,i+1)
+#        plt.plot(data[:,i,40:75].sum(axis=-1))
+#        plt.grid()
+#        plt.title(titles_photo[i])
+#    elif i%2==0:
+#        plt.subplot(4,4,i+1)
+#        plt.plot(data[:,i,50:51].sum(axis=-1)/data[:,i+1,50:51].sum(axis=-1))
+#        plt.grid()
+#        plt.title(titles_photo[i]+' and '+titles_photo[i+1])
+#plt.tight_layout()  
+#
+#plt.figure(figsize=(19.20,10.80))
+#for i in range(16):
+#    plt.subplot(4,4,i+1)
+#    b = com_wl[:,i]
+#    histo = np.histogram(b, int(b.size**0.5))
+#    plt.plot(histo[1][:-1], histo[0], 'o-')
+#    plt.grid()
+#    plt.title('Histogram of COM of '+titles_photo[i])
+#plt.tight_layout()
+#    
+#plt.figure(figsize=(19.20,10.80))
+#for i in range(16):
+#    plt.subplot(4,4,i+1)
+#    plt.plot(com_wl[:,i], 'o-')
+#    plt.grid()
+#    plt.title('Center of mass of '+titles_photo[i])
+#plt.tight_layout()
+#
+#plt.figure(figsize=(19.20,10.80))
+#for i in range(16):
+#    plt.subplot(4,4,i+1)
+#    b = data[:,i,40:75].sum(axis=-1)
+#    histo = np.histogram(b, int(b.size**0.5))
+#    plt.plot(histo[1][:-1], histo[0], 'o-')
+#    plt.grid()
+#    plt.title('Histogram of flux of '+titles_photo[i])
+#plt.tight_layout()

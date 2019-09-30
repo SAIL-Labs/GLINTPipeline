@@ -30,11 +30,11 @@ save = True
 nb_files = (None,None)
 
 ''' Inputs '''
-datafolder = '20190718/20190718_turbulence3/'
+datafolder = '20190718/20190718_turbulence2/'
 root = "/mnt/96980F95980F72D3/glint/"
 calibration_path = root+'reduction/'+'calibration_params/'
 data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f and 'n5n6' in f][nb_files[0]:nb_files[1]]
+data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f and 'n1n4' in f][nb_files[0]:nb_files[1]]
 
 ''' Output '''
 output_path = root+'reduction/'+datafolder
