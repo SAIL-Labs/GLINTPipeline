@@ -447,7 +447,7 @@ def curvefit(func, xdata, ydata, p0=None, sigma=None, bounds=(-np.inf,np.inf), d
     cost_func = _wrap_func(func, xdata, ydata, transform)    
     jac = '2-point'
     res = least_squares(cost_func, p0, jac=jac, bounds=bounds, method='trf', diff_step=diff_step, x_scale=x_scale, loss='huber', 
-                        xtol=None, verbose=2)
+                        verbose=2)#, xtol=None, max_nfev=100)
     popt = res.x
 
     # Do Moore-Penrose inverse discarding zero singular values.
