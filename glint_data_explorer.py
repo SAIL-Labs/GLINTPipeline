@@ -20,7 +20,10 @@ nonoise_switch = False
 ''' Settings '''
 nb_files = (62,70) # Number of data files to read. None = all files
 root = "/mnt/96980F95980F72D3/glint/" # Root path containing the reduced data
+path_to_data = '/mnt/96980F95980F72D3/glint_data/'
 datafolder = '20190718/20190718_turbulence3/' # Folder of the data to explore
+darkfolder = '20190718/20190718_dark_turbulence/' # Folder of the data to explore
+#datafolder = '201907_Data/' # Folder of the data to explore
 wl_path = root+'reduction/calibration_params/px_to_wl.npy'
 #wl_path = root+'reduction/201806_wavecal/px_to_wl.npy'
 output_path = root+'reduction/'+datafolder # Path to reduced data
@@ -29,8 +32,8 @@ wl_min, wl_max = 1400,1650
 fps = 10
 
 ''' Running script '''
-data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder # Full path to the data
-data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f and 'n1n4' in f][nb_files[0]:nb_files[1]]
+data_path = path_to_data+datafolder # Full path to the data
+data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f][nb_files[0]:nb_files[1]]
 
 if not nonoise_switch:
     switch_dark = False
@@ -41,7 +44,8 @@ if not nonoise_switch:
         switch_dark = True
     
     if switch_dark:
-        dark_list = [data_path+f for f in os.listdir(data_path) if 'dark' in f][:1]
+        dark_path = path_to_data + darkfolder
+        dark_list = [dark_path+f for f in os.listdir(dark_path) if 'dark' in f][:]
         with h5py.File(dark_list[0]) as dataFile:
             dark = np.array(dataFile['imagedata'])
             dark = np.transpose(dark, axes=(0,2,1))
@@ -55,6 +59,7 @@ for f in data_list:
     with h5py.File(f) as dataFile:
         try:
             data = np.array(dataFile['imagedata'])
+            print('Number of frames=', data.shape[0])
         except KeyError as e:
             print(e)
             print(f)
@@ -201,7 +206,7 @@ for i in range(16):
         plt.subplot(4,4,i+1)
         plt.plot(data[:,i,40:75].sum(axis=-1))
         plt.grid()
-        plt.title(titles_photo[i])
+        plt.title('Flux in '+titles_photo[i])
     elif i%2==0:
         plt.subplot(4,4,i+1)
         plt.plot(data[:,i,40:75].sum(axis=-1))
@@ -209,6 +214,8 @@ for i in range(16):
 #        plt.plot(data[:,i,33:34].sum(axis=-1)/data[:,i+1,33:34].sum(axis=-1))
         plt.grid()
         plt.title('Flux in '+titles_photo[i]+' and '+titles_photo[i+1])
+    if i == 1 or i == 3 or i == 12 or i == 14:
+        plt.xlabel('Frame')
 plt.tight_layout()        
 #plt.figure(figsize=(19.20,10.80))
 #for i in range(16):
@@ -250,4 +257,16 @@ plt.tight_layout()
 #    plt.plot(histo[1][:-1], histo[0], 'o-')
 #    plt.grid()
 #    plt.title('Histogram of flux of '+titles_photo[i])
+#plt.tight_layout()
+
+#
+#plt.figure(figsize=(19.20,10.80))
+#plt.plot(wl_scale[4], data[0,4], lw=3, label='Frame 0')
+#plt.plot(wl_scale[4], data[300,4], lw=3, label='Frame 300')
+#plt.grid()
+#plt.xticks(size=35);plt.yticks(size=35)
+#plt.legend(loc='best', fontsize=35)
+#plt.xlabel('Wavelength (nm)', size=40)
+#plt.ylabel('Intensity (AU)', size=40)
+#plt.xlim(1400, 1700)
 #plt.tight_layout()
