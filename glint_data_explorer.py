@@ -2,9 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Thu Jun 20 09:58:33 2019
-
 @author: Marc-Antoine Martinod
-
 Just fill the settings and run the script.
 """
 
@@ -18,7 +16,7 @@ from scipy.optimize import curve_fit
 
 nonoise_switch = False
 ''' Settings '''
-nb_files = (62,70) # Number of data files to read. None = all files
+nb_files = (0,1) # Number of data files to read. None = all files
 root = "/mnt/96980F95980F72D3/glint/" # Root path containing the reduced data
 path_to_data = '/mnt/96980F95980F72D3/glint_data/'
 datafolder = '20190718/20190718_turbulence3/' # Folder of the data to explore
@@ -33,8 +31,8 @@ fps = 10
 
 ''' Running script '''
 data_path = path_to_data+datafolder # Full path to the data
-data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f][nb_files[0]:nb_files[1]]
-
+data_list = sorted([data_path+f for f in os.listdir(data_path) if not 'dark' in f and 'n1n4' in f])
+data_list = data_list[nb_files[0]:nb_files[1]]
 if not nonoise_switch:
     switch_dark = False
     try:
@@ -259,7 +257,7 @@ plt.tight_layout()
 #    plt.title('Histogram of flux of '+titles_photo[i])
 #plt.tight_layout()
 
-#
+
 #plt.figure(figsize=(19.20,10.80))
 #plt.plot(wl_scale[4], data[0,4], lw=3, label='Frame 0')
 #plt.plot(wl_scale[4], data[300,4], lw=3, label='Frame 300')
@@ -270,3 +268,51 @@ plt.tight_layout()
 #plt.ylabel('Intensity (AU)', size=40)
 #plt.xlim(1400, 1700)
 #plt.tight_layout()
+
+#plt.figure(figsize=(19.20,10.80))
+#plt.plot(wl_scale[0], data[300,0], lw=3, label='P1')
+#plt.plot(wl_scale[1], data[300,1], lw=3, label='P2')
+#plt.plot(wl_scale[4], data[300,4], lw=3, label='N1')
+#plt.plot(wl_scale[5], data[300,5], lw=3, label='AN1')
+#plt.grid()
+#plt.xticks(size=35);plt.yticks(size=35)
+#plt.legend(loc='best', fontsize=35)
+#plt.xlabel('Wavelength (nm)', size=40)
+#plt.ylabel('Intensity (AU)', size=40)
+#plt.xlim(1400, 1700)
+#plt.tight_layout()
+#
+#plt.figure(figsize=(19.20,10.80))
+#plt.plot(wl_scale[0], data[300,0], lw=3, label='P1')
+#plt.plot(wl_scale[1], data[300,1], lw=3, label='P2')
+#plt.plot(wl_scale[4], data[0,2], lw=3, label='P3')
+#plt.plot(wl_scale[5], data[0,3], lw=3, label='P4')
+#plt.grid()
+#plt.xticks(size=35);plt.yticks(size=35)
+#plt.legend(loc='best', fontsize=35)
+#plt.xlabel('Wavelength (nm)', size=40)
+#plt.ylabel('Intensity (AU)', size=40)
+#plt.xlim(1400, 1700)
+#plt.tight_layout()
+
+p1 = data[:,0]
+p2 = data[:,1]
+p3 = data[:,2]
+p4 = data[:,3]
+p1 /= p1.max(axis=1)[:,None]
+p2 /= p2.max(axis=1)[:,None]
+p3 /= p3.max(axis=1)[:,None]
+p4 /= p4.max(axis=1)[:,None]
+
+plt.figure(figsize=(19.20,10.80))
+plt.plot(wl_scale[0], p1.mean(axis=0), lw=3, label='P1')
+plt.plot(wl_scale[1], p2.mean(axis=0), lw=3, label='P2')
+plt.plot(wl_scale[4], p3.mean(axis=0), lw=3, label='P3')
+plt.plot(wl_scale[5], p4.mean(axis=0), lw=3, label='P4')
+plt.grid()
+plt.xticks(size=35);plt.yticks(size=35)
+plt.legend(loc='best', fontsize=35)
+plt.xlabel('Wavelength (nm)', size=40)
+plt.ylabel('Intensity (AU)', size=40)
+plt.xlim(1400, 1700)
+plt.tight_layout()
