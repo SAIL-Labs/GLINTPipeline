@@ -48,6 +48,7 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
     
     For development and experimentation purpose.
     Plot the linear fit and the gaussian profil for one spectral channel of the first frame for every tracks.
+    Read the description of ''_getSpectralFluxNumba'' for details about the inputs.
     """
     nb_tracks = 16
     amplitude_fit = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
@@ -201,6 +202,41 @@ class File(object):
             self.data = np.zeros((self.nbimg,344,96))
 
     def cosmeticsFrames(self, dark, nonoise=False):
+        """ 
+        Deprecated: ''dark'' should be a 2d-array full of 0.
+        
+        Remove dark and bias from data frames.
+        Directly acts on ''data'' attribute.
+        Compute the variance and standard deviation of the background noise 
+        in a signal-free area of the frames.
+
+        :Parameters:
+            **dark: 2d-array**
+                Average dark
+                
+            **nbimg: tup (optional)**
+                Load all frames of the datacube at path ''data'' from the first 
+                to the second-1 element of the tuple.
+                It cannot be ''(None, None)'' if mock data is created.
+                
+            **nonoise: bol**
+                Set to ''True'' if data does not have any detector noise (e.g. simulated one).
+                It skips the cosmetics and set estimation of the 
+                background variance/std to zero
+                
+        :Attributes:
+            Change the attributes
+            
+            **data**: ndarray 
+                data frame
+                
+            **bg_std**: ndarray
+                Standard deviation of the background of each frame
+            
+            **bg_var**: ndarray
+                Variance of the background of each frame
+            
+        """
         if nonoise:
             self.bg_std = np.zeros(self.data.shape[0])
             self.bg_var = np.zeros(self.data.shape[0])
@@ -213,13 +249,24 @@ class File(object):
             self.bg_var = self.data[:,:,:20].var(axis=(1,2))
             
     def binning(self, binning, axis=0, avg=False):
-        '''
-        Meaning of a sample of images to recreate a new stack of images
-        HIW : we change the shape of the array (input stack of images) to put the element which will be summed on a specific axis.
-        x : array with the stack of images to bin
-        binning : number of image to bin
-        axis : summation axis
-        '''
+        """
+        Bin frames together
+        
+        :Parameters
+            **binning**: int
+                Number of frames to bin
+            **axis**: int
+                axis along which the frames are
+            **avg**: bol
+                If ''True'', the method returns the average of the binned frame.
+                Otherwise, return its sum.
+                
+        :Attributes:
+            Change the attributes
+            
+            **data**: ndarray 
+                datacube
+        """
 
         shape = self.data.shape
         if axis < 0:
@@ -233,22 +280,36 @@ class File(object):
 
 
 class Null(File):
-    ''' Getting the null and photometries'''
+    """
+    Class handling the measurement of the null and photometries 
+    from bias-corrected frame.
+    """
         
-    def insulateTracks(self, channel_pos, sep, spatial_axis, **kwargs):
-        ''' 
-        Insulating each track 
-        ------------------
-        channel_pos : array, expected position of each track
-        sep : float, separation between the tracks
-        spatial_axis : array, coordinates of each tracks along the spatial axis on the detector
-                         (perpendicular to the spectral one)
-                         
-        Returns:
-            self.slices: array (nb of frames, spectral channels, tracks, width), flux per track. 
-            self.slices_axes: array (spectral channels, tracks, width), spatial axis of each track
-                             
-        '''
+    def getChannels(self, channel_pos, sep, spatial_axis, **kwargs):
+        """
+        Extract the 16 channels/outputs from frames
+        
+        :Parameters
+            **channel_pos**: list, array-like
+                Expected position of the arrays
+            **sep**: float
+                Separation (in pixels) between two consecutive channels
+            **spatial_axis**: 1d-array
+                Position-coordinate of each channel
+            **kwargs**: optional
+                Can add the keyword ''dark'' associated with the average dark 
+                of each channel to perform their cosmetics instead of using the
+                ''cosmeticsFrames'' method from class ''File''.
+                
+        :Attributes:
+            Create the attributes
+            
+            **slices**: 4d-darray 
+                Subframes of each channel.
+                Structure as follow: (frame, spectral axis, channel ID, spatial axis)
+            **slices_axes**: ndarray
+                Spatial coordinates of each channel
+        """
         self.slices = np.array([self.data[:,np.int(np.around(pos-sep/2)):np.int(np.around(pos+sep/2)),:] for pos in channel_pos])
         self.slices = np.transpose(self.slices, (1,3,0,2))
         self.slices_axes = np.array([spatial_axis[np.int(np.around(pos-sep/2)):np.int(np.around(pos+sep/2))] for pos in channel_pos])
@@ -258,15 +319,65 @@ class Null(File):
 
         
     def getSpectralFlux(self, which_tracks, spectral_axis, position_poly, width_poly, debug=False):
-        ''' 
-        Measurement of flux per frame, per spectral channel, per track 
-        ------------------
-        which_tracks : list of tracks to process (null, anti null and photometric)
-        spectral_axis : array, spectra axis on the detector
-        position_poly : list of numpy polynom-function of the center of each track
-        width_poly : the same for the width
-        debug: bool, use the non-numba function for development purpose (use several fit methods, generate plots...)
-        '''
+        """
+        Wrapper getting the flux per spectral channel of each output.
+        
+        :Parameters
+            **which_tracks**: list
+                list of the output from which to measure the flux.
+                Outputs are numbered from 0 to 15 from top to bottom 
+                (in the way the frame are loaded)
+            **spectral_axis**: ndarray
+                Common spectral axis in pixel for every outputs
+            **position_poly**: array-like
+                Estimated polynomial coefficients of the positions of each 
+                output respect to wavelength.
+            **width_poly**: array-like
+                Estimated polynomial coefficients of the widths of each 
+                output respect to wavelength, assuming a gaussian profile.
+            **debug**: bol
+                Debug mode.
+                If ''True'', use the python/numpy function ''_getSpectralFlux'' which is 
+                slow and allow visual check of the well behaviour of the model fitting.
+                Strongly recommended to load only one block and one frame of data and deactivated
+                the save of the final products.
+                If ''False'', use the numba function ''_getSpectralFluxNumba''.
+                For fast and routine use of the measurement of the flux.
+                
+        :Attributes:
+            Creates the following attributes
+            
+            **raw**: ndarray 
+                Estimation of the spectral flux by simply summing ''slices'' along spatial axis
+            **raw_err**:ndarray
+                Estimation of the uncertainty of the estimation of the raw flux.
+            **amplitude**: ndarray
+                Estimation of the spectral flux as the amplitude of the Gaussian 
+                profile fitted by numpy's linear leastsquare method.
+            **integ_model**: ndarray
+                Estimation of the spectral flux as the integral of the theoretical
+                Gaussian profile which parameters are the amplitude 
+                (used in the ''amplitude'' method) and the measured positions and width
+                of this profile per wavelength.
+            **integ_windowed**: ndarray
+                Like raw integral but with a Gaussian window giving different 
+                weights to pixels along spatial axis
+            **weights**:
+                Weights in the windowing.
+            **residuals_reg**: ndarray
+                Residuals from the fit which gives ''amplitude'' attribute.
+            **amplitude_fit**: ndarray
+                From debug-mode only.
+                Estimation of the spectral flux as the amplitude of the Gaussian 
+                profile fitted by the scipy's curve_fit method, 
+                assuming a gaussian profile.
+            **residuals_fit**: ndarray
+                From debug-mode only.
+                Residuals of the fit performed by the scipy's curve_fit method
+            **cov**: scalar
+                From debug-mode only.
+                Covariance estimated by the scipy's curve_fit method
+        """
         nbimg = self.data.shape[0]
         slices_axes, slices = self.slices_axes, self.slices
         positions = np.array([p(spectral_axis) for p in position_poly])
@@ -287,17 +398,60 @@ class Null(File):
     @staticmethod
     @jit(nopython=True)
     def _getSpectralFluxNumba(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths):
-        ''' Numba-ized function, to be routinely used 
-        ------------------
-        nbimg : int, number of frames to process
-        which_tracks : list of tracks to process (null, anti null and photometric)
-        slices_axes : array, spatial axis for each track
-        slices : array containing the 16 individual tracks displayed on the detector
-        spectral_axis : array, spectra axis on the detector
-        positions : array of locations of the gaussian shape for linear least square fit in a spectral channel
-        widths : array of widths of this gaussian
-        '''
+        """
+        Numba-ized function measuring the flux per spectral channel (1 pixel width)
         
+        :Parameters
+            **nbimg**: int
+                Number fo frames to process
+            **which_tracks**: array-like
+                list of the output from which to measure the flux.
+                Outputs are numbered from 0 to 15 from top to bottom 
+                (in the way the frame are loaded).
+            **slices_axes**: ndarray
+                Spatial axis in pixel for every outputs.
+            **slices**: ndarray
+                Array containing the flux in the 16 outputs on every frames.
+            **spectral_axis**: ndarray
+                Common spectral axis in pixel for every outputs.
+            **positions**: array-like
+                Estimated positions of each output respect to wavelength.
+            **widths**: array-like
+                Estimated widths of each output respect to wavelength.
+                
+        :Returns:
+            
+            **amplitude**: ndarray
+                Estimation of the spectral flux as the amplitude of the Gaussian 
+                profile fitted by numpy's linear leastsquare method.
+            **integ_model**: ndarray
+                Estimation of the spectral flux as the integral of the theoretical
+                Gaussian profile which parameters are the amplitude 
+                (used in the ''amplitude'' method) and the measured positions and width
+                of this profile per wavelength.
+            **integ_windowed**: ndarray
+                Like raw integral but with a Gaussian window giving different 
+                weights to pixels along spatial axis
+            **weights**:
+                Weights in the windowing.
+            **residuals_reg**: ndarray
+                Residuals from the fit which gives ''amplitude'' attribute.
+                            **amplitude**: ndarray
+                Estimation of the spectral flux as the amplitude of the Gaussian 
+                profile fitted by numpy's linear leastsquare method.
+            **integ_model**: ndarray
+                Estimation of the spectral flux as the integral of the theoretical
+                Gaussian profile which parameters are the amplitude 
+                (used in the ''amplitude'' method) and the measured positions and width
+                of this profile per wavelength.
+            **integ_windowed**: ndarray
+                Like raw integral but with a Gaussian window giving different 
+                weights to pixels along spatial axis
+            **weights**:
+                Weights in the windowing.
+            **residuals_reg**: ndarray
+                Residuals from the fit which gives ''amplitude'' attribute.
+        """
         nb_tracks = 16
         amplitude = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
         integ_model = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
@@ -327,60 +481,71 @@ class Null(File):
                     
         return amplitude, integ_model, integ_windowed, residuals_reg, weights
     
-    def getTotalFlux(self):
-        self.fluxes = np.sum(self.slices[:,56:57,:,:], axis=(1,3))
-        self.fluxes = np.array([self.fluxes[:,15], self.fluxes[:,13], self.fluxes[:,2], self.fluxes[:,0]])
-        
-    def getSpectrum(self):
-        self.spectra = np.mean(self.slices, axis=(0,3))
-        self.spectra = np.array([self.spectra[:,15], self.spectra[:,13], self.spectra[:,2], self.spectra[:,0]])
-        self.spectra /= np.sum(self.spectra, axis=1)[:,None]
-        
-    def getPhotoFluctuations(self, spectral_axis, position_poly, width_poly):
-        self.getTotalFlux()
-        self.getSpectrum()
-        self.spectral_fluxes = self.fluxes[:,:,None] * self.spectra[:,None,:]
-        
-        position_poly_photo = [position_poly[15], position_poly[13], position_poly[2], position_poly[0]]
-        width_poly_photo = [width_poly[15], width_poly[13], width_poly[2], width_poly[0]]
-        slices_axes = np.array([self.slices_axes[15], self.slices_axes[13], self.slices_axes[2], self.slices_axes[0]])
-        positions = np.array([p(spectral_axis) for p in position_poly_photo])
-        widths = np.array([p(spectral_axis) for p in width_poly_photo])
-        
-        amplitude = []
-        for i in range(len(position_poly_photo)):
-            temp = []
-            for j in range(len(spectral_axis)):
-                simple_gaus = np.exp(-(slices_axes[i]-positions[i,j])**2/(2*widths[i,j]**2)) # Shape factor of the intensity profile, to be removed before computing Null depth
-                sum_gaus = np.sum(simple_gaus)
-                amp = self.spectral_fluxes[i,:,j] / sum_gaus
-                temp.append(amp)
-            amplitude.append(temp)
-        
-        amplitude = np.array(amplitude)
-        var = (96*20*self.bg_var/self.fluxes[:,None,:]**2 + self.bg_var/(3000*20) * self.spectra[:,:,None]**2) * np.transpose(self.spectral_fluxes, axes=(0,2,1))**2 / sum_gaus**2
-        self.photo_std = var**0.5
-        self.amplitude[:,15,:] = amplitude[0].T
-        self.amplitude[:,13,:] = amplitude[1].T
-        self.amplitude[:,2,:] = amplitude[2].T
-        self.amplitude[:,0,:] = amplitude[3].T
+#    def getTotalFlux(self):
+#        self.fluxes = np.sum(self.slices[:,56:57,:,:], axis=(1,3))
+#        self.fluxes = np.array([self.fluxes[:,15], self.fluxes[:,13], self.fluxes[:,2], self.fluxes[:,0]])
+#        
+#    def getSpectrum(self):
+#        self.spectra = np.mean(self.slices, axis=(0,3))
+#        self.spectra = np.array([self.spectra[:,15], self.spectra[:,13], self.spectra[:,2], self.spectra[:,0]])
+#        self.spectra /= np.sum(self.spectra, axis=1)[:,None]
+#        
+#    def getPhotoFluctuations(self, spectral_axis, position_poly, width_poly):
+#        self.getTotalFlux()
+#        self.getSpectrum()
+#        self.spectral_fluxes = self.fluxes[:,:,None] * self.spectra[:,None,:]
+#        
+#        position_poly_photo = [position_poly[15], position_poly[13], position_poly[2], position_poly[0]]
+#        width_poly_photo = [width_poly[15], width_poly[13], width_poly[2], width_poly[0]]
+#        slices_axes = np.array([self.slices_axes[15], self.slices_axes[13], self.slices_axes[2], self.slices_axes[0]])
+#        positions = np.array([p(spectral_axis) for p in position_poly_photo])
+#        widths = np.array([p(spectral_axis) for p in width_poly_photo])
+#        
+#        amplitude = []
+#        for i in range(len(position_poly_photo)):
+#            temp = []
+#            for j in range(len(spectral_axis)):
+#                simple_gaus = np.exp(-(slices_axes[i]-positions[i,j])**2/(2*widths[i,j]**2)) # Shape factor of the intensity profile, to be removed before computing Null depth
+#                sum_gaus = np.sum(simple_gaus)
+#                amp = self.spectral_fluxes[i,:,j] / sum_gaus
+#                temp.append(amp)
+#            amplitude.append(temp)
+#        
+#        amplitude = np.array(amplitude)
+#        var = (96*20*self.bg_var/self.fluxes[:,None,:]**2 + self.bg_var/(3000*20) * self.spectra[:,:,None]**2) * np.transpose(self.spectral_fluxes, axes=(0,2,1))**2 / sum_gaus**2
+#        self.photo_std = var**0.5
+#        self.amplitude[:,15,:] = amplitude[0].T
+#        self.amplitude[:,13,:] = amplitude[1].T
+#        self.amplitude[:,2,:] = amplitude[2].T
+#        self.amplitude[:,0,:] = amplitude[3].T
 
     
     def matchSpectralChannels(self, wl_to_px_coeff, px_to_wl_coeff, which_tracks):
-        '''
+        """
         All tracks are slightly shifted respect to each other.
         Need to define the common wavelength to all of them and create a 
         matching map between the spectral channels of every tracks.
-        --------------------------
-        wl_to_px_coeff : array, conversion from wavelength to pixel for each track, 
-                         from spectral_calibration script,
-                        
-        px_to_wl_coeff : array, inverted conversion, got from the same script,
-                         for each track
-                         
-        which_tracks : list of tracks to process (null, anti null and photometric)
-        '''
-        
+
+        :Parameters        
+            **wl_to_px_coeff**: ndarray
+                Polynomial coefficients converting wavelength to pixel position
+                along the spectral axis of the frames.
+            **px_to_wl_coeff**: ndarray
+                Polynomial coefficients converting pixel position to wavelength 
+                along the spectral axis of the frames.
+            **which_tracks**: array-like
+                List of the output from which to measure the flux.
+                Outputs are numbered from 0 to 15 from top to bottom 
+                (in the way the frame are loaded).            
+ 
+        :Attributes:
+            Creates the following attributes
+            **wl_scale**: ndarray
+                Wavelength scale for each output, in nanometer.
+            **px_scale**: ndarray
+                Wavelength scale for each output, in pixel.
+            
+        """
         wl_to_px_poly = [np.poly1d(wl_to_px_coeff[i]) for i in which_tracks]
         px_to_wl_poly = [np.poly1d(px_to_wl_coeff[i]) for i in which_tracks]
         shape = self.data.shape
@@ -395,7 +560,29 @@ class Null(File):
         self.px_scale = np.array([np.around(wl_to_px_poly[i](self.wl_scale[i])) for i in which_tracks], dtype=np.int)
         
     def computeNullDepth(self):
-        ''' Compute null depths with the different estimators of the flux in a spectral channel'''
+        """
+        Compute the null depth per spectral channel, per frame, per model, for each output.
+        
+        :Attributes
+            Creates the following attributes
+            
+            **nullX**: ndarray
+                Estimated null depth of the Xth null, based on the ''amplitude'' attribute.
+            **nullX_err**: ndarray
+                Estimated uncertainty of the estimated Xth null from the ''amplitude'' attribute..
+            **null_modelX**: ndarray
+                Estimated null depth of the Xth null, based on the ''integ_model'' attribute.
+            **null_modelX_err**: ndarray
+                Estimated uncertainty of the estimated Xth null from the ''integ_model'' attribute.
+            **null_windowedX**: ndarray
+                Estimated null depth of the Xth null, based on the ''integ_windowed'' attribute.
+            **null_windowedX_err**: ndarray
+                Estimated uncertainty of the estimated Xth null from the ''integ_windowed'' attribute.                
+            **null_rawX**: ndarray
+                Estimated null depth of the Xth null, based on the ''raw'' attribute.
+            **null_raw1_err**: ndarray
+                Estimated uncertainty of the estimated Xth null from the ''raw'' attribute.   
+        """
         
         # With amplitude
         self.null1 = self.amplitude[:,11][:,self.px_scale[11]]/self.amplitude[:,9][:,self.px_scale[9]]
@@ -456,19 +643,46 @@ class Null(File):
         self.null_raw4_err = np.sqrt(self.raw_err[:,None]**2/(self.raw[:,4][:,self.px_scale[4]])**2 * (1 + self.null_raw4**2))
         self.null_raw5_err = np.sqrt(self.raw_err[:,None]**2/(self.raw[:,7][:,self.px_scale[7]])**2 * (1 + self.null_raw5**2))
         self.null_raw6_err = np.sqrt(self.raw_err[:,None]**2/(self.raw[:,10][:,self.px_scale[10]])**2 * (1 + self.null_raw6**2))
-             
-        
-#        plop = np.where((self.null4 <0)&(self.null4 >-1))[1]
-#        if len(plop>0):
-#            print('NULL4')
-#            print(self.null4[(self.null4 <0)&(self.null4 >-1)])
-#            print(self.px_scale[6,plop])
-#            print(self.px_scale[4,plop])
-#            print(self.px_scale[2,plop])
-#            print(self.px_scale[0,plop])
         
     def getIntensities(self):
         ''' Measure flux in a spectral channel with the different estimators'''
+        """
+        Gets the intensity per spectral channel, per frame, per model, for each output.
+        
+        :Attributes
+            **pX**: ndarray
+                Estimated flux in the photometric output X=1..4, from the ''amplitude'' attribute.
+            **pX_err**: ndarray
+                Uncertainty on the estimated flux in the photometric output X
+            **IminusX**: ndarray
+                Estimated flux in the null output X=1..6, from the ''amplitude'' attribute.
+            **IplusX**: ndarray
+                Estimated flux in the antinull output X=1..6, from the ''amplitude'' attribute.
+            **pX_model**: ndarray
+                Estimated flux in the photometric output X=1..4, from the ''integ_model'' attribute.
+            **pX_model_err**: ndarray
+                Uncertainty on the estimated flux in the photometric output X
+            **Iminus_modelX**: ndarray
+                Estimated flux in the null output X=1..6, from the ''integ_model'' attribute.
+            **Iplus_modelX**: ndarray
+                Estimated flux in the antinull output X=1..6, from the ''integ_model'' attribute.
+            **pX_windowed**: ndarray
+                Estimated flux in the photometric output X=1..4, from the ''integ_windowed'' attribute.
+            **pX_windowed_err**: ndarray
+                Uncertainty on the estimated flux in the photometric output X
+            **Iminus_windowedX**: ndarray
+                Estimated flux in the null output X=1..6, from the ''integ_windowed'' attribute.
+            **Iplus_windowedX**: ndarray
+                Estimated flux in the antinull output X=1..6, from the ''integ_windowed'' attribute.
+            **pX_raw**: ndarray
+                Estimated flux in the photometric output X=1..4, from the ''raw'' attribute.
+            **pX_raw_err**: ndarray
+                Uncertainty on the estimated flux in the photometric output X
+            **Iminus_rawX**: ndarray
+                Estimated flux in the null output X=1..6, from the ''raw'' attribute.
+            **Iplus_rawX**: ndarray
+                Estimated flux in the antinull output X=1..6, from the ''raw'' attribute.                     
+        """
         
         # With amplitude
         self.p1 = self.amplitude[:,15][:,self.px_scale[15]]
@@ -536,6 +750,31 @@ class Null(File):
         date : string, date of the acquisition of the data (YYYY-MM-DD)
         mode : string, which estimator to use
         '''
+        """
+        Saves intermediate products for further analyses, into HDF5 file format.
+        The different intensities and null are gathered into dictionaries, 
+        according to which estimator is used.
+        
+        :Parameters
+            **path**: str
+                Path of the file to save. Must contain the name of the file.
+            **date**: str
+                date of the acquisition of the data (YYYY-MM-DD).
+            **mode**: str
+                Select which estimator to save among ''amplitude'', ''model'',
+                ''windowed'', ''raw''.
+                
+        :Returns
+            HDF5 file containing the measured spectral null depths, 
+            spectral intensities of each output, for each frames, 
+            and their uncertainties.
+            
+            Keywords identifies the nature of the stored data.
+            Comments into the file contains the following attributes:
+                *date: date of the acquisition of the data:
+                *nbimg: number of frames:
+                *array shape: shape of the data into the data sets.
+        """
         
         beams_couple = {'null1':'Beams 1/2', 'null2':'Beams 2/3', 'null3':'Beams 1/4',\
                         'null4':'Beams 3/4', 'null5':'Beams 3/1', 'null6':'Beams 4/2'}
@@ -633,8 +872,24 @@ class Null(File):
                     pass
                 
 class ChipProperties(Null):
-            
+    """
+    Class handling the determination of the properties of the chip.
+    """
     def getRatioCoeff(self, beam, zeta_coeff):
+        """
+        Determines the flux ratio between the different outputs
+        
+        :Parameters
+            **beam**: int,
+            id (1..4) of the intput.
+            **zeta_coeff**: dic
+                Dictionary in which the flux ratios  are stored.
+                
+        :Returns
+            **zeta_coeff**: dic
+                Same dictionary as required in the parameters, with the new 
+                entries set by the ''beam'' parameters.
+        """
         beam = int(beam)
         if beam == 1:
             zeta_coeff['b1null1'] = self.Iminus1 / self.p1
