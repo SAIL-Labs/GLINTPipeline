@@ -1,1 +1,7 @@
+numpy
+matplotlib
 h5py
+functools
+scipy
+numba
+os
