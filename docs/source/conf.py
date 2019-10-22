@@ -12,7 +12,7 @@
 #
 import os
 import sys
-sys.path.insert(0, '/mnt/96980F95980F72D3/glint/GLINTPipeline/')
+sys.path.insert(0, '../')
 
 
 # -- Project information -----------------------------------------------------
