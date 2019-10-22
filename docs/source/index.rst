@@ -3,8 +3,8 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to GLINT Pipeline's documentation!
-==============================================
+Welcome to GLINT Pipeline's documentation
+=========================================
 
 GLINT Pipeline is a set of scripts and classes used to estimate the null depth from raw data
 and put it in a nice format.
