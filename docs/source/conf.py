@@ -54,9 +54,9 @@ html_theme = 'classic'
 html_static_path = ['_static']
 
 master_doc = 'index'
-autodoc_mock_imports = ["functools",
-                        "h5py",
-                        "numpy",
-                        "matplotlib",
-                        "scipy",
-                        'numba']
+#autodoc_mock_imports = ["functools",
+#                        "h5py",
+#                        "numpy",
+#                        "matplotlib",
+#                        "scipy",
+#                        'numba']
