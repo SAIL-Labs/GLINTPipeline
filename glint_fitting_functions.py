@@ -389,8 +389,8 @@ def getErrorPDF(data_null, data_null_err, null_axis):
     std[std==0] = std[std!=0].min()
     return cp.asnumpy(std)
    
-def doubleGaussCdf(x, mu1, mu2, sig, A):
-    return 1/(1+A) * ndtr((x-mu1)/(sig)) + A/(1+A) * ndtr((x-mu2)/(sig))
+def doubleGaussCdf(x, mu1, mu2, sig1, sig2, A):
+    return sig1/(sig1+A*sig2) * ndtr((x-mu1)/(sig1)) + A*sig2/(sig1+A*sig2) * ndtr((x-mu2)/(sig2))
 
 def getErrorBinomNorm(cdf, data_size, width):
     cdf_err = ((cdf * (1 - cdf*width))/(data_size**width))**0.5 # binom-norm
