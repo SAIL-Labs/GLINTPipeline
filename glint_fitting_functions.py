@@ -275,12 +275,12 @@ def getHistogramOfIntensities(data, bins, split, target='cpu'):
     return  pdf_I_interf, bins_cent
 
 def computeNullDepth(IA, IB, wavelength, offset_opd, dopd, phase_bias, dphase_bias, visibility, dark_null, dark_antinull, 
-                     zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B, step, oversampling_switch):
+                     zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B, spec_chan_width, oversampling_switch):
     
     wave_number = 1./wavelength
     sine = cp.sin(2*np.pi*wave_number*(offset_opd + dopd) + phase_bias + dphase_bias)
     if oversampling_switch:
-        delta_wave_number = abs(1/(wavelength + step/2) - 1/(wavelength - step/2))
+        delta_wave_number = abs(1/(wavelength + spec_chan_width/2) - 1/(wavelength - spec_chan_width/2))
         arg = np.pi*delta_wave_number * (offset_opd + dopd)
         sinc = cp.sin(arg) / arg
         sine = sine * sinc
