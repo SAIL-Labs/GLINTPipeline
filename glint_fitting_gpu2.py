@@ -201,23 +201,23 @@ phase_bias_switch = True
 opd_bias_switch = True
 zeta_switch = True
 oversampling_switch = True
-skip_fit = True
+skip_fit = False
 chi2_map_switch = False
 mode_histo = True
 nb_blocks = (None, None)
 bin_bounds = (-0.01, 1) # Boundaries1
 #bin_bounds = (0, 10.)
 #bin_size = 15000
-basin_hopping_nloop = (0, 1)
-bounds_mu = (-100, 100)
+basin_hopping_nloop = (0, 100)
+bounds_mu = (-5, 5)
 bounds_sig = (1, 100)
 bounds_na = (-0.001, 0.1)
 
 ''' Import real data '''
-datafolder = '20191015_simulation/'
-darkfolder = '20191015_simulation/'
-#root = "C:/Users/marc-antoine/glint/"
-root = "/mnt/96980F95980F72D3/glint/"
+datafolder = '20191029_simulation/'
+darkfolder = '20191029_simulation/'
+root = "C:/Users/marc-antoine/glint/"
+#root = "/mnt/96980F95980F72D3/glint/"
 file_path = root+'reduction/'+datafolder
 save_path = file_path+'output/'
 data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and not 'dark' in f][nb_blocks[0]:nb_blocks[1]]
@@ -246,8 +246,8 @@ if not phase_bias_switch:
 null_table = {'null1':[0,[0,1], 'null7', [28,34]], 'null2':[1,[1,2], 'null8', [34,25]], 'null3':[2,[0,3], 'null9', [28,23]], \
               'null4':[3,[2,3], 'null10', [25,23]], 'null5':[4,[2,0], 'null11',[25,28]], 'null6':[5,[3,1], 'null12', [23,34]]}
 
-mu_opd0 = np.ones(6,)*(0)
-sig_opd0 = np.ones(6,)*61 # In nm
+mu_opd0 = np.ones(6,)*0
+sig_opd0 = np.ones(6,)*40*2**0.5 # In nm
 na0 = np.ones(6,)*0.
 dphase_bias = 0.
 
@@ -296,7 +296,7 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
     zeta_minus_A, zeta_minus_B = zeta_coeff['b%s%s'%(idx_photo[0]+1, key)], zeta_coeff['b%s%s'%(idx_photo[1]+1, key)]
     zeta_plus_A, zeta_plus_B = zeta_coeff['b%s%s'%(idx_photo[0]+1, key_antinull)], zeta_coeff['b%s%s'%(idx_photo[1]+1, key_antinull)]
     offset_opd, phase_bias = instrumental_offsets[idx_null]
-    offset_opd = (segment_positions[segment_id_A] - segment_positions[segment_id_B]) + offset_opd
+    offset_opd = (segment_positions[segment_id_A] - segment_positions[segment_id_B]) - offset_opd
     
     if nonoise:
         dark_Iminus_axis = cp.zeros(np.size(np.unique(data_IA[0])))
