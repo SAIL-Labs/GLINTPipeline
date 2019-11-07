@@ -2,7 +2,7 @@
 """
 This script measures the intensity in every output, per spectral channel and 
 computes the null depths.
-It relies on the library **glint_classes** to work.
+It relies on the library :doc:`glint_classes` to work.
 
 The inputs are the datacubes (target or dark).
 The datacube of **dark** needs to be processed as it gives the distribution of dark currents in the different outputs used in the model fitting later.
