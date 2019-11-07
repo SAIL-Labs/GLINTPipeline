@@ -5,6 +5,7 @@ Script's name: **glint_dark.py**
 This script generates the average dark used in the signal processing of datacube.
 ``dark`` means background noise in the detector.
 It is measured when no light is collected by the pixels.
+It relies on the library **glint_classes** to work.
 
 The products are:
     * average dark frame
