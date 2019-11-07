@@ -15,7 +15,8 @@ Navigation
    :maxdepth: 2
 
    glint_classes
-
+   glint_dark
+   glint_measure_null_depth
 
 
 Indices and tables
