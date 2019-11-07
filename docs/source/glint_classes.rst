@@ -1,3 +1,5 @@
+.. _lab_glint_classes:
+
 GLINT Pipeline's classes
 ========================
 
