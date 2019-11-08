@@ -20,8 +20,8 @@ Some monitoring data can be created:
 This script is used in 3 steps.
 
 First step: simply change the value of the variables in the **Settings** section:
-    * **save**: bolean, ``True`` for saving products and monitoring data, ``False`` otherwise
-    * **monitor**: bolean, ``True`` for creating histogram of the background noise and plotting them
+    * **save**: boolean, ``True`` for saving products and monitoring data, ``False`` otherwise
+    * **monitor**: boolean, ``True`` for creating histogram of the background noise and plotting them
     * **nbfiles**: 2-tuple of int, set the bounds between which the dark files are selected. ``None`` is equivalent to 0 if it is the lower bound or -1 included or it is the upper one.
     * **edge_min**, **edge_max**: minimal left-edge and maximal right-edge of the histograms.
 

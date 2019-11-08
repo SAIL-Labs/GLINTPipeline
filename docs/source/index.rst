@@ -17,6 +17,8 @@ Navigation
    glint_classes
    glint_dark
    glint_measure_null_depth
+   glint_geometric_calibration
+   glint_spectral_calibration
 
 
 Indices and tables

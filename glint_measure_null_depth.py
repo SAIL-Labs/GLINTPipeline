@@ -8,31 +8,32 @@ The inputs are the datacubes (target or dark).
 The datacube of **dark** needs to be processed as it gives the distribution of dark currents in the different outputs used in the model fitting later.
 The datacube of **target** gives the **null depth** and the intensities are used to monitor any suspicious behavior if needed.
 
-The products are HDF5 files structured as dictionary (see glint_classes documentation).
-One HDF5 is produces per datacube.
+The products are HDF5 files structured as a dictionary (see glint_classes documentation).
+One HDF5 produces per datacube.
 
 It contains:
     * 1d-arrays for the null depth, named **nullX** (with X=1..6). The elements of the array are the null depths per spectral channel.
     * 1d-array for the photometry, named **pX** (with X=1..4). It has the same structure as ``nullX``.
     * 1d-array for the intensity in the null outputs, named **IminusX** (with X=1..6).
     * 1d-array for the intensity in the anti-null outputs, named **IplusX** (with X=1..6).
-    * 1d-array containing the common spectral channels for all the outputs (as each output is slightly shfited from the others)
+    * 1d-array containing the common spectral channels for all the outputs (as each output is slightly shifted from the others)
     
 Some monitoring data can be created (but not saved):
     * Histograms of intensities of the photometries
-    * Optimal parameters from a Gaussian fitting of the intensity profile in one output for one pectral channel
+    * Optimal parameters from a Gaussian fitting of the intensity profile in one output for one spectral channel
     * Evolution of the null depths along the frame axis for 10 spectral channels
     * Evolution of the measured intensities along the frame axis of every outputs according to different estimators
 
 The monitoring is activated by setting the boolean variable **debug = True**.
-In that case, it is strongly adviced deactivate the save of the results and 
+
+In that case, it is strongly advised deactivate the save of the results and 
 to process one frame of one datacube to avoid extremely long data processing.
 
 This script is used in 3 steps.
 
 First step: simply change the value of the variables in the **Settings** section:
-    * **save**: bolean, ``True`` for saving products and monitoring data, ``False`` otherwise
-    * **no_noise**: bolean, ``True`` for noise-free (simulated) data
+    * **save**: boolean, ``True`` for saving products and monitoring data, ``False`` otherwise
+    * **no_noise**: boolean, ``True`` for noise-free (simulated) data
     * **nbfiles**: 2-tuple of int, set the bounds between which the data files are selected. ``None`` is equivalent to 0 if it is the lower bound or -1 included or it is the upper one.
     * **nb_img**: 2-tuple of int, set the bounds between which the frame are selected, into a data file.
 
