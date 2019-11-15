@@ -553,130 +553,223 @@ class Null(File):
         self.wl_scale = np.array([np.arange(start, end, np.around(px_to_wl_coeff[i,0])) for i in which_tracks])
         self.px_scale = np.array([np.around(wl_to_px_poly[i](self.wl_scale[i])) for i in which_tracks], dtype=np.int)
         
-    def computeNullDepth(self):
+    def error_null(self, null, Iminus, Iplus, Iminus_err, Iplus_err):
+        """
+        Propagate the error on intensities estimations to the null depth.
+        We assume independant and Gaussian distributed values.
+        
+        :Parameters:
+            **null**: array, estimated null depths
+            
+            **Iminus**: array, intensity from the conventional null output
+            
+            **Iplus**: array, intensity from the conventional antinull output
+            
+            **Iminus_err**: array, error on the intensity from the conventional antinull output
+            
+            **Iplus_err**: array, error on the intensity from the conventional antinull output
+            
+        :Returns:
+            Error on the null depth
+        """
+        null_err2 = (Iminus_err**2 / Iminus**2 + Iplus_err**2 / Iplus**2) * null**2
+        return null_err2**0.5
+    
+    def computeNullDepth(self, null_to_invert=[]):
         """
         Compute the null depth per spectral channel, per frame, per model, for each output.
+        
+        :Parameters:
+            **null_to_invert**: list of string
+                Contains ``nullX`` with X=1..6 to return the invert of the computed null in case the antinull output was cancelled out instead of the conventional null one during data acquisition.
+                It can be empty.
         
         :Attributes:
             Creates the following attributes
             
             **nullX**: ndarray
                 Estimated null depth of the Xth null, based on the ``amplitude`` attribute.
+                
             **nullX_err**: ndarray
-                Estimated uncertainty of the estimated Xth null from the ``amplitude`` attribute..
+                Estimated uncertainty of the estimated Xth null from the ``amplitude`` attribute.
+                
             **null_modelX**: ndarray
                 Estimated null depth of the Xth null, based on the ``integ_model`` attribute.
+                
             **null_modelX_err**: ndarray
                 Estimated uncertainty of the estimated Xth null from the ``integ_model`` attribute.
+                
             **null_windowedX**: ndarray
                 Estimated null depth of the Xth null, based on the ``integ_windowed`` attribute.
+                
             **null_windowedX_err**: ndarray
-                Estimated uncertainty of the estimated Xth null from the ``integ_windowed`` attribute.                
+                Estimated uncertainty of the estimated Xth null from the ``integ_windowed`` attribute.  
+                
             **null_rawX**: ndarray
                 Estimated null depth of the Xth null, based on the ``raw`` attribute.
+                
             **null_raw1_err**: ndarray
                 Estimated uncertainty of the estimated Xth null from the ``raw`` attribute.   
+                
         """
-        
+            
+        # Null depths
         # With amplitude
-        self.null1 = self.amplitude[:,11][:,self.px_scale[11]]/self.amplitude[:,9][:,self.px_scale[9]]
-        self.null2 = self.amplitude[:,3][:,self.px_scale[3]]/self.amplitude[:,12][:,self.px_scale[12]]
-        self.null3 = self.amplitude[:,1][:,self.px_scale[1]]/self.amplitude[:,14][:,self.px_scale[14]]
-        self.null4 = self.amplitude[:,6][:,self.px_scale[6]]/self.amplitude[:,4][:,self.px_scale[4]]
-        self.null5 = self.amplitude[:,5][:,self.px_scale[5]]/self.amplitude[:,7][:,self.px_scale[7]]
-        self.null6 = self.amplitude[:,8][:,self.px_scale[8]]/self.amplitude[:,10][:,self.px_scale[10]]
-        
-        self.null1_err = np.sqrt(self.bg_var[:,None]/(self.amplitude[:,9][:,self.px_scale[9]])**2 * (1 + self.null1**2))
-        self.null2_err = np.sqrt(self.bg_var[:,None]/(self.amplitude[:,12][:,self.px_scale[12]])**2 * (1 + self.null2**2))
-        self.null3_err = np.sqrt(self.bg_var[:,None]/(self.amplitude[:,14][:,self.px_scale[14]])**2 * (1 + self.null3**2))
-        self.null4_err = np.sqrt(self.bg_var[:,None]/(self.amplitude[:,4][:,self.px_scale[4]])**2 * (1 + self.null4**2))
-        self.null5_err = np.sqrt(self.bg_var[:,None]/(self.amplitude[:,7][:,self.px_scale[7]])**2 * (1 + self.null5**2))
-        self.null6_err = np.sqrt(self.bg_var[:,None]/(self.amplitude[:,10][:,self.px_scale[10]])**2 * (1 + self.null6**2))
-        
+        self.null1 = self.Iminus1 / self.Iplus1
+        self.null2 = self.Iminus2 / self.Iplus2
+        self.null3 = self.Iminus3 / self.Iplus3
+        self.null4 = self.Iminus4 / self.Iplus4
+        self.null5 = self.Iminus5 / self.Iplus5
+        self.null6 = self.Iminus6 / self.Iplus6
+                
         # With full gaussian model
-        self.null_model1 = self.integ_model[:,11][:,self.px_scale[11]]/self.integ_model[:,9][:,self.px_scale[9]]
-        self.null_model2 = self.integ_model[:,3][:,self.px_scale[3]]/self.integ_model[:,12][:,self.px_scale[12]]
-        self.null_model3 = self.integ_model[:,1][:,self.px_scale[1]]/self.integ_model[:,14][:,self.px_scale[14]]
-        self.null_model4 = self.integ_model[:,6][:,self.px_scale[6]]/self.integ_model[:,4][:,self.px_scale[4]]
-        self.null_model5 = self.integ_model[:,5][:,self.px_scale[5]]/self.integ_model[:,7][:,self.px_scale[7]]
-        self.null_model6 = self.integ_model[:,8][:,self.px_scale[8]]/self.integ_model[:,10][:,self.px_scale[10]]
-        
-        self.null_model1_err = np.sqrt(self.raw_err[:,None]**2/(self.integ_model[:,9][:,self.px_scale[9]])**2 * (1 + self.null_model1**2))
-        self.null_model2_err = np.sqrt(self.raw_err[:,None]**2/(self.integ_model[:,12][:,self.px_scale[12]])**2 * (1 + self.null_model2**2))
-        self.null_model3_err = np.sqrt(self.raw_err[:,None]**2/(self.integ_model[:,14][:,self.px_scale[14]])**2 * (1 + self.null_model3**2))
-        self.null_model4_err = np.sqrt(self.raw_err[:,None]**2/(self.integ_model[:,4][:,self.px_scale[4]])**2 * (1 + self.null_model4**2))
-        self.null_model5_err = np.sqrt(self.raw_err[:,None]**2/(self.integ_model[:,7][:,self.px_scale[7]])**2 * (1 + self.null_model5**2))
-        self.null_model6_err = np.sqrt(self.raw_err[:,None]**2/(self.integ_model[:,10][:,self.px_scale[10]])**2 * (1 + self.null_model6**2))
+        self.null_model1 = self.Iminus_model1 / self.Iplus_model1
+        self.null_model2 = self.Iminus_model2 / self.Iplus_model2
+        self.null_model3 = self.Iminus_model3 / self.Iplus_model3
+        self.null_model4 = self.Iminus_model4 / self.Iplus_model4
+        self.null_model5 = self.Iminus_model5 / self.Iplus_model5
+        self.null_model6 = self.Iminus_model6 / self.Iplus_model6
         
         # With windowed integration
-        self.null_windowed1 = self.integ_windowed[:,11][:,self.px_scale[11]]/self.integ_windowed[:,9][:,self.px_scale[9]]
-        self.null_windowed2 = self.integ_windowed[:,3][:,self.px_scale[3]]/self.integ_windowed[:,12][:,self.px_scale[12]]
-        self.null_windowed3 = self.integ_windowed[:,1][:,self.px_scale[1]]/self.integ_windowed[:,14][:,self.px_scale[14]]
-        self.null_windowed4 = self.integ_windowed[:,6][:,self.px_scale[6]]/self.integ_windowed[:,4][:,self.px_scale[4]]
-        self.null_windowed5 = self.integ_windowed[:,5][:,self.px_scale[5]]/self.integ_windowed[:,7][:,self.px_scale[7]]
-        self.null_windowed6 = self.integ_windowed[:,8][:,self.px_scale[8]]/self.integ_windowed[:,10][:,self.px_scale[10]]
-        
-        self.null_windowed1_err = np.sqrt(self.windowed_err[:,None]**2/(self.integ_windowed[:,9][:,self.px_scale[9]])**2 * (1 + self.null_windowed1**2))
-        self.null_windowed2_err = np.sqrt(self.windowed_err[:,None]**2/(self.integ_windowed[:,12][:,self.px_scale[12]])**2 * (1 + self.null_windowed2**2))
-        self.null_windowed3_err = np.sqrt(self.windowed_err[:,None]**2/(self.integ_windowed[:,14][:,self.px_scale[14]])**2 * (1 + self.null_windowed3**2))
-        self.null_windowed4_err = np.sqrt(self.windowed_err[:,None]**2/(self.integ_windowed[:,4][:,self.px_scale[4]])**2 * (1 + self.null_windowed4**2))
-        self.null_windowed5_err = np.sqrt(self.windowed_err[:,None]**2/(self.integ_windowed[:,7][:,self.px_scale[7]])**2 * (1 + self.null_windowed5**2))
-        self.null_windowed6_err = np.sqrt(self.windowed_err[:,None]**2/(self.integ_windowed[:,10][:,self.px_scale[10]])**2 * (1 + self.null_windowed6**2))
+        self.null_windowed1 = self.Iminus_windowed1 / self.Iplus_windowed1
+        self.null_windowed2 = self.Iminus_windowed2 / self.Iplus_windowed2
+        self.null_windowed3 = self.Iminus_windowed3 / self.Iplus_windowed3
+        self.null_windowed4 = self.Iminus_windowed4 / self.Iplus_windowed4
+        self.null_windowed5 = self.Iminus_windowed5 / self.Iplus_windowed5
+        self.null_windowed6 = self.Iminus_windowed6 / self.Iplus_windowed6
         
         # With raw integration
-        self.null_raw1 = self.raw[:,11][:,self.px_scale[11]]/self.raw[:,9][:,self.px_scale[9]]
-        self.null_raw2 = self.raw[:,3][:,self.px_scale[3]]/self.raw[:,12][:,self.px_scale[12]]
-        self.null_raw3 = self.raw[:,1][:,self.px_scale[1]]/self.raw[:,14][:,self.px_scale[14]]
-        self.null_raw4 = self.raw[:,6][:,self.px_scale[6]]/self.raw[:,4][:,self.px_scale[4]]
-        self.null_raw5 = self.raw[:,5][:,self.px_scale[5]]/self.raw[:,7][:,self.px_scale[7]]
-        self.null_raw6 = self.raw[:,8][:,self.px_scale[8]]/self.raw[:,10][:,self.px_scale[10]]
+        self.null_raw1 = self.Iminus_raw1 / self.Iplus_raw1
+        self.null_raw2 = self.Iminus_raw2 / self.Iplus_raw2
+        self.null_raw3 = self.Iminus_raw3 / self.Iplus_raw3
+        self.null_raw4 = self.Iminus_raw4 / self.Iplus_raw4
+        self.null_raw5 = self.Iminus_raw5 / self.Iplus_raw5
+        self.null_raw6 = self.Iminus_raw6 / self.Iplus_raw6
+
+        if 'null1' in null_to_invert:
+            self.null1 = 1/self.null1
+            self.null_model1 = 1/self.null_model1
+            self.null_windowed1 = 1/self.null_windowed1
+            self.null_raw1 = 1/self.null_raw1
+            self.Iminus1, self.Iplus1 = self.Iplus1, self.Iminus1
+        if 'null2' in null_to_invert:
+            self.null2 = 1/self.null2
+            self.null_model2 = 1/self.null_model2
+            self.null_windowed2 = 1/self.null_windowed2
+            self.null_raw2 = 1/self.null_raw2
+            self.Iminus2, self.Iplus2 = self.Iplus2, self.Iminus2
+        if 'null3' in null_to_invert:
+            self.null3 = 1/self.null3
+            self.null_model3 = 1/self.null_model3
+            self.null_windowed3 = 1/self.null_windowed3
+            self.null_raw3 = 1/self.null_raw3
+            self.Iminus3, self.Iplus3 = self.Iplus3, self.Iminus3
+        if 'null4' in null_to_invert:
+            self.null4 = 1/self.null4
+            self.null_model4 = 1/self.null_model4
+            self.null_windowed4 = 1/self.null_windowed4
+            self.null_raw4 = 1/self.null_raw4
+            self.Iminus4, self.Iplus4 = self.Iplus4, self.Iminus4
+        if 'null5' in null_to_invert:
+            self.null5 = 1/self.null5
+            self.null_model5 = 1/self.null_model5
+            self.null_windowed5 = 1/self.null_windowed5
+            self.null_raw5 = 1/self.null_raw5
+            self.Iminus5, self.Iplus5 = self.Iplus5, self.Iminus5
+        if 'null6' in null_to_invert:
+            self.null6 = 1/self.null6
+            self.null_model6 = 1/self.null_model6
+            self.null_windowed6 = 1/self.null_windowed6
+            self.null_raw6 = 1/self.null_raw6
+            self.Iminus6, self.Iplus6 = self.Iplus6, self.Iminus6
+            
+        # Errors
+        # With amplitude
+        self.null1_err = self.error_null(self.null1, self.Iminus1, self.Iplus1, self.bg_std[:,None], self.bg_std[:,None])
+        self.null2_err = self.error_null(self.null2, self.Iminus2, self.Iplus2, self.bg_std[:,None], self.bg_std[:,None])
+        self.null3_err = self.error_null(self.null3, self.Iminus3, self.Iplus3, self.bg_std[:,None], self.bg_std[:,None])
+        self.null4_err = self.error_null(self.null4, self.Iminus4, self.Iplus4, self.bg_std[:,None], self.bg_std[:,None])
+        self.null5_err = self.error_null(self.null5, self.Iminus5, self.Iplus5, self.bg_std[:,None], self.bg_std[:,None])
+        self.null6_err = self.error_null(self.null6, self.Iminus6, self.Iplus6, self.bg_std[:,None], self.bg_std[:,None])
         
-        self.null_raw1_err = np.sqrt(self.raw_err[:,None]**2/(self.raw[:,9][:,self.px_scale[9]])**2 * (1 + self.null_raw1**2))
-        self.null_raw2_err = np.sqrt(self.raw_err[:,None]**2/(self.raw[:,12][:,self.px_scale[12]])**2 * (1 + self.null_raw2**2))
-        self.null_raw3_err = np.sqrt(self.raw_err[:,None]**2/(self.raw[:,14][:,self.px_scale[14]])**2 * (1 + self.null_raw3**2))
-        self.null_raw4_err = np.sqrt(self.raw_err[:,None]**2/(self.raw[:,4][:,self.px_scale[4]])**2 * (1 + self.null_raw4**2))
-        self.null_raw5_err = np.sqrt(self.raw_err[:,None]**2/(self.raw[:,7][:,self.px_scale[7]])**2 * (1 + self.null_raw5**2))
-        self.null_raw6_err = np.sqrt(self.raw_err[:,None]**2/(self.raw[:,10][:,self.px_scale[10]])**2 * (1 + self.null_raw6**2))
+        # With full gaussian model
+        self.null_model1_err = self.error_null(self.null_model1, self.Iminus_model1, self.Iplus_model1, self.raw_err[:,None], self.raw_err[:,None])
+        self.null_model2_err = self.error_null(self.null_model2, self.Iminus_model2, self.Iplus_model2, self.raw_err[:,None], self.raw_err[:,None])
+        self.null_model3_err = self.error_null(self.null_model3, self.Iminus_model3, self.Iplus_model3, self.raw_err[:,None], self.raw_err[:,None])
+        self.null_model4_err = self.error_null(self.null_model4, self.Iminus_model4, self.Iplus_model4, self.raw_err[:,None], self.raw_err[:,None])
+        self.null_model5_err = self.error_null(self.null_model5, self.Iminus_model5, self.Iplus_model5, self.raw_err[:,None], self.raw_err[:,None])
+        self.null_model6_err = self.error_null(self.null_model6, self.Iminus_model6, self.Iplus_model6, self.raw_err[:,None], self.raw_err[:,None])
+
+        # With windowed integration
+        self.null_windowed1_err = self.error_null(self.null_windowed1, self.Iminus_windowed1, self.Iplus_windowed1, self.windowed_err[:,None], self.windowed_err[:,None])
+        self.null_windowed2_err = self.error_null(self.null_windowed2, self.Iminus_windowed2, self.Iplus_windowed2, self.windowed_err[:,None], self.windowed_err[:,None])
+        self.null_windowed3_err = self.error_null(self.null_windowed3, self.Iminus_windowed3, self.Iplus_windowed3, self.windowed_err[:,None], self.windowed_err[:,None])
+        self.null_windowed4_err = self.error_null(self.null_windowed4, self.Iminus_windowed4, self.Iplus_windowed4, self.windowed_err[:,None], self.windowed_err[:,None])
+        self.null_windowed5_err = self.error_null(self.null_windowed5, self.Iminus_windowed5, self.Iplus_windowed5, self.windowed_err[:,None], self.windowed_err[:,None])
+        self.null_windowed6_err = self.error_null(self.null_windowed6, self.Iminus_windowed6, self.Iplus_windowed6, self.windowed_err[:,None], self.windowed_err[:,None])
+
+        # With raw integration
+        self.null_raw1_err = self.error_null(self.null_raw1, self.Iminus_raw1, self.Iplus_raw1, self.raw_err[:,None], self.raw_err[:,None])
+        self.null_raw2_err = self.error_null(self.null_raw2, self.Iminus_raw2, self.Iplus_raw2, self.raw_err[:,None], self.raw_err[:,None])
+        self.null_raw3_err = self.error_null(self.null_raw3, self.Iminus_raw3, self.Iplus_raw3, self.raw_err[:,None], self.raw_err[:,None])
+        self.null_raw4_err = self.error_null(self.null_raw4, self.Iminus_raw4, self.Iplus_raw4, self.raw_err[:,None], self.raw_err[:,None])
+        self.null_raw5_err = self.error_null(self.null_raw5, self.Iminus_raw5, self.Iplus_raw5, self.raw_err[:,None], self.raw_err[:,None])
+        self.null_raw6_err = self.error_null(self.null_raw6, self.Iminus_raw6, self.Iplus_raw6, self.raw_err[:,None], self.raw_err[:,None])
         
     def getIntensities(self):
         """
         Gets the intensity per spectral channel, per frame, per model, for each output.
         
         :Attributes:
-            **pX**: ndarray
+            **pX**: ndarray,
                 Estimated flux in the photometric output X=1..4, from the ``amplitude`` attribute.
-            **pX_err**: ndarray
+                
+            **pX_err**: ndarray,
                 Uncertainty on the estimated flux in the photometric output X
-            **IminusX**: ndarray
+                
+            **IminusX**: ndarray,
                 Estimated flux in the null output X=1..6, from the ``amplitude`` attribute.
-            **IplusX**: ndarray
+                
+            **IplusX**: ndarray,
                 Estimated flux in the antinull output X=1..6, from the ``amplitude`` attribute.
+                
             **pX_model**: ndarray
                 Estimated flux in the photometric output X=1..4, from the ``integ_model`` attribute.
+                
             **pX_model_err**: ndarray
                 Uncertainty on the estimated flux in the photometric output X
+                
             **Iminus_modelX**: ndarray
                 Estimated flux in the null output X=1..6, from the ``integ_model`` attribute.
+                
             **Iplus_modelX**: ndarray
                 Estimated flux in the antinull output X=1..6, from the ``integ_model`` attribute.
+                
             **pX_windowed**: ndarray
                 Estimated flux in the photometric output X=1..4, from the ``integ_windowed`` attribute.
+                
             **pX_windowed_err**: ndarray
                 Uncertainty on the estimated flux in the photometric output X
+                
             **Iminus_windowedX**: ndarray
                 Estimated flux in the null output X=1..6, from the ``integ_windowed`` attribute.
+                
             **Iplus_windowedX**: ndarray
                 Estimated flux in the antinull output X=1..6, from the ``integ_windowed`` attribute.
+                
             **pX_raw**: ndarray
                 Estimated flux in the photometric output X=1..4, from the ``raw`` attribute.
+                
             **pX_raw_err**: ndarray
                 Uncertainty on the estimated flux in the photometric output X
+                
             **Iminus_rawX**: ndarray
                 Estimated flux in the null output X=1..6, from the ``raw`` attribute.
+                
             **Iplus_rawX**: ndarray
                 Estimated flux in the antinull output X=1..6, from the ``raw`` attribute.                     
         """
-        
+      
         # With amplitude
         self.p1 = self.amplitude[:,15][:,self.px_scale[15]]
         self.p2 = self.amplitude[:,13][:,self.px_scale[13]]
@@ -746,8 +839,10 @@ class Null(File):
         :Parameters:
             **path**: str
                 Path of the file to save. Must contain the name of the file.
+                
             **date**: str
                 date of the acquisition of the data (YYYY-MM-DD).
+                
             **mode**: str
                 Select which estimator to save among ``amplitude``, ``model``,
                 ``windowed``, ``raw``.

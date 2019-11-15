@@ -125,13 +125,13 @@ def getHistogram(data, bins):
   
 if __name__ == '__main__':         
     ''' Settings '''
-    save = True
-    monitor = False # Set True to map the average, variance of relative difference of set of dark current datacubes
-    nb_files = (None, None)
+    save = False
+    monitor = True # Set True to map the average, variance of relative difference of set of dark current datacubes
+    nb_files = (None, 10)
     edge_min, edge_max = -300, 300
     
     ''' Inputs '''
-    datafolder = '20191015/dark2/'
+    datafolder = '20191015/dark/'
     root = "/mnt/96980F95980F72D3/glint_data/"
     data_path = root+datafolder
     dark_list = [data_path+f for f in os.listdir(data_path) if 'dark' in f][nb_files[0]:nb_files[1]]
@@ -167,7 +167,7 @@ if __name__ == '__main__':
         superNbImg = superNbImg + dark.nbimg
         
         spatial_axis = np.arange(dark.data.shape[0])
-        dark.insulateTracks(channel_pos, sep, spatial_axis)
+        dark.getChannels(channel_pos, sep, spatial_axis)
         
         try:
             superDarkChannel = superDarkChannel + dark.slices.sum(axis=0)
@@ -203,7 +203,7 @@ if __name__ == '__main__':
             hist = np.histogram(np.ravel(dark.data - dark.data.mean(axis=(1,2))[:,None,None]), bins=bin_hist)
             list_hist.append(hist[0])
             
-            dark.insulateTracks(channel_pos, sep, spatial_axis)
+            dark.getChannels(channel_pos, sep, spatial_axis)
             dark.slices = dark.slices - superDarkChannel
             
             try:
@@ -342,9 +342,10 @@ if __name__ == '__main__':
                 plt.xlabel('Frame')
                 plt.ylabel('Avg dark current')
                 if i ==0: plt.legend(loc='best')
+            plt.tight_layout()
          
             plt.figure(figsize=(19.20, 10.80))
-            plt.plot(np.arange(dk56.size)[::100], dk56[::100])
+            plt.plot(np.arange(dk56.size)[::1], dk56[::1])
             plt.grid()
             plt.xlabel('Frame/100', size=30)
             plt.ylabel('Avg amplitude', size=30)
@@ -352,7 +353,7 @@ if __name__ == '__main__':
             plt.title('Avg dark current in P1 at 56th column of pixels', size=35)
             
             plt.figure(figsize=(19.20, 10.80))
-            plt.plot(np.arange(dk56bis.size)[::100], dk56bis[::100])
+            plt.plot(np.arange(dk56bis.size)[::1], dk56bis[::1])
             plt.grid()
             plt.xlabel('Frame/100', size=30)
             plt.ylabel('Avg amplitude', size=30)
@@ -371,9 +372,9 @@ if __name__ == '__main__':
             avg_dark_binned = np.mean(avg_dark_binned, axis=1)
             popt = np.polyfit(time_binned, avg_dark_binned, 1)
             p = np.poly1d(popt)        
-            plt.plot(time[::100], avg_dark[::100], lw=3, alpha=0.5, label='Data')
+            plt.plot(time[::1], avg_dark[::1], lw=3, alpha=0.5, label='Data')
             plt.plot(time_binned, avg_dark_binned, lw=3, label='Binned data (%s)'%binning)
-            plt.plot(time[::100], p(time[::100]), lw=2, alpha=0.8, label='Fit')
+            plt.plot(time[::1], p(time[::1]), lw=2, alpha=0.8, label='Fit')
             plt.grid()
             plt.xlabel('Frame', size=30)
             plt.ylabel('Avg dark current', size=30)

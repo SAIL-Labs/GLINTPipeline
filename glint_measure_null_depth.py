@@ -84,6 +84,7 @@ if __name__ == '__main__':
     debug = False
     save = False
     nb_files = (None,1)
+    nulls_to_invert = ['null1']
     
     ''' Inputs '''
     datafolder = '20191015_simulation/'
@@ -165,18 +166,18 @@ if __name__ == '__main__':
         list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
         img.getSpectralFlux(list_channels, spectral_axis, position_poly, width_poly, debug=debug)
         
-        ''' Compute null depth '''
-        print('Computing null depths')
-        img.computeNullDepth()
-        null_depths = np.array([img.null1, img.null2, img.null3, img.null4, img.null5, img.null6])
-        null_depths_err = np.array([img.null1_err, img.null2_err, img.null3_err, img.null4_err, img.null5_err, img.null6_err])
-        
         ''' Measure flux in photometric channels '''
         img.getIntensities()
         p1.append(img.p1)
         p2.append(img.p2)
         p3.append(img.p3)
         p4.append(img.p4)
+        
+        ''' Compute null depth '''
+        print('Computing null depths')
+        img.computeNullDepth(nulls_to_invert)
+        null_depths = np.array([img.null1, img.null2, img.null3, img.null4, img.null5, img.null6])
+        null_depths_err = np.array([img.null1_err, img.null2_err, img.null3_err, img.null4_err, img.null5_err, img.null6_err])
         
         ''' Output file'''
         if save:
