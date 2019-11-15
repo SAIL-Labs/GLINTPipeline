@@ -167,7 +167,7 @@ def computeCdfCupy(rv, x_axis):
     
     return 1-cdf
     
-def load_data(data, wl_edges, null_key, *args):
+def load_data(data, wl_edges, null_key, *args, **kwargs):
     # Null table for getting the null and associated photometries in the intermediate data
     # Structure = Chosen null:[number of null, photometry A and photometry B]
     null_table = {'null1':[1,1,2], 'null2':[2,2,3], 'null3':[3,1,4], \
@@ -217,11 +217,15 @@ def load_data(data, wl_edges, null_key, *args):
     
     wl_min, wl_max = wl_edges
     mask = mask[(wl_scale>=wl_min)&(wl_scale < wl_max)]
+    
+    if 'flag' in kwargs:
+        flags = kwargs['flag']
+        mask = mask[flags]
         
-    null_data = null_data[:,mask[0]:mask[-1]+1]
-    Iminus_data = Iminus_data[:,mask[0]:mask[-1]+1]
-    Iplus_data = Iplus_data[:,mask[0]:mask[-1]+1]
-    photo_data = photo_data[:,:,mask[0]:mask[-1]+1]
+    null_data = null_data[:,mask]
+    Iminus_data = Iminus_data[:,mask]
+    Iplus_data = Iplus_data[:,mask]
+    photo_data = photo_data[:,:,mask]
     wl_scale = wl_scale[mask]
     
     null_data = np.transpose(null_data)
@@ -445,7 +449,7 @@ def curvefit(func, xdata, ydata, p0=None, sigma=None, bounds=(-np.inf,np.inf), d
         transform = None
 
     cost_func = _wrap_func(func, xdata, ydata, transform)    
-    jac = '2-point'
+    jac = '3-point'
     res = least_squares(cost_func, p0, jac=jac, bounds=bounds, method='trf', diff_step=diff_step, x_scale=x_scale, loss='huber', 
                         verbose=2)#, xtol=None, max_nfev=100)
     popt = res.x
@@ -508,6 +512,18 @@ def curvefit2(func, xdata, ydata, p0=None, sigma=None):
     
     return popt, pcov, res
     
+my_list = ['geeks', 'for', 'geeks', 'like', 
+		'geeky','nerdy', 'geek', 'love', 
+			'questions','words', 'life'] 
+
+# Yield successive n-sized 
+# chunks from l. 
+def divide_chunks(l, n): 
+	
+	# looping till length l 
+	for i in range(0, len(l), n): 
+		yield l[i:i + n] 
+
 
 if __name__ == '__main__':
 #    offset_opd = (0.39999938011169434 - (-1.500000000000056843e-02))*1000
@@ -538,11 +554,11 @@ if __name__ == '__main__':
     x0 = [2.001]
     
     counter = 1
-#    popt, pcov, res = curvefit(model, x, y, x0, yerr, bounds=([0],[10]))
+    popt, pcov, res = curvefit(model, x, y, x0, yerr, bounds=([0],[10]))
 #    popt3, pcov3 = curve_fit(model, x, y, x0, sigma=yerr, absolute_sigma=True)
     
-#    chi2 = np.sum((y-model(x, *res.x))**2/yerr**2) * 1/(y.size-res.x.size)
-#    print('chi2', chi2)
+    chi2 = np.sum((y-model(x, *res.x))**2/yerr**2) * 1/(y.size-res.x.size)
+    print('chi2', chi2)
     
     print('--------')
     counter = 1

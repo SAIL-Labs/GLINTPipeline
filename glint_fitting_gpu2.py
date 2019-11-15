@@ -54,7 +54,7 @@ def MCfunction(bins0, na, mu_opd, sig_opd):
     sig_opd = abs(sig_opd)
     dphase_bias = 0
     
-    nloop = 100
+    nloop = 10
         
     visibility = (1 - na) / (1 + na)
 #    bins = cp.asarray(bins, dtype=cp.float32)
@@ -121,12 +121,6 @@ def MCfunction(bins0, na, mu_opd, sig_opd):
         
     accum = cp.asnumpy(accum)
     return accum.ravel()
-#    return [selt for elt in accum for selt in elt]
-
-def map_error(params, x, y):
-    residuals = y - MCfunction(x, *params)
-    chi2 = np.sum(residuals**2) / (y.size-len(params))
-    return chi2
 
 class Logger(object):
     def __init__(self, log_path):
@@ -164,7 +158,7 @@ def basin_hoppin_values(mu_opd0, sig_opd0, na0, n_hop, bounds_mu, bounds_sig, bo
                 break
             if _ == 1000-1:
                 print('mu_opd: no new guess, take initial one')
-                mu_opd = mu_opd0[idx_null]
+                mu_opd = mu_opd0
         mu_list.append(mu_opd)
         
         for _ in range(1000):
@@ -173,16 +167,16 @@ def basin_hoppin_values(mu_opd0, sig_opd0, na0, n_hop, bounds_mu, bounds_sig, bo
                 break
             if _ == 1000-1:
                 print('sig opd: no new guess, take initial one')
-                sig_opd = sig_opd0[idx_null]
+                sig_opd = sig_opd0
         sig_list.append(sig_opd)
             
         for _ in range(1000):
-            na = np.random.normal(na0, 0.1)
+            na = np.random.normal(na0, 0.002)
             if na >= bounds_na[0] and na <= bounds_na[1]:
                 break
             if _ == 1000-1:
                 print('na: no new guess, take initial one')
-                na = na0[idx_null]
+                na = na0
         null_list.append(na)
             
     print('Random drawing done')
@@ -192,8 +186,8 @@ def basin_hoppin_values(mu_opd0, sig_opd0, na0, n_hop, bounds_mu, bounds_sig, bo
 plt.ioff()
 
 ''' Settings '''  
-wl_min = 1550
-wl_max = 1600
+wl_min = 1525
+wl_max = 1625
 n_samp = int(1e+7) # number of samples per loop
 mode = 'cuda'
 nonoise = False
@@ -201,17 +195,21 @@ phase_bias_switch = True
 opd_bias_switch = True
 zeta_switch = True
 oversampling_switch = True
-skip_fit = True
+skip_fit = False
 chi2_map_switch = False
 mode_histo = True
-nb_blocks = (None, None)
-bin_bounds = (-0.01, 1) # Boundaries1
+nb_files_data = (0, None)
+nb_files_dark = (0, None)
+bin_bounds = (-0.02, 1) # Boundaries1
 #bin_bounds = (0, 10.)
 #bin_size = 15000
-basin_hopping_nloop = (0, 10)
-bounds_mu = (-10, 10)
-bounds_sig = (50, 62)
-bounds_na = (0., 0.2)
+basin_hopping_nloop = (0, 1)
+bounds_mu0 = [(200, 400), (200, 400), (200, 400), (200, 400), (200, 400), (200, 400)]
+bounds_sig0 = [(100, 300), (100, 300), (100, 300), (100, 300), (100, 300), (100, 300)]
+bounds_na0 = [(0., 0.01), (0., 0.01), (0., 0.01), (0., 0.01), (0., 0.01), (0., 0.01)]
+bounds_mu0 = [(-100, 100), (-100, 100), (-100, 100), (-100, 100), (-100, 100), (-100, 100)]
+bounds_sig0 = [(0, 100), (0, 100), (0, 100), (0, 100), (0, 100), (0, 100)]
+bounds_na0 = [(0., 0.01), (0., 0.01), (0., 0.01), (0., 0.01), (0., 0.01), (0., 0.01)]
 
 ''' Import real data '''
 datafolder = '20191029_simulation/'
@@ -220,8 +218,8 @@ darkfolder = '20191029_simulation/'
 root = "/mnt/96980F95980F72D3/glint/"
 file_path = root+'reduction/'+datafolder
 save_path = file_path+'output/'
-data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and not 'dark' in f][nb_blocks[0]:nb_blocks[1]]
-dark_list = [root+'reduction/'+darkfolder+f for f in os.listdir(root+'reduction/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_blocks[0]:nb_blocks[1]]
+data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and not 'dark' in f][nb_files_data[0]:nb_files_data[1]]
+dark_list = [root+'reduction/'+darkfolder+f for f in os.listdir(root+'reduction/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
 calib_params_path = root+'reduction/'+'calibration_params_simu/'
 zeta_coeff_path = calib_params_path + 'zeta_coeff_simu.hdf5'
 instrumental_offsets_path = calib_params_path + '4WG_opd0_and_phase_simu.txt'
@@ -251,16 +249,26 @@ sig_opd0 = np.ones(6,)*40*2**0.5 # In nm
 na0 = np.ones(6,)*(0.0)
 dphase_bias = 0.
 
-''' Generate basin hopping values '''
-mu_list, sig_list, null_list = basin_hoppin_values(mu_opd0[0], sig_opd0[0], na0[0], basin_hopping_nloop, bounds_mu, bounds_sig, bounds_na)
-mu_list = [mu_opd0[0] for elt in mu_list]
-sig_list = [sig_opd0[0] for elt in mu_list]
-null_list = [na0[0] for elt in mu_list]
-
+''' Specific settings for some configurations '''
+if chi2_map_switch:
+    basin_hopping_nloop = (0, 1) # A line to not care about anymore when changing the settings
+ 
+    
+''' Fool-proof '''
+if not chi2_map_switch and not skip_fit:
+    check_mu =  np.any(mu_opd0 < np.array(bounds_mu0)[:,0]) or np.any(mu_opd0 > np.array(bounds_mu0)[:,1])
+    check_sig =  np.any(sig_opd0 < np.array(bounds_sig0)[:,0]) or np.any(sig_opd0 > np.array(bounds_sig0)[:,1])
+    check_null = np.any(na0 < np.array(bounds_na0)[:,0]) or np.any(na0 > np.array(bounds_na0)[:,1])
+    
+    if check_mu or check_sig or check_null:
+        raise Exception('Check boundaries: the initial guesses are not between the boundaries.')
+    
 results = {}
-print('starting loop')
 total_time_start = time()
 for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
+    print('****************')
+    print('Processing %s \n'%key)
+    
     plt.ioff()
    
     if nonoise:
@@ -270,13 +278,9 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
         data = gff.load_data(data_list, (wl_min, wl_max), key, dark)
         
     wl_scale = data['wl_scale']
-    zeta_coeff = gff.get_zeta_coeff(zeta_coeff_path, wl_scale, False)
-    if not zeta_switch:
-        for key in zeta_coeff.keys():
-            if key != 'wl_scale':
-                zeta_coeff[key][:] = 1.
-    
+
     data_photo = data['photo'].copy()
+    flags = np.ones(wl_scale.shape, dtype=np.bool)
     if not nonoise:
         ''' Remove dark contribution to measured intensity fluctuations '''
         # Estimate the mean and variance of the dark and data photometric fluctuations 
@@ -286,8 +290,27 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
         # Substract variance of dark fluctuations to the variance of the photometric ones
         data_photo = (data_photo - mean_data[:,:,None]) * \
             ((var_data[:,:,None]-var_dark[:,:,None])/var_data[:,:,None])**0.5 + mean_data[:,:,None] - mean_dark[:,:,None]
-            
+        
+    check_nan = np.all(np.isnan(data_photo), axis=-1) # Check if one beam is NaN for some wavelength due to dark variance higher than data one at this wl
+    mask = np.where(check_nan==True)[1]
+    mask = np.unique(mask)
+    flags[mask] = False
+        
+    data_photo = data_photo[:,flags]
+    wl_scale = wl_scale[flags]
 
+    if nonoise:
+        data = gff.load_data(data_list, (wl_min, wl_max), flag=flags)
+    else:   
+        dark = gff.load_data(dark_list, (wl_min, wl_max), key, flag=flags)
+        data = gff.load_data(data_list, (wl_min, wl_max), key, dark, flag=flags)    
+            
+    zeta_coeff = gff.get_zeta_coeff(zeta_coeff_path, wl_scale, False)
+    if not zeta_switch:
+        for key in zeta_coeff.keys():
+            if key != 'wl_scale':
+                zeta_coeff[key][:] = 1.
+    
     ''' Get histograms of intensities and dark current in the pair of photomoetry outputs '''
     idx_null = null_table[key][0] 
     idx_photo = null_table[key][1]
@@ -389,51 +412,18 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
             stop = time()
             print('Time PDF error=', stop-start)
             null_cdf_err.append(pdf_err)
-        
-#        liste = []
-#        niter = 10
-#        step = data_null.shape[1] // niter
-#        for i in range(niter):
-#            lb = i*step
-#            ub = (i+1)*step
-#            if data_null.shape[1] - ub <= data_null.shape[1] % step:
-#                ub = None
-#                
-#            if not mode_histo:
-#                cdf = gff.computeCdf(null_axis[wl], data_null[wl][lb:ub], 'ccdf', True)
-#                liste.append(cp.asnumpy(cdf))
-#            else:
-#                pdf = np.histogram(data_null[wl][i*step:(i+1)*step], null_axis[wl])[0]
-#                pdf = pdf / np.sum(pdf)
-#                liste.append(pdf)
-#        liste = np.array(liste)
-#        liste2 = liste.std(axis=0)
-#        liste2[liste2==0] = liste2[liste2!=0].min()
-#        null_cdf_err.append(liste2)
                                     
     null_cdf = np.array(null_cdf)
     null_cdf_err = np.array(null_cdf_err)
 
-#    f = plt.figure(figsize=(19.20,10.80))
-#    count = 0
-#    wl_idx = np.arange(wl_scale.size)
-#    wl_idx = wl_idx[wl_scale>=1550]
-#    for wl in wl_idx[::-1][:10]:
-#        if len(wl_idx) > 1:
-#            ax = f.add_subplot(5,2,count+1)
-#        else:
-#            ax = f.add_subplot(1,1,count+1)
-#        plt.title('%s nm'%wl_scale[wl])
-#        if not mode_histo:
-#            plt.errorbar(null_axis[wl], null_cdf[wl], yerr=null_cdf_err[wl], fmt='.')
-#        else:
-#            plt.errorbar(null_axis[wl][:-1], null_cdf[wl], yerr=null_cdf_err[wl], fmt='.')
-#        plt.grid()
-#        plt.xlabel('Null depth')
-#        plt.ylabel('Frequency')
-#        plt.tight_layout()
-#        count += 1
-
+    bounds_mu = bounds_mu0[idx_null]
+    bounds_sig = bounds_sig0[idx_null]
+    bounds_na = bounds_na0[idx_null]
+    ''' Generate basin hopping values '''
+    if max(basin_hopping_nloop)>1:
+        mu_list, sig_list, null_list = basin_hoppin_values(mu_opd0[idx_null], sig_opd0[idx_null], na0[idx_null], 
+                                                           basin_hopping_nloop, bounds_mu, bounds_sig, bounds_na, idx_null)
+        
     chi2_liste = []
     popt_liste = []
     uncertainties_liste = []
@@ -468,8 +458,9 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
                 na_opt = na
                 uncertainties = np.zeros(3)
                 popt = (np.array([na, mu_opd, sig_opd]), np.ones((3,3)))
-                chi2 = 1/(null_cdf.size-popt[0].size) * np.sum((null_cdf.ravel() - z)**2/null_cdf_err.ravel()**2)
+                chi2 = 1/(null_cdf.size-popt[0].size) * np.sum((null_cdf.ravel() - z)**2)
                 term_status = None
+            
             else:            
                 print('Model fitting')    
                 count = 0.
@@ -486,7 +477,9 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
                 with open(save_path+'callfunc_%02d.txt'%(basin_hopping_count), 'w') as fichier:
                     popt = gff.curvefit(MCfunction, null_axis, null_cdf.ravel(), p0=initial_guess, sigma=null_cdf_err.ravel(), 
                                         bounds=([bounds_na[0], bounds_mu[0], bounds_sig[0]],[bounds_na[1], bounds_mu[1], bounds_sig[1]]), 
-                                        diff_step = [0.01, 100., 100.])
+                                        diff_step = [0.001, 10., 10.])
+#                    popt = gff.curvefit2(MCfunction, null_axis, null_cdf.ravel(), p0=initial_guess, sigma=null_cdf_err.ravel())
+                    
                 res = popt[2]
                 popt = popt[:2]
                 print('Termination:', res.message)
@@ -516,9 +509,9 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
                 print(chi2)
                 print('******')
 
-                np.savez(save_path+os.path.basename(file_path[:-1])+'_%03d'%(basin_hopping_count),
+                np.savez(save_path+os.path.basename(file_path[:-1])+'%s_%03d'%(key, basin_hopping_count),
                          chi2=chi2, popt=[na_opt]+[elt for elt in popt[0][1:]], uncertainties=uncertainties, init=[guess_na]+list(initial_guess[1:]),
-                                         termination=np.array([term_status]))
+                                         termination=np.array([term_status]), nsamp=np.array([n_samp]), wl=wl_scale)
             
             chi2_liste.append(chi2)
             popt_liste.append([na_opt]+[elt for elt in popt[0][1:]])
@@ -526,91 +519,61 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
             termination_liste.append(term_status)
             pcov_liste.append(popt[1])
             
-#            f = plt.figure(figsize=(19.20,10.80))
-#            txt3 = '%s '%key+'Fitted values: ' + 'Na$ = %.2E \pm %.2E$, '%(na_opt, uncertainties[0]) + \
-#            r'$\mu_{OPD} = %.2E \pm %.2E$ nm, '%(popt[0][1], uncertainties[1]) + \
-#            r'$\sigma_{OPD} = %.2E \pm %.2E$ nm,'%(popt[0][2], uncertainties[2])+' Chi2 = %.2E '%(chi2)+'(Last = %.3f s)'%(stop-start)
-#            count = 0
-#            wl_idx = np.arange(wl_scale.size)
-#            wl_idx = wl_idx[wl_scale>=1550]
-#            for wl in wl_idx[::-1][:10]:
-#                if len(wl_idx) > 1:
-#                    ax = f.add_subplot(5,2,count+1)
-#                else:
-#                    ax = f.add_subplot(1,1,count+1)
-#                plt.title('%s nm'%wl_scale[wl])
-#                if not mode_histo:
-##                    plt.semilogy(null_axis[wl], null_cdf[wl], '.', markersize=5, label='Data')
-##                    plt.semilogy(null_axis[wl], out.reshape((wl_scale.size,-1))[wl], '+', markersize=5, lw=5, alpha=0.8, label='Fit')
-#                    plt.errorbar(null_axis[wl], null_cdf[wl], yerr=null_cdf_err[wl], fmt='.', markersize=5, label='Data')
-#                    plt.errorbar(null_axis[wl], out.reshape((wl_scale.size,-1))[wl], fmt='+', markersize=5, lw=5, alpha=0.8, label='Fit')
-#                else:
-##                    plt.semilogy(null_axis[wl][:-1], null_cdf[wl], '.', markersize=5, label='Data')
-##                    plt.semilogy(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], '+', markersize=5, lw=5, alpha=0.8, label='Fit')
-#                    plt.errorbar(null_axis[wl][:-1], null_cdf[wl], yerr=null_cdf_err[wl], fmt='.', markersize=5, label='Data')
-#                    plt.errorbar(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], fmt='+', markersize=5, lw=5, alpha=0.8, label='Fit')                    
-#                plt.grid()
-#                plt.legend(loc='best')
-#                plt.xlabel('Null depth')
-#                plt.ylabel('Frequency')
-##                plt.ylim(1e-8, 10)
-##                plt.xlim(-0.86, 6)
-#                count += 1
-#            if len(wl_idx) > 1:
-#                ax.text(-0.8, -0.5, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
-#            else:
-#                ax.text(0.3, 0.8, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
-#            plt.tight_layout()
-#            string = key+'_'+'%03d'%(basin_hopping_count)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])
-##            if nonoise: string = string + '_nodarkinmodel'
-##            if not oversampling_switch: string = string + '_nooversamplinginmodel'
-##            if not zeta_switch: string = string + '_nozetainmodel'
-#            if not skip_fit: 
-#                if not mode_histo:
-#                    string = string + '_fit_cdf'
-#                else:
-#                    string = string + '_fit_pdf'
-#            plt.savefig(save_path+string+'.png')
-#            if basin_hopping_nloop[1]-basin_hopping_nloop[0]>5:
-#                plt.close('all')
-###            print(string)
-###            np.save('/home/mam/Documents/glint/model fitting - labdata/'+key+'_%08d'%n_samp+'_%03d'%(supercount)+'.npy', out)
-
-#            f = plt.figure(figsize=(19.20,10.80))
-#            txt3 = '%s '%key+'Fitted values: ' + 'Na$ = %.2E \pm %.2E$, '%(na_opt, uncertainties[0]) + \
-#            r'$\mu_{OPD} = %.2E \pm %.2E$ nm, '%(popt[0][1], uncertainties[1]) + \
-#            r'$\sigma_{OPD} = %.2E \pm %.2E$ nm,'%(popt[0][2], uncertainties[2])+' Chi2 = %.2E '%(chi2)+'(Last = %.3f s)'%(stop-start)
-#            count = 0
-#            wl_idx = np.arange(wl_scale.size)
-#            wl_idx = wl_idx[wl_scale>=1550]
-#            for wl in wl_idx[::-1][:10]:
-#                if len(wl_idx) > 1:
-#                    ax = f.add_subplot(5,2,count+1)
-#                else:
-#                    ax = f.add_subplot(1,1,count+1)
-#                plt.title('%s nm'%wl_scale[wl])
-#                if not mode_histo:
-##                    plt.semilogy(null_axis[wl], null_cdf[wl], '.', markersize=5, label='Data')
-##                    plt.semilogy(null_axis[wl], out.reshape((wl_scale.size,-1))[wl], '+', markersize=5, lw=5, alpha=0.8, label='Fit')
-#                    plt.plot(null_axis[wl], null_cdf_err[wl], fmt='.', markersize=5, label='Data')
-#                    plt.plot(null_axis[wl], out.reshape((wl_scale.size,-1))[wl], fmt='+', markersize=5, lw=5, alpha=0.8, label='Fit')
-#                else:
-##                    plt.semilogy(null_axis[wl][:-1], null_cdf[wl], '.', markersize=5, label='Data')
-##                    plt.semilogy(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], '+', markersize=5, lw=5, alpha=0.8, label='Fit')
-#                    plt.plot(null_axis[wl][:-1], null_cdf_err[wl], '.', markersize=5, label='Error on data')
-##                    plt.errorbar(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], fmt='+', markersize=5, lw=5, alpha=0.8, label='Fit')                    
-#                plt.grid()
-#                plt.legend(loc='best')
-#                plt.xlabel('Null depth')
-#                plt.ylabel('Frequency')
-##                plt.ylim(1e-8, 10)
-##                plt.xlim(-0.86, 6)
-#                count += 1
-#            if len(wl_idx) > 1:
-#                ax.text(-0.8, -0.5, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
-#            else:
-#                ax.text(0.025, 0.05, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
-#            plt.tight_layout()
+            wl_idx0 = np.arange(wl_scale.size)
+            wl_idx0 = list(gff.divide_chunks(wl_idx0, 10))
+            
+            for wl_idx in wl_idx0:
+                f = plt.figure(figsize=(19.20,10.80))
+                txt3 = '%s '%key+'Fitted values: ' + 'Na$ = %.2E \pm %.2E$, '%(na_opt, uncertainties[0]) + \
+                r'$\mu_{OPD} = %.2E \pm %.2E$ nm, '%(popt[0][1], uncertainties[1]) + \
+                r'$\sigma_{OPD} = %.2E \pm %.2E$ nm,'%(popt[0][2], uncertainties[2])+' Chi2 = %.2E '%(chi2)+'(Last = %.3f s)'%(stop-start)
+                count = 0
+                
+                axs = []
+    #            wl_idx = wl_idx[wl_scale>=1550]
+                for wl in wl_idx[::-1]:
+                    if len(wl_idx) > 1:
+                        ax = f.add_subplot(5,2,count+1)
+                    else:
+                        ax = f.add_subplot(1,1,count+1)
+                    axs.append(ax)
+                    plt.title('%s nm'%wl_scale[wl])
+                    if not mode_histo:
+    #                    plt.semilogy(null_axis[wl], null_cdf[wl], '.', markersize=5, label='Data')
+    #                    plt.semilogy(null_axis[wl], out.reshape((wl_scale.size,-1))[wl], '+', markersize=5, lw=5, alpha=0.8, label='Fit')
+                        plt.errorbar(null_axis[wl], null_cdf[wl], yerr=null_cdf_err[wl], fmt='.', markersize=5, label='Data')
+                        plt.errorbar(null_axis[wl], out.reshape((wl_scale.size,-1))[wl], fmt='+', markersize=5, lw=5, alpha=0.8, label='Fit')
+                    else:
+    #                    plt.semilogy(null_axis[wl][:-1], null_cdf[wl], '.', markersize=5, label='Data')
+    #                    plt.semilogy(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], '+', markersize=5, lw=5, alpha=0.8, label='Fit')
+                        plt.errorbar(null_axis[wl][:-1], null_cdf[wl], yerr=null_cdf_err[wl], fmt='.', markersize=5, label='Data')
+                        plt.errorbar(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], fmt='+', markersize=5, lw=5, alpha=0.8, label='Fit')                    
+                    plt.grid()
+                    plt.legend(loc='best')
+                    plt.xlabel('Null depth')
+                    plt.ylabel('Frequency')
+    #                plt.ylim(1e-8, 10)
+    #                plt.xlim(-0.86, 6)
+                    count += 1
+                plt.tight_layout(rect=[0., 0.05, 1, 1])
+                if len(wl_idx) > 1:
+                    axs[0].text(0., -0.7, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+                else:
+                    axs[0].text(0.3, 0.8, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+                string = key+'_'+'%03d'%(basin_hopping_count)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(wl_scale[wl_idx[-1]])
+    #            if nonoise: string = string + '_nodarkinmodel'
+    #            if not oversampling_switch: string = string + '_nooversamplinginmodel'
+    #            if not zeta_switch: string = string + '_nozetainmodel'
+                if not skip_fit: 
+                    if not mode_histo:
+                        string = string + '_fit_cdf'
+                    else:
+                        string = string + '_fit_pdf'
+                plt.savefig(save_path+string+'.png')
+                if basin_hopping_nloop[1]-basin_hopping_nloop[0]>5:
+                    plt.close('all')
+    ##            print(string)
+    ##            np.save('/home/mam/Documents/glint/model fitting - labdata/'+key+'_%08d'%n_samp+'_%03d'%(supercount)+'.npy', out)
             
         else:
             print('Error mapping')
@@ -625,18 +588,19 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
                 for o in map_mu_opd:
                     temp2 = []
                     for s in map_sig_opd:
-                        parameters = np.array([visi, o, s])
+                        parameters = [visi, o, s]
                         out = MCfunction(null_axis, *parameters)
-                        chi2 = 1/(null_cdf.size-parameters.size) * np.sum((null_cdf.ravel() - out)**2/null_cdf_err.ravel()**2)
-                        temp2.append([chi2, visi, o, s])
+                        value = 1/(null_cdf.size-parameters.size) * np.sum((null_cdf.ravel() - out)**2/null_cdf_err.ravel()**2)                        
+                        temp2.append([value, visi, o, s])
                     temp1.append(temp2)
                 chi2map.append(temp1)
             stop = time()
             chi2map = np.array(chi2map)
             print('Duration: %.3f s'%(stop-start))
             
-            np.savez(save_path+'chi2map_%03d'%(basin_hopping_count), value=chi2map, na=map_na, mu=map_mu_opd, sig=map_sig_opd)
-        #    chi2map = np.load('/mnt/96980F95980F72D3/glint/GLINTPipeline/chi2map_fit_1wl.npy')
+            np.savez(save_path+'chi2map_%s_%03d'%(key, basin_hopping_count), 
+                     value=chi2map, na=map_na, mu=map_mu_opd, sig=map_sig_opd, wl=wl_scale)
+            
             plt.figure(figsize=(19.20,10.80))
             for i in range(10):
                 plt.subplot(5,2,i+1)
@@ -644,16 +608,18 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
                 plt.colorbar()
                 plt.title('sig %.2f'%map_sig_opd[i])
                 plt.xlabel('mu opd');plt.ylabel('null depth')
-            plt.tight_layout()
+            plt.tight_layout(rect=[0,0,1,0.95])
+            plt.suptitle(key)
             
             plt.figure(figsize=(19.20,10.80))
             for i in range(0,10):
                 plt.subplot(5,2,i+1)
-                plt.imshow(chi2map[i,:,:,0], interpolation='none', origin='lower', aspect='auto', extent=[map_sig_opd[0]-step_sig/2, map_sig_opd[-1]+step_sig/2, map_mu_opd[0]-step_mu/2, map_mu_opd[-1]+step_mu/2])
+                plt.imshow(np.log10(chi2map[i,:,:,0]), interpolation='none', origin='lower', aspect='auto', extent=[map_sig_opd[0]-step_sig/2, map_sig_opd[-1]+step_sig/2, map_mu_opd[0]-step_mu/2, map_mu_opd[-1]+step_mu/2])
                 plt.colorbar()
                 plt.xlabel('sig opd');plt.ylabel('mu opd')
                 plt.title('Na %.2f'%map_na[i])
-            plt.tight_layout()
+            plt.tight_layout(rect=[0,0,1,0.95])
+            plt.suptitle(key)
         
             plt.figure(figsize=(19.20,10.80))
             for i in range(10):
@@ -662,95 +628,41 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
                 plt.colorbar()
                 plt.xlabel('sig opd');plt.ylabel('null depth')    
                 plt.title('mu %.2f'%map_mu_opd[i])
-            plt.tight_layout()
-        
+            plt.tight_layout(rect=[0,0,1,0.95])
+            plt.suptitle(key)
+            
+            chi2map2 = chi2map[:,:,:,0]
+            argmin = np.unravel_index(np.argmin(chi2map2), chi2map2.shape)
+            print('Min in param space', chi2map2.min(), map_na[argmin[0]], map_mu_opd[argmin[1]], map_sig_opd[argmin[2]])
+            argmin2 = np.unravel_index(np.argmin(chi2map2[chi2map2!=chi2map2.min()]), chi2map2.shape)
+            print('2nd min in param space', chi2map2[argmin2], map_na[argmin2[0]], map_mu_opd[argmin2[1]], map_sig_opd[argmin2[2]])
+            
         sys.stdout.close()
     
-    results[key] = [popt_liste, uncertainties_liste, chi2_liste, init_liste, termination_liste, pcov_liste]
+    results[key] = [popt_liste, uncertainties_liste, chi2_liste, init_liste, termination_liste, pcov_liste, wl_scale, n_samp]
             
 total_time_stop = time()            
 print('Total time', total_time_stop-total_time_start)
-#np.save('/home/mam/Documents/glint/model fitting - nsamp/'+'chi2_'+'%08d'%(n_samp)+'.npy', out)        
 plt.ion()
 plt.show()
 
+suffix_files = [nb_files_data[0], nb_files_data[1]]
+if nb_files_data[0] is None:
+    suffix_files[0] = 0
+if nb_files_data[1] is None:
+    suffix_files[1] = len(data_list)
+    
+suffix_files = '_files_%05d-%05d'%(suffix_files[0], suffix_files[1])
+pickle_name = os.path.basename(file_path[:-1])+suffix_files
 if mode_histo:
-    pickle_name = os.path.basename(file_path[:-1])+'_pdf.pkl'
+    pickle_name = pickle_name+'_pdf'
 else:
-    pickle_name = os.path.basename(file_path[:-1])+'_cdf.pkl'
+    pickle_name = pickle_name+'_cdf'
+
+pickle_name = pickle_name+'.pkl'
                                    
 with open(save_path+pickle_name, 'wb') as f:
     pickle.dump(results, f)
 
-print('-- end --')
+print('-- End --')
 
-#plt.figure(figsize=(19.20,10.80))
-#plt.plot(results['null1'][2], '.', markersize=20)
-#plt.grid()
-#plt.ylim(0, 4000)
-#plt.xticks(size=35);plt.yticks(size=35)
-#plt.xlabel('Trial', size=40)
-#plt.ylabel(r'$\chi^2$', size=40)
-#plt.tight_layout()
-#
-#plt.figure(figsize=(19.20,10.80))
-#plt.plot(np.array(results['null1'][0])[:,0], results['null1'][2], '.', markersize=20)
-#plt.grid()
-#plt.ylim(0, 4000)
-#plt.xlim(-0.01, 0.025)
-#plt.xticks(size=35);plt.yticks(size=35)
-#plt.xlabel('Null depth', size=40)
-#plt.ylabel(r'$\chi^2$', size=40)
-#plt.tight_layout()
-#
-#plt.figure(figsize=(19.20,10.80))
-#plt.plot(np.array(results['null1'][0])[:,1], results['null1'][2], '.', markersize=20)
-#plt.grid()
-#plt.ylim(1000, 3000)
-#plt.xlim(0, 450)
-#plt.xticks(size=35);plt.yticks(size=35)
-#plt.xlabel(r'$\mu_{OPD}$ (nm)', size=40)
-#plt.ylabel(r'$\chi^2$', size=40)
-#plt.tight_layout()
-#
-#plt.figure(figsize=(19.20,10.80))
-#plt.plot(np.array(results['null1'][0])[:,2], results['null1'][2], '.', markersize=20)
-#plt.grid()
-#plt.ylim(1000,3000)
-#plt.xlim(95,106)
-#plt.xticks(size=35);plt.yticks(size=35)
-#plt.xlabel(r'$\sigma_{OPD}$ (nm)', size=40)
-#plt.ylabel(r'$\chi^2$', size=40)
-#plt.tight_layout()
-#
-#plt.figure(figsize=(19.20,10.80))
-#plt.plot(np.array(results['null1'][-1])[:,2], np.array(results['null1'][0])[:,2], '.', markersize=20)
-#plt.grid()
-##plt.ylim(-110,150)
-##plt.xlim(95,106)
-#plt.xticks(size=35);plt.yticks(size=35)
-#plt.xlabel(r'Initial $\sigma_{OPD}$ (nm)', size=40)
-#plt.ylabel(r'Fitted $\sigma_{OPD}$ (nm)', size=40)
-#plt.tight_layout()
-#
-#plt.figure(figsize=(19.20,10.80))
-#plt.plot(np.array(results['null1'][-1])[:,1], np.array(results['null1'][0])[:,1], '.', markersize=20)
-#plt.grid()
-#plt.ylim(-50,450)
-##plt.xlim(95,106)
-#plt.xticks(size=35);plt.yticks(size=35)
-#plt.xlabel(r'Initial $\mu_{OPD}$ (nm)', size=40)
-#plt.ylabel(r'Fitted $\mu_{OPD}$ (nm)', size=40)
-#plt.tight_layout()
-#
-#temp = np.array(results['null1'][-1])[:,0]
-#temp = (1-temp)/(1+temp)
-#plt.figure(figsize=(19.20,10.80))
-#plt.plot(temp, np.array(results['null1'][0])[:,0], '.', markersize=20)
-#plt.grid()
-#plt.ylim(-0.06,0.06)
-#plt.xlim(-0.01,0.33)
-#plt.xticks(size=35);plt.yticks(size=35)
-#plt.xlabel(r'Initial null depth', size=40)
-#plt.ylabel(r'Fitted null depth', size=40)
-#plt.tight_layout()
