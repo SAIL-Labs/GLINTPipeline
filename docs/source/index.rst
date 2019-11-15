@@ -25,6 +25,10 @@ It returns the shape and location of the 16 outputs respect to the wavelength.
 
 :doc:`glint_spectral_calibration` performs a spectral calibration for each one of the 16 outputs.
 
+The source can be found `on Github`_.
+
+.. _on Github: https://github.com/SydneyAstrophotonicInstrumentationLab/GLINTPipeline
+
 Navigation
 ==========
 .. toctree::
