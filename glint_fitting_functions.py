@@ -18,7 +18,7 @@ import scipy.special as sp
 from scipy.stats import norm
 from scipy.linalg import svd
 import warnings
-from scipy.optimize import OptimizeWarning
+from scipy.optimize import OptimizeWarning, minimize
 
 interpolate_kernel = cp.ElementwiseKernel(
     'float32 x_new, raw float32 xp, int32 xp_size, raw float32 yp', 
@@ -464,12 +464,50 @@ def curvefit(func, xdata, ydata, p0=None, sigma=None, bounds=(-np.inf,np.inf), d
         pcov.fill(np.inf)
         warn_cov = True
 
-
     if warn_cov:
         warnings.warn('Covariance of the parameters could not be estimated',
                       category=OptimizeWarning)
             
     return popt, pcov, res
+
+def _objective_func(parameters, *args):
+    func, xdata, ydata, transform = args
+    if transform is None:
+        obj_fun = func(xdata, *parameters) - ydata
+    else:
+        obj_fun = transform * (func(xdata, *parameters) - ydata)
+    
+    return np.sum(obj_fun**2)
+    
+def curvefit2(func, xdata, ydata, p0=None, sigma=None):
+    if p0 is None:
+        # determine number of parameters by inspecting the function
+        from scipy._lib._util import getargspec_no_self as _getargspec
+        args = _getargspec(func)[0]
+        if len(args) < 2:
+            raise ValueError("Unable to determine number of fit parameters.")
+        n = len(args) - 1
+        p0 = np.ones(n,)
+    else:
+        p0 = np.atleast_1d(p0)
+        n = len(p0)
+        
+    if sigma is not None:
+        sigma = np.array(sigma)
+        transform = 1/sigma
+    else:
+        transform = None
+
+    cost_func = _objective_func
+    arguments = (func, xdata, ydata, transform)
+    res = minimize(cost_func, p0, args=arguments, method='Powell', options={'disp': True, 'return_all': True},
+                   callback=lambda x:print(x[0], x[0], x[0], x[0], x[0]))
+    res.x = np.atleast_1d(res.x)
+    popt = res.x
+    pcov = np.ones((n,n))
+    
+    return popt, pcov, res
+    
 
 if __name__ == '__main__':
 #    offset_opd = (0.39999938011169434 - (-1.500000000000056843e-02))*1000
@@ -485,18 +523,43 @@ if __name__ == '__main__':
 #    plt.plot(bin_edges[:-1], hist)
 #    plt.grid()    
 
-    def model(x, a, b):
-        return a*x + b
+    def model(x, a):
+        global counter
+        print(counter, a)
+        counter += 1
+        return a*x
 
-    slope, offset = 2, 5
+    counter = 1
+    slope, offset = 2, 0
     x = np.arange(100)
-    y = slope * x + offset + np.random.normal(0, 0.1, x.size)
-    yerr = 0.1 * np.ones(y.shape)
+    y = model(x, slope) + np.random.normal(0, 0.2, x.size)
+    yerr = 0.2 * np.ones(y.shape)
     
-    x0 = [1.,1.]
+    x0 = [2.001]
     
-    popt, pcov, res = curvefit(model, x, y, x0, yerr, bounds=([0,0],[20,20]))
+    counter = 1
+#    popt, pcov, res = curvefit(model, x, y, x0, yerr, bounds=([0],[10]))
+#    popt3, pcov3 = curve_fit(model, x, y, x0, sigma=yerr, absolute_sigma=True)
     
-    chi2 = np.sum((y-model(x, *res.x))**2/yerr**2) * 1/(y.size-res.x.size)
+#    chi2 = np.sum((y-model(x, *res.x))**2/yerr**2) * 1/(y.size-res.x.size)
+#    print('chi2', chi2)
+    
+    print('--------')
+    counter = 1
+    popt2, pcov2, res2 = curvefit2(model, x, y, x0, yerr)
+    chi2 = np.sum((y-model(x, *popt2))**2/yerr**2) * 1/(y.size-popt2.size)
     print('chi2', chi2)
-  
+#    
+#    chi2map = []
+#    slopes = np.linspace(1.995,2.005,1001)
+#    for s in slopes:
+#        a = model(x, s)
+#        res = y - a
+#        chi = np.sum(res**2/yerr**2) * 1/(res.size-1)
+#        chi2map.append(chi)
+#    chi2map = np.array(chi2map)
+#    plt.figure()
+#    plt.plot(slopes, chi2map)
+#    plt.grid()
+#    from scipy.interpolate import interp1d
+#    inter = interp1d(slopes, chi2map)
