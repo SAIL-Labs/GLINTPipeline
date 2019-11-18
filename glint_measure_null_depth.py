@@ -36,6 +36,9 @@ First step: simply change the value of the variables in the **Settings** section
     * **no_noise**: boolean, ``True`` for noise-free (simulated) data
     * **nbfiles**: 2-tuple of int, set the bounds between which the data files are selected. ``None`` is equivalent to 0 if it is the lower bound or -1 included or it is the upper one.
     * **nb_img**: 2-tuple of int, set the bounds between which the frame are selected, into a data file.
+    * **nulls_to_invert**: list of null outputs to invert. Fill with ``nullX`` (X=1..6) or leave empty if no null is to invert
+    * **bin_frames**: boolean, set True to bin frames
+    * **nb_frames_to_bin**: number of frames to bin (average) together. If ``None``, the whole stack is average into one frame. If the total number of frames is not a multiple of the binning value, the remaining frames are lost.
 
     
 Second step: change the value of the variables in the **Inputs** and **Outputs** sections:
@@ -82,14 +85,19 @@ if __name__ == '__main__':
     no_noise = False
     nb_img = (None, None)
     debug = False
-    save = False
+    save = True
     nb_files = (None,1)
     nulls_to_invert = ['null1']
+    bin_frames = False
+    nb_frames_to_bin = 1
+    spectral_binning = False
+    wl_bin_min, wl_bin_max = 1550, 1600 # In nm
+    bandwidth_binning = 20 # In nm
     
     ''' Inputs '''
-    datafolder = '20191015_simulation/'
+    datafolder = '20190907/eps_peg/'
     root = "/mnt/96980F95980F72D3/glint/"
-    calibration_path = root+'reduction/'+'calibration_params_simu/'
+    calibration_path = root+'reduction/'+'calibration_params/'
     data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
     data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f][nb_files[0]:nb_files[1]]
     
@@ -152,6 +160,9 @@ if __name__ == '__main__':
         img = glint_classes.Null(f, nbimg=nb_img)
         
         ''' Process frames '''
+        if bin_frames:
+            img.data = img.binning(img.data, nb_frames_to_bin, axis=0, avg=True)
+            img.nbimg = img.data.shape[0]
         img.cosmeticsFrames(np.zeros(dark.shape), no_noise)
         
         ''' Insulating each track '''
@@ -168,6 +179,9 @@ if __name__ == '__main__':
         
         ''' Measure flux in photometric channels '''
         img.getIntensities()
+        if spectral_binning:
+            img.spectralBinning(wl_bin_min, wl_bin_max, bandwidth_binning, wl_to_px_coeff)
+            
         p1.append(img.p1)
         p2.append(img.p2)
         p3.append(img.p3)

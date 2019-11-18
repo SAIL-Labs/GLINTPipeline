@@ -242,11 +242,13 @@ class File(object):
             self.bg_std = self.data[:,:,:20].std(axis=(1,2))
             self.bg_var = self.data[:,:,:20].var(axis=(1,2))
             
-    def binning(self, binning, axis=0, avg=False):
+    def binning(self, arr, binning, axis=0, avg=False):
         """
         Bin frames together
         
         :Parameters:
+            **arr**: nd-array
+                Array containing data to bin
             **binning**: int
                 Number of frames to bin
             **axis**: int
@@ -261,16 +263,23 @@ class File(object):
             **data**: ndarray 
                 datacube
         """
-
-        shape = self.data.shape
+        if binning is None:
+            binning = arr.shape[axis]
+            
+        shape = arr.shape
+        crop = shape[axis]//binning*binning # Number of frames which can be binned respect to the input value
+        arr = np.take(arr, np.arange(crop), axis=axis)
+        shape = arr.shape
         if axis < 0:
-            axis += self.data.ndim
+            axis += arr.ndim
         shape = shape[:axis] + (-1, binning) + shape[axis+1:]
-        self.data = self.data.reshape(shape)
+        arr = arr.reshape(shape)
         if not avg:
-            self.data = self.data.sum(axis=axis+1)
+            arr = arr.sum(axis=axis+1)
         else:
-            self.data = self.data.mean(axis=axis+1)
+            arr = arr.mean(axis=axis+1)
+        
+        return arr
 
 
 class Null(File):
@@ -474,10 +483,10 @@ class Null(File):
                     
         return amplitude, integ_model, integ_windowed, residuals_reg, weights
     
-#    def getTotalFlux(self):
-#        self.fluxes = np.sum(self.slices[:,56:57,:,:], axis=(1,3))
-#        self.fluxes = np.array([self.fluxes[:,15], self.fluxes[:,13], self.fluxes[:,2], self.fluxes[:,0]])
-#        
+    def getTotalFlux(self):
+        self.fluxes = np.sum(self.slices[:,56:57,:,:], axis=(1,3))
+        self.fluxes = np.array([self.fluxes[:,15], self.fluxes[:,13], self.fluxes[:,2], self.fluxes[:,0]])
+        
 #    def getSpectrum(self):
 #        self.spectra = np.mean(self.slices, axis=(0,3))
 #        self.spectra = np.array([self.spectra[:,15], self.spectra[:,13], self.spectra[:,2], self.spectra[:,0]])
@@ -828,7 +837,81 @@ class Null(File):
         self.Iminus_raw5, self.Iplus_raw5 = self.raw[:,5][:,self.px_scale[5]], self.raw[:,7][:,self.px_scale[7]]
         self.Iminus_raw6, self.Iplus_raw6 = self.raw[:,8][:,self.px_scale[8]], self.raw[:,10][:,self.px_scale[10]]
         
-        self.p1_raw_err = self.p2_raw_err = self.p3_raw_err = self.p4_raw_err = self.raw_err        
+        self.p1_raw_err = self.p2_raw_err = self.p3_raw_err = self.p4_raw_err = self.raw_err  
+        
+    def spectralBinning(self, wl_min, wl_max, bandwidth, wl_to_px_coeff):
+        """
+        Method for keeping or binning a spectral band.
+        It changes the attributes ``pX``, ``IminusX``, ``IplusX`` (X=1..6), ``px_scale`` and ``wl_scale`` of the object.
+        
+        :Parameters:
+            **wl_min**: scalar
+                Lower bound of the bandwidth to keep/bin, in nm
+            
+            **wl_max**: scalar
+                Upper bound of the bandwidth to keep/bin, in nm
+                
+            **bandwidth**: scalar or None
+                Width of the spectrum to bin (in nm), should be lower or equal to the difference between **wl_min** and **wl_max**.
+                If it is higher, the whole spectrum is binned.
+                If None, the whole band is binned and the average value is taken.
+                
+            **wl_to_px_coeff**: array
+                Coefficient of conversion from wavelength to pixel position
+        """
+        
+        self.p1 = self.p1[:,(self.wl_scale[15]>=wl_min)&(self.wl_scale[15]<=wl_max)]
+        self.p2 = self.p2[:,(self.wl_scale[13]>=wl_min)&(self.wl_scale[13]<=wl_max)]
+        self.p3 = self.p3[:,(self.wl_scale[2]>=wl_min)&(self.wl_scale[2]<=wl_max)]
+        self.p4 = self.p4[:,(self.wl_scale[0]>=wl_min)&(self.wl_scale[0]<=wl_max)]
+        
+        self.Iminus1 = self.Iminus1[:,(self.wl_scale[11]>=wl_min)&(self.wl_scale[11]<=wl_max)]
+        self.Iplus1 = self.Iplus1[:,(self.wl_scale[9]>=wl_min)&(self.wl_scale[9]<=wl_max)]
+        self.Iminus2 = self.Iminus2[:,(self.wl_scale[3]>=wl_min)&(self.wl_scale[3]<=wl_max)]
+        self.Iplus2 = self.Iplus2[:,(self.wl_scale[12]>=wl_min)&(self.wl_scale[12]<=wl_max)]
+        self.Iminus3 = self.Iminus3[:,(self.wl_scale[1]>=wl_min)&(self.wl_scale[1]<=wl_max)]
+        self.Iplus3 = self.Iplus3[:,(self.wl_scale[14]>=wl_min)&(self.wl_scale[14]<=wl_max)]         
+        self.Iminus4 = self.Iminus4[:,(self.wl_scale[6]>=wl_min)&(self.wl_scale[6]<=wl_max)]
+        self.Iplus4 = self.Iplus4[:,(self.wl_scale[4]>=wl_min)&(self.wl_scale[4]<=wl_max)]         
+        self.Iminus5 = self.Iminus5[:,(self.wl_scale[5]>=wl_min)&(self.wl_scale[5]<=wl_max)]
+        self.Iplus5 = self.Iplus5[:,(self.wl_scale[7]>=wl_min)&(self.wl_scale[7]<=wl_max)]   
+        self.Iminus6 = self.Iminus6[:,(self.wl_scale[8]>=wl_min)&(self.wl_scale[8]<=wl_max)]
+        self.Iplus6 = self.Iplus6[:,(self.wl_scale[10]>=wl_min)&(self.wl_scale[10]<=wl_max)]
+        
+        self.px_scale = np.array([self.px_scale[i][(self.wl_scale[i]>=wl_min)&(self.wl_scale[i]<=wl_max)] for i in range(self.wl_scale.shape[0])])
+        self.wl_scale = np.array([elt[(elt>=wl_min)&(elt<=wl_max)] for elt in self.wl_scale])
+        
+        if bandwidth is None or bandwidth > wl_max - wl_min:
+            bandwith_px = [None]*wl_to_px_coeff.shape[0]
+            if bandwidth > wl_max - wl_min:
+                print('Bandwidth larger than selected spectrum, the whole spectrum will be binned.')
+        else:
+            bandwith_px = abs(bandwidth * wl_to_px_coeff[:,0])
+            bandwith_px = bandwith_px.astype(np.int)
+            bandwith_px[bandwith_px==0] = 1
+            
+        self.p1 = self.binning(self.p1, bandwith_px[15], axis=1, avg=True)
+        self.p2 = self.binning(self.p2, bandwith_px[13], axis=1, avg=True)
+        self.p3 = self.binning(self.p3, bandwith_px[2], axis=1, avg=True)
+        self.p4 = self.binning(self.p4, bandwith_px[0], axis=1, avg=True)
+        
+        self.Iminus1 = self.binning(self.Iminus1, bandwith_px[11], axis=1, avg=True)
+        self.Iminus2 = self.binning(self.Iminus2, bandwith_px[3], axis=1, avg=True)
+        self.Iminus3 = self.binning(self.Iminus3, bandwith_px[1], axis=1, avg=True)
+        self.Iminus4 = self.binning(self.Iminus4, bandwith_px[6], axis=1, avg=True)
+        self.Iminus5 = self.binning(self.Iminus5, bandwith_px[5], axis=1, avg=True)
+        self.Iminus6 = self.binning(self.Iminus6, bandwith_px[8], axis=1, avg=True)
+        
+        self.Iplus1 = self.binning(self.Iplus1, bandwith_px[9], axis=1, avg=True)
+        self.Iplus2 = self.binning(self.Iplus2, bandwith_px[12], axis=1, avg=True)
+        self.Iplus3 = self.binning(self.Iplus3, bandwith_px[14], axis=1, avg=True)
+        self.Iplus4 = self.binning(self.Iplus4, bandwith_px[4], axis=1, avg=True)
+        self.Iplus5 = self.binning(self.Iplus5, bandwith_px[7], axis=1, avg=True)
+        self.Iplus6 = self.binning(self.Iplus6, bandwith_px[10], axis=1, avg=True)
+        
+        self.wl_scale = np.array([self.binning(self.wl_scale[i], bandwith_px[i], axis=0, avg=True) for i in range(self.wl_scale.shape[0])])
+        self.px_scale = np.array([self.binning(self.px_scale[i], bandwith_px[i], axis=0, avg=True) for i in range(self.wl_scale.shape[0])])
+    
                 
     def save(self, path, date, mode):
         """
