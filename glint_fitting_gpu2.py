@@ -187,7 +187,7 @@ plt.ioff()
 
 ''' Settings '''  
 wl_min = 1525
-wl_max = 1625
+wl_max = 1530
 n_samp = int(1e+7) # number of samples per loop
 mode = 'cuda'
 nonoise = False
@@ -195,7 +195,7 @@ phase_bias_switch = True
 opd_bias_switch = True
 zeta_switch = True
 oversampling_switch = True
-skip_fit = False
+skip_fit = True
 chi2_map_switch = False
 mode_histo = True
 nb_files_data = (0, None)
@@ -557,9 +557,9 @@ for key in ['null1', 'null2', 'null3', 'null4', 'null5', 'null6'][:1]:
                     count += 1
                 plt.tight_layout(rect=[0., 0.05, 1, 1])
                 if len(wl_idx) > 1:
-                    axs[0].text(0., -0.7, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+                    axs[0].text(-0.3, -0.7, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
                 else:
-                    axs[0].text(0.3, 0.8, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+                    axs[0].text(0.3, -0.1, txt3, va='center', transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
                 string = key+'_'+'%03d'%(basin_hopping_count)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(wl_scale[wl_idx[-1]])
     #            if nonoise: string = string + '_nodarkinmodel'
     #            if not oversampling_switch: string = string + '_nooversamplinginmodel'
