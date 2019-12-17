@@ -1,0 +1,534 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+This script aims at to measure the splitting and coupling coefficients
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+import glint_classes
+import warnings
+warnings.filterwarnings(action="ignore", category=np.VisibleDeprecationWarning)
+from timeit import default_timer as time
+from itertools import permutations, combinations
+
+def gaussian(x, A, loc, sig):
+    return A * np.exp(-(x-loc)**2/(2*sig**2))
+
+''' Settings '''
+no_noise = False
+nb_img = (None, None)
+debug = False
+save = False
+zeta_coeff = {}
+
+''' Inputs '''
+datafolder = '201907_Data/'
+calibration_path = '201806_wavecal'
+root = "/mnt/96980F95980F72D3/glint/"
+data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
+output_path = root+'reduction/'+datafolder
+dark = np.load(output_path+'superdark.npy')
+
+Iminus = []
+Iplus = []
+P1, P2, P3, P4 = 0, 0, 0, 0
+
+for beam in range(1,5):
+    data_list = [data_path+f for f in os.listdir(data_path) if 'p'+str(beam) in f]
+    
+    ''' Output '''
+    output_path = root+'reduction/'+datafolder
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+    
+    dark = np.load(output_path+'superdark.npy')
+    dark_per_channel = np.load(output_path+'superdarkchannel.npy')
+    if no_noise:
+        dark_per_channel[:] = 0.
+    
+    ''' Set processing configuration and load instrumental calibration data '''
+    nb_tracks = 16 # Number of tracks
+    which_tracks = np.arange(16) # Tracks to process
+    coeff_pos = np.load(output_path+'coeff_position_poly.npy')
+    coeff_width = np.load(output_path+'coeff_width_poly.npy')
+    position_poly = [np.poly1d(coeff_pos[i]) for i in range(nb_tracks)]
+    width_poly = [np.poly1d(coeff_width[i]) for i in range(nb_tracks)]
+    wl_to_px_coeff = np.load(root+'reduction/'+calibration_path+'/wl_to_px.npy')
+    px_to_wl_coeff = np.load(root+'reduction/'+calibration_path+'/px_to_wl.npy')
+    
+    
+    spatial_axis = np.arange(dark.shape[0])
+    spectral_axis = np.arange(dark.shape[1])
+    
+    ''' Define bounds of each track '''
+    y_ends = [33, 329] # row of top and bottom-most Track
+    sep = (y_ends[1] - y_ends[0])/(nb_tracks-1)
+    channel_pos = np.around(np.arange(y_ends[0], y_ends[1]+sep, sep))
+    
+    beams = [1, 2, 3, 4]
+    
+    ''' Start the data processing '''
+    superData = np.zeros((344,96))
+    superNbImg = 0
+    for f in data_list:
+        print("Process of : %s (%d / %d)" %(f, data_list.index(f)+1, len(data_list)))
+        img = glint_classes.ChipProperties(f, nbimg=nb_img)
+        print(img.data[:,:,10].mean())
+
+        superData = superData + img.data.sum(axis=0)
+        superNbImg += img.nbimg
+
+    superData = superData / superNbImg
+    
+    plt.figure()
+    plt.imshow(superData-dark, interpolation='none')
+    plt.colorbar()
+    plt.title('P'+str(beam)+' on')
+
+    img2 = glint_classes.ChipProperties(nbimg=superNbImg)
+    img2.data = np.reshape(superData, (1,superData.shape[0], superData.shape[1]))
+    
+    img2.cosmeticsFrames(np.zeros(dark.shape), no_noise)
+    
+    ''' Insulating each track '''
+    print('Getting channels')
+    img2.insulateTracks(channel_pos, sep, spatial_axis, dark=dark_per_channel)
+    
+    ''' Map the spectral channels between every chosen tracks before computing 
+    the null depth'''
+    img2.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff, which_tracks)
+    
+    ''' Measurement of flux per frame, per spectral channel, per track '''
+    list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
+    img2.getSpectralFlux(list_channels, spectral_axis, position_poly, width_poly, debug=debug)
+    
+    img2.getIntensities()
+    
+    ''' Get split and coupler coefficient, biased with transmission coeff between nulling-chip and detector '''
+    img2.getRatioCoeff(beam, zeta_coeff)
+    
+    Iminus.append([img2.Iminus1[0], img2.Iminus2[0], img2.Iminus3[0], img2.Iminus4[0], img2.Iminus5[0], img2.Iminus6[0]])
+    Iplus.append([img2.Iplus1[0], img2.Iplus2[0], img2.Iplus3[0], img2.Iplus4[0], img2.Iplus5[0], img2.Iplus6[0]])
+    
+    if beam == 1:
+        P1 = img2.p1[0]
+    if beam == 2:
+        P2 = img2.p2[0]
+    if beam == 3:
+        P3 = img2.p3[0]
+    if beam == 4:
+        P4 = img2.p4[0]
+    
+#    plt.figure(figsize=(19.20,10.80))
+#    plt.suptitle('P%s on'%beam)
+#    plt.subplot(4,4,1)
+#    plt.plot(img2.wl_scale[0], img2.p1[0])
+#    plt.grid()
+#    plt.ylim(-1)
+#    if np.max(np.abs(img2.p1[0])) > 1500: plt.ylim(-1, 1500)
+#    plt.title('P1')
+#    plt.subplot(4,4,2)
+#    plt.plot(img2.wl_scale[0], img2.p2[0])
+#    plt.grid()
+#    plt.ylim(-1)
+#    if np.max(np.abs(img2.p2[0])) > 1500: plt.ylim(-1, 1500)
+#    plt.title('P2')
+#    plt.subplot(4,4,3)
+#    plt.plot(img2.wl_scale[0], img2.p3[0])
+#    plt.grid()
+#    plt.ylim(-1)
+#    if np.max(np.abs(img2.p3[0])) > 1500: plt.ylim(-1, 1500)
+#    plt.title('P3')
+#    plt.subplot(4,4,4)
+#    plt.plot(img2.wl_scale[0], img2.p4[0])
+#    plt.grid()
+#    plt.ylim(-1)
+#    if np.max(np.abs(img2.p4[0])) > 1500: plt.ylim(-1, 1500)
+#    plt.title('P4')
+#    
+#    plt.subplot(4,4,5)
+#    plt.plot(img2.wl_scale[0], img2.Iminus1[0])
+#    plt.grid()
+#    plt.ylim(-1)
+#    if np.max(np.abs(img2.Iminus1[0])) > 1500: plt.ylim(-1, 1500)
+#    plt.title('N1 (12)')
+#    plt.subplot(4,4,6)
+#    plt.plot(img2.wl_scale[0], img2.Iminus2[0])
+#    plt.grid()
+#    plt.ylim(-1)
+#    if np.max(np.abs(img2.Iminus2[0])) > 1500: plt.ylim(-1, 1500)
+#    plt.title('N2 (23)')
+#    plt.subplot(4,4,7)
+#    plt.plot(img2.wl_scale[0], img2.Iminus3[0])
+#    plt.grid()
+#    plt.ylim(-1)
+#    if np.max(np.abs(img2.Iminus3[0])) > 1500: plt.ylim(-1, 1500)
+#    plt.title('N3 (14)')
+#    plt.subplot(4,4,8)
+#    plt.plot(img2.wl_scale[0], img2.Iminus4[0])
+#    plt.grid()
+#    plt.ylim(-1)
+#    if np.max(np.abs(img2.Iminus4[0])) > 1500: plt.ylim(-1, 1500)
+#    plt.title('N4 (34)')
+#    plt.subplot(4,4,9)
+#    plt.plot(img2.wl_scale[0], img2.Iminus5[0])
+#    plt.grid()
+#    plt.ylim(-1)
+#    if np.max(np.abs(img2.Iminus5[0])) > 1500: plt.ylim(-1, 1500)
+#    plt.title('N5 (13)')
+#    plt.subplot(4,4,10)
+#    plt.plot(img2.wl_scale[0], img2.Iminus6[0])
+#    plt.grid()
+#    plt.ylim(-1)
+#    if np.max(np.abs(img2.Iminus6[0])) > 1500: plt.ylim(-1, 1500)
+#    plt.title('N6 (24)')
+#    
+#    plt.subplot(4,4,11)
+#    plt.plot(img2.wl_scale[0], img2.Iplus1[0])
+#    plt.grid()
+#    plt.ylim(-1)
+#    if np.max(np.abs(img2.Iplus1[0])) > 1500: plt.ylim(-1, 1500)
+#    plt.title('AN1 (12)')
+#    plt.subplot(4,4,12)
+#    plt.plot(img2.wl_scale[0], img2.Iplus2[0])
+#    plt.grid()
+#    plt.ylim(-1)
+#    if np.max(np.abs(img2.Iplus2[0])) > 1500: plt.ylim(-1, 1500)
+#    plt.title('AN2 (23)')
+#    plt.subplot(4,4,13)
+#    plt.plot(img2.wl_scale[0], img2.Iplus3[0])
+#    plt.grid()
+#    plt.ylim(-1)
+#    if np.max(np.abs(img2.Iplus3[0])) > 1500: plt.ylim(-1, 1500)
+#    plt.title('AN3 (14)')
+#    plt.subplot(4,4,14)
+#    plt.plot(img2.wl_scale[0], img2.Iplus4[0])
+#    plt.grid()
+#    plt.ylim(-1)
+#    if np.max(np.abs(img2.Iplus4[0])) > 1500: plt.ylim(-1, 1500)
+#    plt.title('AN4 (34)')
+#    plt.subplot(4,4,15)
+#    plt.plot(img2.wl_scale[0], img2.Iplus5[0])
+#    plt.grid()
+#    plt.ylim(-1)
+#    if np.max(np.abs(img2.Iplus5[0])) > 1500: plt.ylim(-1, 1500)
+#    plt.title('AN5 (13)')
+#    plt.subplot(4,4,16)
+#    plt.plot(img2.wl_scale[0], img2.Iplus6[0])
+#    plt.grid()
+#    plt.ylim(-1)
+#    if np.max(np.abs(img2.Iplus6[0])) > 1500: plt.ylim(-1, 1500)
+#    plt.title('AN6 (24)')
+
+    plt.figure(figsize=(19.20,10.80))
+#    plt.suptitle('P%s on'%beam)
+    plt.subplot(3,4,1)
+    plt.title('P1')
+    plt.plot(img2.wl_scale[0], img2.p1[0])
+    plt.grid()
+    plt.ylim(-1)
+    if np.max(np.abs(img2.p1[0])) > 1500: plt.ylim(-1, 1500)
+    plt.ylabel('Intensity (AU)')
+    plt.xlabel('Wavelength (nm)')
+    plt.subplot(3,4,2)
+    plt.title('P2')
+    plt.plot(img2.wl_scale[0], img2.p2[0])
+    plt.grid()
+    plt.ylim(-1)
+    if np.max(np.abs(img2.p2[0])) > 1500: plt.ylim(-1, 1500)
+    plt.ylabel('Intensity (AU)')
+    plt.xlabel('Wavelength (nm)')
+    plt.subplot(3,4,3)
+    plt.title('P3')
+    plt.plot(img2.wl_scale[0], img2.p3[0])
+    plt.grid()
+    plt.ylim(-1)
+    if np.max(np.abs(img2.p3[0])) > 1500: plt.ylim(-1, 1500)
+    plt.ylabel('Intensity (AU)')
+    plt.xlabel('Wavelength (nm)')
+    plt.subplot(3,4,4)
+    plt.title('P4')
+    plt.plot(img2.wl_scale[0], img2.p4[0])
+    plt.grid()
+    plt.ylim(-1)
+    if np.max(np.abs(img2.p4[0])) > 1500: plt.ylim(-1, 1500)
+    plt.ylabel('Intensity (AU)')
+    plt.xlabel('Wavelength (nm)')
+    plt.subplot(3,4,5)
+    plt.title('N1 and N7 (12)')
+    plt.plot(img2.wl_scale[0], img2.Iminus1[0])
+    plt.plot(img2.wl_scale[0], img2.Iplus1[0])
+    plt.grid()
+    plt.ylim(-1)
+    if np.max(np.abs(img2.Iplus1[0])) > 1500 or np.max(np.abs(img2.Iminus1[0])) > 1500: plt.ylim(-1, 1500)
+    plt.ylabel('Intensity (AU)')
+    plt.xlabel('Wavelength (nm)')
+    plt.subplot(3,4,6)
+    plt.title('N2 and N8 (23)')
+    plt.plot(img2.wl_scale[0], img2.Iminus2[0])
+    plt.plot(img2.wl_scale[0], img2.Iplus2[0])
+    plt.grid()
+    plt.ylim(-1)
+    if np.max(np.abs(img2.Iplus2[0])) > 1500 or np.max(np.abs(img2.Iminus2[0])) > 1500: plt.ylim(-1, 1500)
+    plt.ylabel('Intensity (AU)')
+    plt.xlabel('Wavelength (nm)')
+    plt.subplot(3,4,7)
+    plt.title('N3 and N9 (14)')
+    plt.plot(img2.wl_scale[0], img2.Iminus3[0])
+    plt.plot(img2.wl_scale[0], img2.Iplus3[0])
+    if np.max(np.abs(img2.Iplus3[0])) > 1500 or np.max(np.abs(img2.Iminus3[0])) > 1500: plt.ylim(-1, 1500)
+    plt.grid()
+    plt.ylim(-1)
+    plt.ylabel('Intensity (AU)')
+    plt.xlabel('Wavelength (nm)')
+    plt.subplot(3,4,8)
+    plt.title('N4 and N10 (34)')
+    plt.plot(img2.wl_scale[0], img2.Iminus4[0])
+    plt.plot(img2.wl_scale[0], img2.Iplus4[0])
+    plt.grid()
+    plt.ylim(-1)
+    if np.max(np.abs(img2.Iplus4[0])) > 1500 or np.max(np.abs(img2.Iminus4[0])) > 1500: plt.ylim(-1, 1500)
+    plt.ylabel('Intensity (AU)')
+    plt.xlabel('Wavelength (nm)')
+    plt.subplot(3,4,9)
+    plt.title('N5 and N11 (13)')
+    plt.plot(img2.wl_scale[0], img2.Iminus5[0])
+    plt.plot(img2.wl_scale[0], img2.Iplus5[0])
+    plt.grid()
+    plt.ylim(-1)
+    if np.max(np.abs(img2.Iplus5[0])) > 1500 or np.max(np.abs(img2.Iminus5[0])) > 1500: plt.ylim(-1, 1500)
+    plt.ylabel('Intensity (AU)')
+    plt.xlabel('Wavelength (nm)')
+    plt.subplot(3,4,10)
+    plt.title('N6 and N12 (24)')    
+    plt.plot(img2.wl_scale[0], img2.Iminus6[0])
+    plt.plot(img2.wl_scale[0], img2.Iplus6[0])
+    plt.grid()
+    plt.ylim(-1)
+    if np.max(np.abs(img2.Iplus6[0])) > 1500 or np.max(np.abs(img2.Iminus6[0])) > 1500: plt.ylim(-1, 1500)
+    plt.ylabel('Intensity (AU)')
+    plt.xlabel('Wavelength (nm)')
+    
+keys = np.array(list(zeta_coeff.keys()))
+keys_title = np.array([elt[0].upper()+'eam '+elt[1]+' to '+elt[2:6].capitalize()+' '+elt[6:] for elt in keys]).reshape(4,6)
+keys = keys.reshape(4,6)
+
+fig = plt.figure(figsize=(19.20,10.80))
+grid = plt.GridSpec(4, 6, wspace=0.2, hspace=0.4, left=0.03, bottom=0.05, right=0.98, top=0.92)
+plt.suptitle('Zeta coefficients')
+for i in range(4):
+    for j in range(6):
+        fig.add_subplot(grid[i,j])
+        plt.plot(img2.wl_scale[0], zeta_coeff[keys[i,j]][0])
+        plt.grid()
+        plt.title(keys_title[i,j])
+        if i == 3: plt.xlabel('Wavelength (nm)')
+        if j == 0: plt.ylabel(r'$\zeta$ coeff')
+        plt.ylim(-0.2,5)
+        
+Iplus = np.array(Iplus)
+Iminus = np.array(Iminus)
+
+tan2 = {'N1 (12)':(Iminus[0,0]/Iplus[0,0], Iminus[1,0]/Iplus[1,0]),
+       'N2 (23)':(Iminus[1,1]/Iplus[1,1], Iminus[2,1]/Iplus[2,1]),
+       'N3 (14)':(Iminus[0,2]/Iplus[0,2], Iminus[3,2]/Iplus[3,2]),
+       'N4 (34)':(Iminus[2,3]/Iplus[2,3], Iminus[3,3]/Iplus[3,3]),
+       'N5 (13)':(Iminus[0,4]/Iplus[0,4], Iminus[2,4]/Iplus[2,4]),
+       'N6 (24)':(Iminus[1,5]/Iplus[1,5], Iminus[3,5]/Iplus[3,5])}
+
+plt.figure(figsize=(19.20,10.80))
+plt.subplot(2,3,1)
+plt.title('Coupling ratio for N1 (12)')
+plt.plot(img2.wl_scale[0], Iminus[0,0]/(Iminus[0,0]+Iplus[0,0]), label='B1 to N1')
+plt.plot(img2.wl_scale[0], Iplus[0,0]/(Iminus[0,0]+Iplus[0,0]), label='B1 to N7')
+plt.plot(img2.wl_scale[0], Iminus[1,0]/(Iminus[1,0]+Iplus[1,0]), label='B2 to N1')
+plt.plot(img2.wl_scale[0], Iplus[1,0]/(Iminus[1,0]+Iplus[1,0]), label='B2 to N7')
+plt.grid()
+plt.legend(loc='center left')
+plt.ylim(0,1.02)
+plt.xlim(1250)
+plt.xlabel('Wavelength (nm)')
+plt.ylabel('Coupling ratio')
+plt.subplot(2,3,2)
+plt.title('Coupling ratio for N2 (23)')
+plt.plot(img2.wl_scale[0], Iminus[1,1]/(Iminus[1,1]+Iplus[1,1]), label='B2 to N2')
+plt.plot(img2.wl_scale[0], Iplus[1,1]/(Iminus[1,1]+Iplus[1,1]), label='B2 to N8')
+plt.plot(img2.wl_scale[0], Iminus[2,1]/(Iminus[2,1]+Iplus[2,1]), label='B3 to N2')
+plt.plot(img2.wl_scale[0], Iplus[2,1]/(Iminus[2,1]+Iplus[2,1]), label='B3 to N8')
+plt.grid()
+plt.legend(loc='center left')
+plt.ylim(0,1.02)
+plt.xlim(1250)
+plt.xlabel('Wavelength (nm)')
+plt.ylabel('Coupling ratio')
+plt.subplot(2,3,3)
+plt.title('Coupling ratio for N3 (14)')
+plt.plot(img2.wl_scale[0], Iminus[0,2]/(Iminus[0,2]+Iplus[0,2]), label='B1 to N3')
+plt.plot(img2.wl_scale[0], Iplus[0,2]/(Iminus[0,2]+Iplus[0,2]), label='B1 to N9')
+plt.plot(img2.wl_scale[0], Iminus[3,2]/(Iminus[3,2]+Iplus[3,2]), label='B4 to N3')
+plt.plot(img2.wl_scale[0], Iplus[3,2]/(Iminus[3,2]+Iplus[3,2]), label='B4 to N9')
+plt.grid()
+plt.legend(loc='center left')
+plt.ylim(0,1.02)
+plt.xlim(1250)
+plt.xlabel('Wavelength (nm)')
+plt.ylabel('Coupling ratio')
+plt.subplot(2,3,4)
+plt.title('Coupling ratio for N4 (34)')
+plt.plot(img2.wl_scale[0], Iminus[2,3]/(Iminus[2,3]+Iplus[2,3]), label='B3 to N4')
+plt.plot(img2.wl_scale[0], Iplus[2,3]/(Iminus[2,3]+Iplus[2,3]), label='B3 to N10')
+plt.plot(img2.wl_scale[0], Iminus[3,3]/(Iminus[3,3]+Iplus[3,3]), label='B4 to N4')
+plt.plot(img2.wl_scale[0], Iplus[3,3]/(Iminus[3,3]+Iplus[3,3]), label='B4 to N10')
+plt.grid()
+plt.legend(loc='center left')
+plt.ylim(0,1.02)
+plt.xlim(1250)
+plt.xlabel('Wavelength (nm)')
+plt.ylabel('Coupling ratio')
+plt.subplot(2,3,5)
+plt.title('Coupling ratio for N5 (13)')
+plt.plot(img2.wl_scale[0], Iminus[0,4]/(Iminus[0,4]+Iplus[0,4]), label='B1 to N5')
+plt.plot(img2.wl_scale[0], Iplus[0,4]/(Iminus[0,4]+Iplus[0,4]), label='B1 to N11')
+plt.plot(img2.wl_scale[0], Iminus[2,4]/(Iminus[2,4]+Iplus[2,4]), label='B3 to N5')
+plt.plot(img2.wl_scale[0], Iplus[2,4]/(Iminus[2,4]+Iplus[2,4]), label='B3 to N11')
+plt.grid()
+plt.legend(loc='center left')
+plt.ylim(0,1.02)
+plt.xlim(1250)
+plt.xlabel('Wavelength (nm)')
+plt.ylabel('Coupling ratio')
+plt.subplot(2,3,6)
+plt.title('Coupling ratio for N6 (24)')
+plt.plot(img2.wl_scale[0], Iminus[1,5]/(Iminus[1,5]+Iplus[1,5]), label='B2 to N6')
+plt.plot(img2.wl_scale[0], Iplus[1,5]/(Iminus[1,5]+Iplus[1,5]), label='B2 to N12')
+plt.plot(img2.wl_scale[0], Iminus[3,5]/(Iminus[3,5]+Iplus[3,5]), label='B4 to N6')
+plt.plot(img2.wl_scale[0], Iplus[3,5]/(Iminus[3,5]+Iplus[3,5]), label='B4 to N12')
+plt.grid()
+plt.legend(loc='center left')
+plt.ylim(0,1.02)
+plt.xlim(1250)
+
+
+plt.figure(figsize=(19.20,10.80))
+plt.subplot(2,2,1)
+plt.title('Splitting ratio for Beam 1')
+plt.plot(img2.wl_scale[0], P1/(P1 + Iminus[0,0] + Iplus[0,0] + Iminus[0,2] + Iplus[0,2] + Iminus[0,4] + Iplus[0,4]), label='Photo')
+plt.plot(img2.wl_scale[0], Iminus[0,0]/(P1 + Iminus[0,0] + Iplus[0,0] + Iminus[0,2] + Iplus[0,2] + Iminus[0,4] + Iplus[0,4]), label='N1')
+plt.plot(img2.wl_scale[0], Iplus[0,0]/(P1 + Iminus[0,0] + Iplus[0,0] + Iminus[0,2] + Iplus[0,2] + Iminus[0,4] + Iplus[0,4]), label='N7')
+plt.plot(img2.wl_scale[0], Iminus[0,2]/(P1 + Iminus[0,0] + Iplus[0,0] + Iminus[0,2] + Iplus[0,2] + Iminus[0,4] + Iplus[0,4]), label='N3')
+plt.plot(img2.wl_scale[0], Iplus[0,2]/(P1 + Iminus[0,0] + Iplus[0,0] + Iminus[0,2] + Iplus[0,2] + Iminus[0,4] + Iplus[0,4]), label='N9')
+plt.plot(img2.wl_scale[0], Iminus[0,4]/(P1 + Iminus[0,0] + Iplus[0,0] + Iminus[0,2] + Iplus[0,2] + Iminus[0,4] + Iplus[0,4]), label='N5')
+plt.plot(img2.wl_scale[0], Iplus[0,4]/(P1 + Iminus[0,0] + Iplus[0,0] + Iminus[0,2] + Iplus[0,2] + Iminus[0,4] + Iplus[0,4]), label='N11')
+plt.grid()
+plt.ylim(0,1.02)
+plt.xlim(1250)
+plt.legend(loc='best')
+plt.xlabel('Wavelength (nm)')
+plt.ylabel('Splitting ratio')
+plt.subplot(2,2,2)
+plt.title('Splitting ratio for Beam 2')
+plt.plot(img2.wl_scale[0], P2/(P2 + Iminus[1,0] + Iplus[1,0] + Iminus[1,1] + Iplus[1,1] + Iminus[1,5] + Iplus[1,5]), label='Photo')
+plt.plot(img2.wl_scale[0], Iminus[1,0]/(P2 + Iminus[1,0] + Iplus[1,0] + Iminus[1,1] + Iplus[1,1] + Iminus[1,5] + Iplus[1,5]), label='N1')
+plt.plot(img2.wl_scale[0], Iplus[1,0]/(P2 + Iminus[1,0] + Iplus[1,0] + Iminus[1,1] + Iplus[1,1] + Iminus[1,5] + Iplus[1,5]), label='N7')
+plt.plot(img2.wl_scale[0], Iminus[1,1]/(P2 + Iminus[1,0] + Iplus[1,0] + Iminus[1,1] + Iplus[1,1] + Iminus[1,5] + Iplus[1,5]), label='N2')
+plt.plot(img2.wl_scale[0], Iplus[1,1]/(P2 + Iminus[1,0] + Iplus[1,0] + Iminus[1,1] + Iplus[1,1] + Iminus[1,5] + Iplus[1,5]), label='N8')
+plt.plot(img2.wl_scale[0], Iminus[1,5]/(P2 + Iminus[1,0] + Iplus[1,0] + Iminus[1,1] + Iplus[1,1] + Iminus[1,5] + Iplus[1,5]), label='N6')
+plt.plot(img2.wl_scale[0], Iplus[1,5]/(P2 + Iminus[1,0] + Iplus[1,0] + Iminus[1,1] + Iplus[1,1] + Iminus[1,5] + Iplus[1,5]), label='N12')
+plt.grid()
+plt.ylim(0,1.02)
+plt.xlim(1250)
+plt.legend(loc='best')
+plt.xlabel('Wavelength (nm)')
+plt.ylabel('Splitting ratio')
+plt.subplot(2,2,3)
+plt.title('Splitting ratio for Beam 3')
+plt.plot(img2.wl_scale[0], P3/(P3 + Iminus[2,1] + Iplus[2,1] + Iminus[2,3] + Iplus[2,3] + Iminus[2,4] + Iplus[2,4]), label='Photo')
+plt.plot(img2.wl_scale[0], Iminus[2,1]/(P3 + Iminus[2,1] + Iplus[2,1] + Iminus[2,3] + Iplus[2,3] + Iminus[2,4] + Iplus[2,4]), label='N2')
+plt.plot(img2.wl_scale[0], Iplus[2,1]/(P3 + Iminus[2,1] + Iplus[2,1] + Iminus[2,3] + Iplus[2,3] + Iminus[2,4] + Iplus[2,4]), label='N8')
+plt.plot(img2.wl_scale[0], Iminus[2,3]/(P3 + Iminus[2,1] + Iplus[2,1] + Iminus[2,3] + Iplus[2,3] + Iminus[2,4] + Iplus[2,4]), label='N4')
+plt.plot(img2.wl_scale[0], Iplus[2,3]/(P3 + Iminus[2,1] + Iplus[2,1] + Iminus[2,3] + Iplus[2,3] + Iminus[2,4] + Iplus[2,4]), label='N10')
+plt.plot(img2.wl_scale[0], Iminus[2,4]/(P3 + Iminus[2,1] + Iplus[2,1] + Iminus[2,3] + Iplus[2,3] + Iminus[2,4] + Iplus[2,4]), label='N5')
+plt.plot(img2.wl_scale[0], Iplus[2,4]/(P3 + Iminus[2,1] + Iplus[2,1] + Iminus[2,3] + Iplus[2,3] + Iminus[2,4] + Iplus[2,4]), label='N11')
+plt.grid()
+plt.ylim(0,1.02)
+plt.xlim(1250)
+plt.legend(loc='best')
+plt.xlabel('Wavelength (nm)')
+plt.ylabel('Splitting ratio')
+plt.subplot(2,2,4)
+plt.title('Splitting ratio for Beam 4')
+plt.plot(img2.wl_scale[0], P4/(P4 + Iminus[3,2] + Iplus[3,2] + Iminus[3,5] + Iplus[3,5] + Iminus[3,3] + Iplus[3,3]), label='Photo')
+plt.plot(img2.wl_scale[0], Iminus[3,2]/(P4 + Iminus[3,2] + Iplus[3,2] + Iminus[3,5] + Iplus[3,5] + Iminus[3,3] + Iplus[3,3]), label='N3')
+plt.plot(img2.wl_scale[0], Iplus[3,2]/(P4 + Iminus[3,2] + Iplus[3,2] + Iminus[3,5] + Iplus[3,5] + Iminus[3,3] + Iplus[3,3]), label='N9')
+plt.plot(img2.wl_scale[0], Iminus[3,5]/(P4 + Iminus[3,2] + Iplus[3,2] + Iminus[3,5] + Iplus[3,5] + Iminus[3,3] + Iplus[3,3]), label='N6')
+plt.plot(img2.wl_scale[0], Iplus[3,5]/(P4 + Iminus[3,2] + Iplus[3,2] + Iminus[3,5] + Iplus[3,5] + Iminus[3,3] + Iplus[3,3]), label='N12')
+plt.plot(img2.wl_scale[0], Iminus[3,3]/(P4 + Iminus[3,2] + Iplus[3,2] + Iminus[3,5] + Iplus[3,5] + Iminus[3,3] + Iplus[3,3]), label='N4')
+plt.plot(img2.wl_scale[0], Iplus[3,3]/(P4 + Iminus[3,2] + Iplus[3,2] + Iminus[3,5] + Iplus[3,5] + Iminus[3,3] + Iplus[3,3]), label='N10')
+plt.grid()
+plt.ylim(0,1.02)
+plt.xlim(1250)
+plt.legend(loc='best')
+plt.xlabel('Wavelength (nm)')
+plt.ylabel('Splitting ratio')
+
+#plt.figure(figsize=(19.20,10.80))
+#plt.subplot(2,3,1)
+#plt.plot(img2.wl_scale[0], np.arctan2(tan2['N1 (12)'][0]**0.25, tan2['N1 (12)'][1]**0.25))
+#plt.grid()
+#plt.title('coupling coeff for N1 (12) (arctan)')
+#plt.subplot(2,3,2)
+#plt.plot(img2.wl_scale[0], np.arctan2(tan2['N2 (23)'][0]**0.25, tan2['N2 (23)'][1]**0.25))
+#plt.grid()
+#plt.title('tan^2 or 1/tan^2 of coupling coeff for N2 (23)')
+#plt.subplot(2,3,3)
+#plt.plot(img2.wl_scale[0], np.arctan2(tan2['N3 (14)'][0]**0.25, tan2['N3 (14)'][1]**0.25))
+#plt.grid()
+#plt.title('tan^2 or 1/tan^2 of coupling coeff for N3 (14)')
+#plt.subplot(2,3,4)
+#plt.plot(img2.wl_scale[0], np.arctan2(tan2['N4 (34)'][0]**0.25, tan2['N4 (34)'][1]**0.25))
+#plt.grid()
+#plt.title('tan^2 or 1/tan^2 of coupling coeff for N4 (34)')
+#plt.subplot(2,3,5)
+#plt.plot(img2.wl_scale[0], np.arctan2(tan2['N5 (13)'][0]**0.25, tan2['N5 (13)'][1]**0.25))
+#plt.grid()
+#plt.title('tan^2 or 1/tan^2 of coupling coeff for N5 (13)')
+#plt.subplot(2,3,6)
+#plt.plot(img2.wl_scale[0], np.arctan2(tan2['N6 (24)'][0]**0.25, tan2['N6 (24)'][1]**0.25))
+#plt.grid()
+#plt.title('tan^2 or 1/tan^2 of coupling coeff for N6 (24)')
+#
+#plt.figure(figsize=(19.20,10.80))
+#plt.subplot(2,3,1)
+#plt.plot(img2.wl_scale[0], np.arctan2(tan2['N1 (12)'][1]**0.25, tan2['N1 (12)'][0]**0.25))
+#plt.grid()
+#plt.title('coupling coeff for N1 (12) (arctan)')
+#plt.subplot(2,3,2)
+#plt.plot(img2.wl_scale[0], np.arctan2(tan2['N2 (23)'][1]**0.25, tan2['N2 (23)'][0]**0.25))
+#plt.grid()
+#plt.title('tan^2 or 1/tan^2 of coupling coeff for N2 (23)')
+#plt.subplot(2,3,3)
+#plt.plot(img2.wl_scale[0], np.arctan2(tan2['N3 (14)'][1]**0.25, tan2['N3 (14)'][0]**0.25))
+#plt.grid()
+#plt.title('tan^2 or 1/tan^2 of coupling coeff for N3 (14)')
+#plt.subplot(2,3,4)
+#plt.plot(img2.wl_scale[0], np.arctan2(tan2['N4 (34)'][1]**0.25, tan2['N4 (34)'][0]**0.25))
+#plt.grid()
+#plt.title('tan^2 or 1/tan^2 of coupling coeff for N4 (34)')
+#plt.subplot(2,3,5)
+#plt.plot(img2.wl_scale[0], np.arctan2(tan2['N5 (13)'][1]**0.25, tan2['N5 (13)'][0]**0.25))
+#plt.grid()
+#plt.title('tan^2 or 1/tan^2 of coupling coeff for N5 (13)')
+#plt.subplot(2,3,6)
+#plt.plot(img2.wl_scale[0], np.arctan2(tan2['N6 (24)'][1]**0.25, tan2['N6 (24)'][0]**0.25))
+#plt.grid()
+#plt.title('tan^2 or 1/tan^2 of coupling coeff for N6 (24)')
+
+if save:
+    import h5py
+    with h5py.File(output_path+'/zeta_coeff.hdf5', 'w') as f:
+        f.create_dataset('wl_scale', data=img2.wl_scale.mean(axis=0))
+        f['wl_scale'].attrs['comment'] = 'wl in nm'
+        for key in zeta_coeff.keys():
+            f.create_dataset(key, data=zeta_coeff[key][0])
