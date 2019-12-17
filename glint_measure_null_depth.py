@@ -82,24 +82,25 @@ def gaussian(x, A, loc, sig):
 if __name__ == '__main__':
     warnings.filterwarnings(action="ignore", category=np.VisibleDeprecationWarning) # Ignore deprecation warning
     ''' Settings '''
-    no_noise = False
+    no_noise = True
     nb_img = (None, None)
     debug = False
     save = True
-    nb_files = (None,1)
-    nulls_to_invert = ['null1']
+    nb_files = (None,None)
+    nulls_to_invert = ['']
     bin_frames = False
     nb_frames_to_bin = 1
     spectral_binning = False
-    wl_bin_min, wl_bin_max = 1550, 1600 # In nm
-    bandwidth_binning = 20 # In nm
+    wl_bin_min, wl_bin_max = 1575, 1625 # In nm
+    bandwidth_binning = 50 # In nm
     
     ''' Inputs '''
-    datafolder = '20190907/eps_peg/'
+    datafolder = '20191210_simulation/'
     root = "/mnt/96980F95980F72D3/glint/"
-    calibration_path = root+'reduction/'+'calibration_params/'
+    calibration_path = root+'reduction/'+'calibration_params_simu/'
     data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f][nb_files[0]:nb_files[1]]
+    data_list = sorted([data_path+f for f in os.listdir(data_path) if not 'dark' in f])
+    data_list = data_list[nb_files[0]:nb_files[1]]
     
     ''' Output '''
     output_path = root+'reduction/'+datafolder
@@ -116,7 +117,6 @@ if __name__ == '__main__':
     
     ''' Set processing configuration and load instrumental calibration data '''
     nb_tracks = 16 # Number of tracks
-    which_tracks = np.arange(16) # Tracks to process
     coeff_pos = np.load(calibration_path+'coeff_position_poly.npy')
     coeff_width = np.load(calibration_path+'coeff_width_poly.npy')
     position_poly = [np.poly1d(coeff_pos[i]) for i in range(nb_tracks)]
@@ -171,11 +171,11 @@ if __name__ == '__main__':
         
         ''' Map the spectral channels between every chosen tracks before computing 
         the null depth'''
-        img.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff, which_tracks)
+        img.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff)
         
         ''' Measurement of flux per frame, per spectral channel, per track '''
         list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
-        img.getSpectralFlux(list_channels, spectral_axis, position_poly, width_poly, debug=debug)
+        positions_tracks, width_tracks = img.getSpectralFlux(list_channels, spectral_axis, position_poly, width_poly, debug=debug)
         
         ''' Measure flux in photometric channels '''
         img.getIntensities()
@@ -196,6 +196,7 @@ if __name__ == '__main__':
         ''' Output file'''
         if save:
             img.save(output_path+os.path.basename(f)[:-4]+'.hdf5', '2019-04-30', 'amplitude')
+            print('Saved')
     
         null.append(np.transpose(null_depths, axes=(1,0,2)))
         null_err.append(np.transpose(null_depths_err, axes=(1,0,2)))
