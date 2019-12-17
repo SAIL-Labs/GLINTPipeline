@@ -25,6 +25,8 @@ It returns the shape and location of the 16 outputs respect to the wavelength.
 
 :doc:`glint_spectral_calibration` performs a spectral calibration for each one of the 16 outputs.
 
+:doc:`glint_zeta_coeff` determines the intensity ratios between the interferometric outputs and their related photometric ones.
+
 The source can be found `on Github`_.
 
 .. _on Github: https://github.com/SydneyAstrophotonicInstrumentationLab/GLINTPipeline
@@ -39,6 +41,7 @@ Navigation
    glint_measure_null_depth
    glint_geometric_calibration
    glint_spectral_calibration
+   glint_zeta_coeff
 
 Glossary
 ========
@@ -55,12 +58,16 @@ Data needed:
 * dark frames
 * spectral data: data acquired with a tunable spectral source. One set (e.g. folder) of frames per wavelength. The name of the folder must contain the wavelength
 * geometric data: no fringe data. Obtained either with OPD out of the coherent length or by blurring the fringes
+* data with individual beam active. Obtained by moving the mask to be sure that **one** and only **one** beam is active. Be careful with cross-talk and wiggles. The name of the files must contain the keyword ``pX`` with X=1..4 the id of the beam.
 
 Run the script in the following order:
 
 1. :doc:`glint_dark`
 2. :doc:`glint_geometric_calibration`
 3. :doc:`glint_spectral_calibration`
+4. :doc:`glint_zeta_coeff`
+
+For sanity, step 2 should be run for every observation session.
 
 Routine use
 -------------
@@ -73,9 +80,10 @@ Data needed:
 Run the script in the following order:
 
 1. :doc:`glint_dark`
-2. :doc:`glint_measure_null_depth` with dark frames
-3. :doc:`glint_measure_null_depth` with data frames
-4. Feed the model fitting script with the products
+2. :doc:`glint_geometric_calibration`
+3. :doc:`glint_measure_null_depth` with dark frames
+4. :doc:`glint_measure_null_depth` with data frames
+5. Feed the model fitting script with the products
 
 
 Indices and tables
