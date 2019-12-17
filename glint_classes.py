@@ -319,6 +319,8 @@ class Null(File):
         
         if 'dark' in kwargs:
             self.slices = self.slices - kwargs['dark'][None,:]
+            self.med_slices = np.mean(self.slices[:,:10], axis=(1,3))
+            self.slices = self.slices - self.med_slices[:,None,:,None]
 
         
     def getSpectralFlux(self, which_tracks, spectral_axis, position_poly, width_poly, debug=False):
@@ -397,6 +399,8 @@ class Null(File):
 
         self.raw_err = self.bg_std * slices_axes.shape[-1]**0.5
         self.windowed_err = self.bg_std * np.sum(self.weights)**0.5
+        
+        return positions, widths
         
     @staticmethod
     @jit(nopython=True)
@@ -522,7 +526,7 @@ class Null(File):
 #        self.amplitude[:,0,:] = amplitude[3].T
 
     
-    def matchSpectralChannels(self, wl_to_px_coeff, px_to_wl_coeff, which_tracks):
+    def matchSpectralChannels(self, wl_to_px_coeff, px_to_wl_coeff):
         """
         All tracks are slightly shifted respect to each other.
         Need to define the common wavelength to all of them and create a 
@@ -534,11 +538,7 @@ class Null(File):
                 along the spectral axis of the frames.
             **px_to_wl_coeff**: ndarray
                 Polynomial coefficients converting pixel position to wavelength 
-                along the spectral axis of the frames.
-            **which_tracks**: array-like
-                List of the output from which to measure the flux.
-                Outputs are numbered from 0 to 15 from top to bottom 
-                (in the way the frame are loaded).            
+                along the spectral axis of the frames.         
  
         :Attributes:
             Creates the following attributes
@@ -549,6 +549,8 @@ class Null(File):
                 Wavelength scale for each output, in pixel.
             
         """
+        
+        which_tracks = np.arange(16) # Tracks to process, former argument which functionality no longer exists
         wl_to_px_poly = [np.poly1d(wl_to_px_coeff[i]) for i in which_tracks]
         px_to_wl_poly = [np.poly1d(px_to_wl_coeff[i]) for i in which_tracks]
         shape = self.data.shape
