@@ -83,10 +83,10 @@ if __name__ == '__main__':
     warnings.filterwarnings(action="ignore", category=np.VisibleDeprecationWarning) # Ignore deprecation warning
     ''' Settings '''
     no_noise = True
-    nb_img = (None, None)
-    debug = False
-    save = True
-    nb_files = (None,None)
+    nb_img = (None, 1)
+    debug = True
+    save = False
+    nb_files = (None,1)
     nulls_to_invert = ['']
     bin_frames = False
     nb_frames_to_bin = 1
@@ -95,11 +95,12 @@ if __name__ == '__main__':
     bandwidth_binning = 50 # In nm
     
     ''' Inputs '''
-    datafolder = '20191210_simulation/'
+    datafolder = '20200106/p3/'
     root = "/mnt/96980F95980F72D3/glint/"
-    calibration_path = root+'reduction/'+'calibration_params_simu/'
+    spectral_calibration_path = root+'reduction/'+'calibration_params/'
+    geometric_calibration_path = root+'reduction/'+datafolder
     data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    data_list = sorted([data_path+f for f in os.listdir(data_path) if not 'dark' in f])
+    data_list = sorted([data_path+f for f in os.listdir(data_path) if not 'dark' in f in f])
     data_list = data_list[nb_files[0]:nb_files[1]]
     
     ''' Output '''
@@ -117,12 +118,12 @@ if __name__ == '__main__':
     
     ''' Set processing configuration and load instrumental calibration data '''
     nb_tracks = 16 # Number of tracks
-    coeff_pos = np.load(calibration_path+'coeff_position_poly.npy')
-    coeff_width = np.load(calibration_path+'coeff_width_poly.npy')
+    coeff_pos = np.load(geometric_calibration_path+'coeff_position_poly.npy')
+    coeff_width = np.load(geometric_calibration_path+'coeff_width_poly.npy')
     position_poly = [np.poly1d(coeff_pos[i]) for i in range(nb_tracks)]
     width_poly = [np.poly1d(coeff_width[i]) for i in range(nb_tracks)]
-    wl_to_px_coeff = np.load(calibration_path+'wl_to_px.npy')
-    px_to_wl_coeff = np.load(calibration_path+'px_to_wl.npy')
+    wl_to_px_coeff = np.load(spectral_calibration_path+'wl_to_px.npy')
+    px_to_wl_coeff = np.load(spectral_calibration_path+'px_to_wl.npy')
     
     
     spatial_axis = np.arange(dark.shape[0])

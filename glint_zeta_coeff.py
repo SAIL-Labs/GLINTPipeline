@@ -66,9 +66,10 @@ if __name__ == '__main__':
     save = False
     
     ''' Inputs '''
-    datafolder = '201907_Data/'
+    datafolder = '20200106/all/'
     root = "/mnt/96980F95980F72D3/glint/"
-    calibration_path = root+'reduction/201806_wavecal/'
+    spectral_calibration_path = root+'reduction/201806_wavecal'
+    geometric_calibration_path = root+'reduction/'+datafolder
     data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
     output_path = root+'reduction/'+datafolder
     dark = np.load(output_path+'superdark.npy')
@@ -94,12 +95,12 @@ if __name__ == '__main__':
         ''' Set processing configuration and load instrumental calibration data '''
         nb_tracks = 16 # Number of tracks
         which_tracks = np.arange(16) # Tracks to process
-        coeff_pos = np.load(output_path+'coeff_position_poly.npy')
-        coeff_width = np.load(output_path+'coeff_width_poly.npy')
+        coeff_pos = np.load(geometric_calibration_path+'coeff_position_poly.npy')
+        coeff_width = np.load(geometric_calibration_path+'coeff_width_poly.npy')
         position_poly = [np.poly1d(coeff_pos[i]) for i in range(nb_tracks)]
         width_poly = [np.poly1d(coeff_width[i]) for i in range(nb_tracks)]
-        wl_to_px_coeff = np.load(root+'reduction/'+calibration_path+'/wl_to_px.npy')
-        px_to_wl_coeff = np.load(root+'reduction/'+calibration_path+'/px_to_wl.npy')
+        wl_to_px_coeff = np.load(spectral_calibration_path+'/wl_to_px.npy')
+        px_to_wl_coeff = np.load(spectral_calibration_path+'/px_to_wl.npy')
         
         
         spatial_axis = np.arange(dark.shape[0])
@@ -130,7 +131,7 @@ if __name__ == '__main__':
         plt.colorbar()
         plt.title('P'+str(beam)+' on')
     
-        img2 = glint_classes.ChipProperties(nbimg=superNbImg)
+        img2 = glint_classes.ChipProperties(nbimg=(0,superNbImg))
         img2.data = np.reshape(superData, (1,superData.shape[0], superData.shape[1]))
         
         img2.cosmeticsFrames(np.zeros(dark.shape), no_noise)
@@ -141,7 +142,7 @@ if __name__ == '__main__':
         
         ''' Map the spectral channels between every chosen tracks before computing 
         the null depth'''
-        img2.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff, which_tracks)
+        img2.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff)
         
         ''' Measurement of flux per frame, per spectral channel, per track '''
         list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
@@ -272,7 +273,7 @@ if __name__ == '__main__':
         plt.plot(img2.wl_scale[0], img2.p1[0])
         plt.grid()
         plt.ylim(-1)
-        if np.max(np.abs(img2.p1[0])) > 1500: plt.ylim(-1, 1500)
+#        if np.max(np.abs(img2.p1[0])) > 1500: plt.ylim(-1, 1500)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
         plt.subplot(3,4,2)
@@ -280,7 +281,7 @@ if __name__ == '__main__':
         plt.plot(img2.wl_scale[0], img2.p2[0])
         plt.grid()
         plt.ylim(-1)
-        if np.max(np.abs(img2.p2[0])) > 1500: plt.ylim(-1, 1500)
+#        if np.max(np.abs(img2.p2[0])) > 1500: plt.ylim(-1, 1500)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
         plt.subplot(3,4,3)
@@ -288,7 +289,7 @@ if __name__ == '__main__':
         plt.plot(img2.wl_scale[0], img2.p3[0])
         plt.grid()
         plt.ylim(-1)
-        if np.max(np.abs(img2.p3[0])) > 1500: plt.ylim(-1, 1500)
+#        if np.max(np.abs(img2.p3[0])) > 1500: plt.ylim(-1, 1500)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
         plt.subplot(3,4,4)
@@ -296,7 +297,7 @@ if __name__ == '__main__':
         plt.plot(img2.wl_scale[0], img2.p4[0])
         plt.grid()
         plt.ylim(-1)
-        if np.max(np.abs(img2.p4[0])) > 1500: plt.ylim(-1, 1500)
+#        if np.max(np.abs(img2.p4[0])) > 1500: plt.ylim(-1, 1500)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
         plt.subplot(3,4,5)
@@ -305,7 +306,7 @@ if __name__ == '__main__':
         plt.plot(img2.wl_scale[0], img2.Iplus1[0])
         plt.grid()
         plt.ylim(-1)
-        if np.max(np.abs(img2.Iplus1[0])) > 1500 or np.max(np.abs(img2.Iminus1[0])) > 1500: plt.ylim(-1, 1500)
+#        if np.max(np.abs(img2.Iplus1[0])) > 1500 or np.max(np.abs(img2.Iminus1[0])) > 1500: plt.ylim(-1, 1500)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
         plt.subplot(3,4,6)
@@ -314,14 +315,14 @@ if __name__ == '__main__':
         plt.plot(img2.wl_scale[0], img2.Iplus2[0])
         plt.grid()
         plt.ylim(-1)
-        if np.max(np.abs(img2.Iplus2[0])) > 1500 or np.max(np.abs(img2.Iminus2[0])) > 1500: plt.ylim(-1, 1500)
+#        if np.max(np.abs(img2.Iplus2[0])) > 1500 or np.max(np.abs(img2.Iminus2[0])) > 1500: plt.ylim(-1, 1500)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
         plt.subplot(3,4,7)
         plt.title('N3 and N9 (14)')
         plt.plot(img2.wl_scale[0], img2.Iminus3[0])
         plt.plot(img2.wl_scale[0], img2.Iplus3[0])
-        if np.max(np.abs(img2.Iplus3[0])) > 1500 or np.max(np.abs(img2.Iminus3[0])) > 1500: plt.ylim(-1, 1500)
+#        if np.max(np.abs(img2.Iplus3[0])) > 1500 or np.max(np.abs(img2.Iminus3[0])) > 1500: plt.ylim(-1, 1500)
         plt.grid()
         plt.ylim(-1)
         plt.ylabel('Intensity (AU)')
@@ -332,7 +333,7 @@ if __name__ == '__main__':
         plt.plot(img2.wl_scale[0], img2.Iplus4[0])
         plt.grid()
         plt.ylim(-1)
-        if np.max(np.abs(img2.Iplus4[0])) > 1500 or np.max(np.abs(img2.Iminus4[0])) > 1500: plt.ylim(-1, 1500)
+#        if np.max(np.abs(img2.Iplus4[0])) > 1500 or np.max(np.abs(img2.Iminus4[0])) > 1500: plt.ylim(-1, 1500)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
         plt.subplot(3,4,9)
@@ -341,7 +342,7 @@ if __name__ == '__main__':
         plt.plot(img2.wl_scale[0], img2.Iplus5[0])
         plt.grid()
         plt.ylim(-1)
-        if np.max(np.abs(img2.Iplus5[0])) > 1500 or np.max(np.abs(img2.Iminus5[0])) > 1500: plt.ylim(-1, 1500)
+#        if np.max(np.abs(img2.Iplus5[0])) > 1500 or np.max(np.abs(img2.Iminus5[0])) > 1500: plt.ylim(-1, 1500)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
         plt.subplot(3,4,10)
@@ -350,7 +351,7 @@ if __name__ == '__main__':
         plt.plot(img2.wl_scale[0], img2.Iplus6[0])
         plt.grid()
         plt.ylim(-1)
-        if np.max(np.abs(img2.Iplus6[0])) > 1500 or np.max(np.abs(img2.Iminus6[0])) > 1500: plt.ylim(-1, 1500)
+#        if np.max(np.abs(img2.Iplus6[0])) > 1500 or np.max(np.abs(img2.Iminus6[0])) > 1500: plt.ylim(-1, 1500)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
         

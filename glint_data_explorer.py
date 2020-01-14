@@ -16,11 +16,11 @@ from scipy.optimize import curve_fit
 
 nonoise_switch = False
 ''' Settings '''
-nb_files = (0,1) # Number of data files to read. None = all files
+nb_files = (0,10) # Number of data files to read. None = all files
 root = "/mnt/96980F95980F72D3/glint/" # Root path containing the reduced data
 path_to_data = '/mnt/96980F95980F72D3/glint_data/'
-datafolder = '20190718/20190718_turbulence3/' # Folder of the data to explore
-darkfolder = '20190718/20190718_dark_turbulence/' # Folder of the data to explore
+datafolder = '20200106/p3/' # Folder of the data to explore
+darkfolder = '20200106/p3/' # Folder of the data to explore
 #datafolder = '201907_Data/' # Folder of the data to explore
 wl_path = root+'reduction/calibration_params/px_to_wl.npy'
 #wl_path = root+'reduction/201806_wavecal/px_to_wl.npy'
@@ -31,7 +31,7 @@ fps = 10
 
 ''' Running script '''
 data_path = path_to_data+datafolder # Full path to the data
-data_list = sorted([data_path+f for f in os.listdir(data_path) if not 'dark' in f and 'n1n4' in f])
+data_list = sorted([data_path+f for f in os.listdir(data_path) if not 'dark' in f and 'p3' in f])
 data_list = data_list[nb_files[0]:nb_files[1]]
 if not nonoise_switch:
     switch_dark = False
@@ -87,9 +87,11 @@ except:
     switch_wl = True
     
 print('Let\'s go!')
-p1, p2, p3, p4 = stack[:,329], stack[:,289], stack[:,73], stack[:,34]
-n1, n2, n3, n4, n5, n6 = stack[:,250], stack[:,93], stack[:,53], stack[:,152], stack[:,132], stack[:,191]
-an1, an2, an3, an4, an5, an6 = stack[:,211], stack[:,270], stack[:,309], stack[:,112], stack[:,171], stack[:,230]
+#positions_tracks = [33, 53, 72, 92, 111, 131, 151, 170, 190, 210, 229, 249, 269, 288, 308, 328]
+positions_tracks = [34, 53, 73, 93, 112, 132, 152, 171, 191, 211, 230, 250, 270, 289, 309, 328]
+p1, p2, p3, p4 = stack[:,positions_tracks[15]], stack[:,positions_tracks[13]], stack[:,positions_tracks[2]], stack[:,positions_tracks[0]]
+n1, n2, n3, n4, n5, n6 = stack[:,positions_tracks[11]], stack[:,positions_tracks[3]], stack[:,positions_tracks[1]], stack[:,positions_tracks[6]], stack[:,positions_tracks[5]], stack[:,positions_tracks[8]]
+an1, an2, an3, an4, an5, an6 = stack[:,positions_tracks[9]], stack[:,positions_tracks[12]], stack[:,positions_tracks[14]], stack[:,positions_tracks[4]], stack[:,positions_tracks[7]], stack[:,positions_tracks[10]]
 spectrum = p1 / p1.sum(axis=1)[:,None]
 
 #data = np.array([p1, n1, n2, n3,\
@@ -106,14 +108,10 @@ data = np.transpose(data, axes=(1,0,2))
 
 wl_px = np.tile(np.arange(96), (16, 1))
 
-center_of_mass = np.array([[moments(data[k,i][(wl_scale[i]>wl_min)&(wl_scale[i]<wl_max)], 1)[1] / moments(data[k,i][(wl_scale[i]>wl_min)&(wl_scale[i]<wl_max)], 1)[0] for i in range(16)] for k in range(data.shape[0])])
-com_wl = np.array([[poly[i](center_of_mass[j,i] + wl_px[i][wl_scale[i]<wl_max][0]) for i in range(16)] for j in range(center_of_mass.shape[0])])
-com_wl = np.array([[np.sum(wl_scale[i]*data[k,i])/np.sum(data[k,i]) for i in range(16)] for k in range(data.shape[0])])
-    
-#titles_photo = ['P1', 'N1 (12)' ,'N2 (23)', 'N3 (14)',\
-#                'P2', 'AN1 (12)', 'AN2 (23)', 'AN3 (14)',\
-#                'P3', 'N4 (34)', 'N5 (13)', 'N6 (24)',\
-#                'P4', 'AN4 (34)', 'AN5 (13)', 'AN6 (24)']
+frame_axis = np.arange(data.shape[0])
+maxi = np.argmax(data, axis=2)
+maxi = np.array([[wl_scale[i,j] for j in maxi[:,i]] for i in range(16)])
+   
 titles_photo = ['P1', 'P2' ,'P3', 'P4',\
                 'N1 (12)', 'AN1 (12)', 'N2 (23)', 'AN2 (23)',\
                 'N3 (14)', 'AN3 (14)', 'N4 (34)', 'AN4 (34)',\
@@ -131,7 +129,7 @@ for i in range(4):
 
 lines = [elt.plot([], [], lw=2)[0] for elt in axs[1:]] + \
     [axs[0].imshow(np.zeros(stack[0].shape), interpolation='none', vmin=stack.min(), vmax=stack.max())]#, extent=[abs(wl_scale.max()), abs(wl_scale.min()), 344, 0], aspect='auto')]
-lines2 = [elt.plot([], [], 'o')[0] for elt in axs[1:]]
+lines2 = [elt.plot([], [], '-')[0] for elt in axs[1:]]
 lines3 = [elt.plot([], [])[0] for elt in axs[1:]]
 
 axs[0].set_xlabel('Wavelength (nm)')
@@ -181,12 +179,12 @@ def init3():
             text_antinull1, text_antinull2, text_antinull3, text_antinull4, text_antinull5, text_antinull6]
         
 def run2(k):
-    global data, stack, wl_scale, com_wl, params
+    global data, stack, wl_scale, params, maxi
     lines[-1].set_data(stack[k])
     time_text.set_text('Frame %s/%s (%.5f s)'%(k+1, stack.shape[0], (k+1)/fps))
     for i in range(16):
         lines[i].set_data(wl_scale[i], data[k,i,:])
-        lines2[i].set_data(com_wl[k,i], 0)
+        lines2[i].set_data([maxi[i,k],maxi[i,k]], [0,data[k,i,:].max()])
 #        if i == 1:
 #            lines3[i].set_data(wl_scale[i], func(wl_scale[i], *params[k]))
 #        if i == 5:
@@ -269,50 +267,62 @@ plt.tight_layout()
 #plt.xlim(1400, 1700)
 #plt.tight_layout()
 
-#plt.figure(figsize=(19.20,10.80))
-#plt.plot(wl_scale[0], data[300,0], lw=3, label='P1')
-#plt.plot(wl_scale[1], data[300,1], lw=3, label='P2')
-#plt.plot(wl_scale[4], data[300,4], lw=3, label='N1')
-#plt.plot(wl_scale[5], data[300,5], lw=3, label='AN1')
-#plt.grid()
-#plt.xticks(size=35);plt.yticks(size=35)
-#plt.legend(loc='best', fontsize=35)
-#plt.xlabel('Wavelength (nm)', size=40)
-#plt.ylabel('Intensity (AU)', size=40)
-#plt.xlim(1400, 1700)
-#plt.tight_layout()
-#
-#plt.figure(figsize=(19.20,10.80))
-#plt.plot(wl_scale[0], data[300,0], lw=3, label='P1')
-#plt.plot(wl_scale[1], data[300,1], lw=3, label='P2')
-#plt.plot(wl_scale[4], data[0,2], lw=3, label='P3')
-#plt.plot(wl_scale[5], data[0,3], lw=3, label='P4')
-#plt.grid()
-#plt.xticks(size=35);plt.yticks(size=35)
-#plt.legend(loc='best', fontsize=35)
-#plt.xlabel('Wavelength (nm)', size=40)
-#plt.ylabel('Intensity (AU)', size=40)
-#plt.xlim(1400, 1700)
-#plt.tight_layout()
-
-p1 = data[:,0]
-p2 = data[:,1]
-p3 = data[:,2]
-p4 = data[:,3]
-p1 /= p1.max(axis=1)[:,None]
-p2 /= p2.max(axis=1)[:,None]
-p3 /= p3.max(axis=1)[:,None]
-p4 /= p4.max(axis=1)[:,None]
-
 plt.figure(figsize=(19.20,10.80))
-plt.plot(wl_scale[0], p1.mean(axis=0), lw=3, label='P1')
-plt.plot(wl_scale[1], p2.mean(axis=0), lw=3, label='P2')
-plt.plot(wl_scale[4], p3.mean(axis=0), lw=3, label='P3')
-plt.plot(wl_scale[5], p4.mean(axis=0), lw=3, label='P4')
+plt.plot(wl_scale[0], data[300,0], lw=3, label='P1')
+plt.plot(wl_scale[1], data[300,1], lw=3, label='P2')
+plt.plot(wl_scale[4], data[300,4], lw=3, label='N1')
+plt.plot(wl_scale[5], data[300,5], lw=3, label='AN1')
 plt.grid()
 plt.xticks(size=35);plt.yticks(size=35)
 plt.legend(loc='best', fontsize=35)
 plt.xlabel('Wavelength (nm)', size=40)
 plt.ylabel('Intensity (AU)', size=40)
 plt.xlim(1400, 1700)
+plt.tight_layout()
+
+plt.figure(figsize=(19.20,10.80))
+plt.plot(wl_scale[2], data[:,2].mean(axis=0), lw=3, label='P3')
+plt.plot(wl_scale[3], data[:,3].mean(axis=0), lw=3, label='P4')
+plt.plot(wl_scale[10], data[:,10].mean(axis=0), lw=3, label='N4')
+plt.plot(wl_scale[11], data[:,11].mean(axis=0), lw=3, label='AN4')
+plt.grid()
+plt.xticks(size=35);plt.yticks(size=35)
+plt.legend(loc='best', fontsize=35)
+plt.xlabel('Wavelength (nm)', size=40)
+plt.ylabel('Intensity (AU)', size=40)
+plt.xlim(1400, 1700)
+plt.tight_layout()
+
+photo1 = data[:,0].copy()
+photo2 = data[:,1].copy()
+photo3 = data[:,2].copy()
+photo4 = data[:,3].copy()
+photo1 /= photo1.max(axis=1)[:,None]
+photo2 /= photo2.max(axis=1)[:,None]
+photo3 /= photo3.max(axis=1)[:,None]
+photo4 /= photo4.max(axis=1)[:,None]
+
+plt.figure(figsize=(19.20,10.80))
+plt.plot(wl_scale[0], photo1.mean(axis=0), lw=3, label='P1')
+plt.plot(wl_scale[1], photo2.mean(axis=0), lw=3, label='P2')
+plt.plot(wl_scale[2], photo3.mean(axis=0), lw=3, label='P3')
+plt.plot(wl_scale[3], photo4.mean(axis=0), lw=3, label='P4')
+plt.grid()
+plt.xticks(size=30);plt.yticks(size=30)
+plt.legend(loc='best', fontsize=35)
+plt.xlabel('Wavelength (nm)', size=35)
+plt.ylabel('Intensity (AU)', size=35)
+plt.title('Visual check of wiggles', size=40)
+plt.xlim(1400, 1700)
+plt.ylim(-0.05, 1.05)
+plt.tight_layout()
+
+
+
+plt.figure(figsize=(19.20,10.80))
+for k in range(16):
+    plt.subplot(4,4,k+1)
+    plt.title(titles_photo[k])
+    plt.plot(frame_axis, maxi[k])
+    plt.grid()
 plt.tight_layout()

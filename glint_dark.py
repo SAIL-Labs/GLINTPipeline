@@ -125,17 +125,17 @@ def getHistogram(data, bins):
   
 if __name__ == '__main__':         
     ''' Settings '''
-    save = False
-    monitor = True # Set True to map the average, variance of relative difference of set of dark current datacubes
-    nb_files = (None, 10)
+    save = True
+    monitor = False # Set True to map the average, variance of relative difference of set of dark current datacubes
+    nb_files = (None, None)
     edge_min, edge_max = -300, 300
     
     ''' Inputs '''
-    datafolder = '20191015/dark/'
+    datafolder = '20200106/p3/'
     root = "/mnt/96980F95980F72D3/glint_data/"
     data_path = root+datafolder
     dark_list = [data_path+f for f in os.listdir(data_path) if 'dark' in f][nb_files[0]:nb_files[1]]
-    date = '2019-10-17'
+    date = '2020-01-06'
     
     ''' Output '''
     output_path = '/mnt/96980F95980F72D3/glint/reduction/'+datafolder
