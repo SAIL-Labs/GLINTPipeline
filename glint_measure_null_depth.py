@@ -82,25 +82,29 @@ def gaussian(x, A, loc, sig):
 if __name__ == '__main__':
     warnings.filterwarnings(action="ignore", category=np.VisibleDeprecationWarning) # Ignore deprecation warning
     ''' Settings '''
-    no_noise = True
-    nb_img = (None, 1)
-    debug = True
-    save = False
-    nb_files = (None,1)
+    no_noise = False
+    nb_img = (0, None)
+    debug = False
+    save = True
+    nb_files = (0, None)
     nulls_to_invert = ['']
     bin_frames = False
     nb_frames_to_bin = 1
     spectral_binning = False
-    wl_bin_min, wl_bin_max = 1575, 1625 # In nm
+    wl_bin_min, wl_bin_max = 1525, 1575# In nm
     bandwidth_binning = 50 # In nm
     
     ''' Inputs '''
-    datafolder = '20200106/p3/'
+    datafolder = '20191212/'
+#    root = "C:/Users/marc-antoine/glint/"
     root = "/mnt/96980F95980F72D3/glint/"
     spectral_calibration_path = root+'reduction/'+'calibration_params/'
     geometric_calibration_path = root+'reduction/'+datafolder
+#    data_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'+datafolder
     data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    data_list = sorted([data_path+f for f in os.listdir(data_path) if not 'dark' in f in f])
+    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'lab_static_01' in f])
+    if len(data_list) == 0:
+        raise IndexError('Data list is empty')
     data_list = data_list[nb_files[0]:nb_files[1]]
     
     ''' Output '''
@@ -196,7 +200,7 @@ if __name__ == '__main__':
         
         ''' Output file'''
         if save:
-            img.save(output_path+os.path.basename(f)[:-4]+'.hdf5', '2019-04-30', 'amplitude')
+            img.save(output_path+os.path.basename(f)[:-4]+'.hdf5', '2019-04-30', 'amplitude', nulls_to_invert)
             print('Saved')
     
         null.append(np.transpose(null_depths, axes=(1,0,2)))
@@ -253,7 +257,11 @@ if __name__ == '__main__':
     # =============================================================================
     # Miscellaneous
     # =============================================================================
-    photometries = [p1[:,56], p2[:,56], p3[:,56], p4[:,56]]
+    try:
+        photometries = [p1[:,56], p2[:,56], p3[:,56], p4[:,56]]
+    except IndexError:
+        photometries = [p1[:,0], p2[:,0], p3[:,0], p4[:,0]]
+        
     photometries_label = ['p1' ,'p2', 'p3', 'p4']
     for k in range(len(photometries)):
         photo = photometries[k]
@@ -316,22 +324,22 @@ if __name__ == '__main__':
         plt.figure()
         plt.suptitle('Null')
         plt.subplot(321)
-        plt.plot(img.wl_scale[0], null[i][0], '-')
+        plt.plot(img.wl_scale[0], null[i][0], '.')
         plt.grid()
         plt.subplot(322)
-        plt.plot(img.wl_scale[0], null[i][1], '-')
+        plt.plot(img.wl_scale[0], null[i][1], '.')
         plt.grid()
         plt.subplot(323)
-        plt.plot(img.wl_scale[0], null[i][2], '-')
+        plt.plot(img.wl_scale[0], null[i][2], '.')
         plt.grid()
         plt.subplot(324)
-        plt.plot(img.wl_scale[0], null[i][3], '-')
+        plt.plot(img.wl_scale[0], null[i][3], '.')
         plt.grid()
         plt.subplot(325)
-        plt.plot(img.wl_scale[0], null[i][4], '-')
+        plt.plot(img.wl_scale[0], null[i][4], '.')
         plt.grid()
         plt.subplot(326)
-        plt.plot(img.wl_scale[0], null[i][5], '-')
+        plt.plot(img.wl_scale[0], null[i][5], '.')
         plt.grid()
         
     #amplitude0 = np.load('amplitude.npy')

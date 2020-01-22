@@ -89,7 +89,7 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
 #                        debug.append([0, k, i, j])
 #                    if abs(popt2[0]) > 1.e+4:
 #                        debug.append([1, k, i, j])
-                if j==47 and k == 0:
+                if j==59 and k == 0:
                     print(k, i, j)
                     print('Weight on std', (np.sum((simple_gaus/simple_gaus.sum())**2))**0.5)
                     print(slices[k,j,i][:7].std())
@@ -316,6 +316,8 @@ class Null(File):
         self.slices = np.array([self.data[:,np.int(np.around(pos-sep/2)):np.int(np.around(pos+sep/2)),:] for pos in channel_pos])
         self.slices = np.transpose(self.slices, (1,3,0,2))
         self.slices_axes = np.array([spatial_axis[np.int(np.around(pos-sep/2)):np.int(np.around(pos+sep/2))] for pos in channel_pos])
+        
+        self.slices0 = self.slices.copy()
         
         if 'dark' in kwargs:
             self.slices = self.slices - kwargs['dark'][None,:]
@@ -880,6 +882,9 @@ class Null(File):
         self.Iminus6 = self.Iminus6[:,(self.wl_scale[8]>=wl_min)&(self.wl_scale[8]<=wl_max)]
         self.Iplus6 = self.Iplus6[:,(self.wl_scale[10]>=wl_min)&(self.wl_scale[10]<=wl_max)]
         
+        self.px_scale_nonbinned = self.px_scale.copy()
+        self.wl_scale_nonbinned = self.wl_scale.copy()
+        
         self.px_scale = np.array([self.px_scale[i][(self.wl_scale[i]>=wl_min)&(self.wl_scale[i]<=wl_max)] for i in range(self.wl_scale.shape[0])])
         self.wl_scale = np.array([elt[(elt>=wl_min)&(elt<=wl_max)] for elt in self.wl_scale])
         
@@ -915,7 +920,7 @@ class Null(File):
         self.px_scale = np.array([self.binning(self.px_scale[i], bandwith_px[i], axis=0, avg=True) for i in range(self.wl_scale.shape[0])])
     
                 
-    def save(self, path, date, mode):
+    def save(self, path, date, mode, nulls_to_invert):
         """
         Saves intermediate products for further analyses, into HDF5 file format.
         The different intensities and null are gathered into dictionaries, 
@@ -1037,6 +1042,8 @@ class Null(File):
                 f.create_dataset(key, data=dictio[key])
                 try:
                     f[key].attrs['comment'] = beams_couple[key]
+                    if key in nulls_to_invert:
+                        f[key].attrs['inverted'] = 'yes'
                 except KeyError:
                     pass
                 
