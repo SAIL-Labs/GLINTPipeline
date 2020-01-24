@@ -90,19 +90,20 @@ if __name__ == '__main__':
     nulls_to_invert = ['']
     bin_frames = False
     nb_frames_to_bin = 1
-    spectral_binning = False
+    spectral_binning = True
     wl_bin_min, wl_bin_max = 1525, 1575# In nm
     bandwidth_binning = 50 # In nm
+    mode_flux = 'amplitude'
     
     ''' Inputs '''
-    datafolder = '20191212/'
+    datafolder = '20200123_simulation2/'
 #    root = "C:/Users/marc-antoine/glint/"
     root = "/mnt/96980F95980F72D3/glint/"
-    spectral_calibration_path = root+'reduction/'+'calibration_params/'
-    geometric_calibration_path = root+'reduction/'+datafolder
+    spectral_calibration_path = root+'reduction/'+'calibration_params_simu/'
+    geometric_calibration_path = spectral_calibration_path# root+'reduction/'+datafolder
 #    data_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'+datafolder
     data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'lab_static_01' in f])
+    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'simu_0.0' in f])
     if len(data_list) == 0:
         raise IndexError('Data list is empty')
     data_list = data_list[nb_files[0]:nb_files[1]]
@@ -111,7 +112,6 @@ if __name__ == '__main__':
     output_path = root+'reduction/'+datafolder
     if not os.path.exists(output_path):
         os.makedirs(output_path)
-    
     
     if no_noise:
         dark = np.zeros((344,96))
@@ -183,7 +183,7 @@ if __name__ == '__main__':
         positions_tracks, width_tracks = img.getSpectralFlux(list_channels, spectral_axis, position_poly, width_poly, debug=debug)
         
         ''' Measure flux in photometric channels '''
-        img.getIntensities()
+        img.getIntensities(mode=mode_flux)
         if spectral_binning:
             img.spectralBinning(wl_bin_min, wl_bin_max, bandwidth_binning, wl_to_px_coeff)
             
@@ -200,7 +200,7 @@ if __name__ == '__main__':
         
         ''' Output file'''
         if save:
-            img.save(output_path+os.path.basename(f)[:-4]+'.hdf5', '2019-04-30', 'amplitude', nulls_to_invert)
+            img.save(output_path+os.path.basename(f)[:-4]+'.hdf5', '2019-04-30', nulls_to_invert)
             print('Saved')
     
         null.append(np.transpose(null_depths, axes=(1,0,2)))
@@ -391,3 +391,19 @@ if __name__ == '__main__':
     #        plt.ylabel('Std of curve_fit')
     #        plt.grid()
 
+#histo_amplitude = np.histogram(null_amplitude[:,3,0], bins=int(934**0.5), density=True)
+#histo_raw = np.histogram(null_raw[:,3,0], bins=int(934**0.5), density=True)
+#histo_pixel = np.histogram(null_pixel[:,3,0], bins=int(934**0.5), density=True)
+#histo_interp = np.histogram(null[:,3,0], bins=int(934**0.5), density=True)
+#
+#plt.figure()
+#plt.plot(histo_amplitude[1][:-1], histo_amplitude[0], lw=2)
+#plt.plot(histo_raw[1][:-1], histo_raw[0], lw=2)
+#plt.plot(histo_pixel[1][:-1], histo_pixel[0], lw=2)
+#plt.plot(histo_interp[1][:-1], histo_interp[0], lw=2)
+#plt.grid()
+#plt.legend(['fit', 'raw', 'pixel', 'interp'], loc='best', fontsize=30)
+#plt.xticks(size=30);plt.yticks(size=30)
+#plt.ylabel('Count (normalized)', size=35)
+#plt.xlabel('Null depth', size=35)
+#plt.title('Histogram of N4', size=40)
