@@ -67,22 +67,23 @@ Run the script in the following order:
 3. :doc:`glint_spectral_calibration`
 4. :doc:`glint_zeta_coeff`
 
-For sanity, step 2 should be run for every observation session.
+For sanity, step 2 should be run the day before the observation night.
 
 Routine use
 -------------
-The calibration product exist.
+The calibration products exist.
 Data needed:
 
 * dark frames
 * science frames (lab or on-sky)
+* no-fringe frames in lab
 
 Run the script in the following order:
 
-1. :doc:`glint_dark`
-2. :doc:`glint_geometric_calibration`
-3. :doc:`glint_measure_null_depth` with dark frames
-4. :doc:`glint_measure_null_depth` with data frames
+1. :doc:`glint_dark` with *dark frames*
+2. :doc:`glint_geometric_calibration` with *no-fringe frames in lab*
+3. :doc:`glint_measure_null_depth` with *dark frames*
+4. :doc:`glint_measure_null_depth` with *data frames*
 5. Feed the model fitting script with the products
 
 

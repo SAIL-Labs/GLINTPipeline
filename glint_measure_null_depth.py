@@ -36,16 +36,25 @@ First step: simply change the value of the variables in the **Settings** section
     * **no_noise**: boolean, ``True`` for noise-free (simulated) data
     * **nbfiles**: 2-tuple of int, set the bounds between which the data files are selected. ``None`` is equivalent to 0 if it is the lower bound or -1 included or it is the upper one.
     * **nb_img**: 2-tuple of int, set the bounds between which the frame are selected, into a data file.
-    * **nulls_to_invert**: list of null outputs to invert. Fill with ``nullX`` (X=1..6) or leave empty if no null is to invert
+    * **nulls_to_invert**: list of null outputs to invert. Fill with ``nullX`` (X=1..6) or leave empty if no null is to invert (deprecated)
     * **bin_frames**: boolean, set True to bin frames
     * **nb_frames_to_bin**: number of frames to bin (average) together. If ``None``, the whole stack is average into one frame. If the total number of frames is not a multiple of the binning value, the remaining frames are lost.
-
+    * **spectral_binning**: bool, set to ``True`` to spectrally bins the outputs
+    * **wl_bin_min**: scalar, lower bounds (in nm) of the bandwidth to bin, possibly in several chunks
+    * **wl_bin_max**: scalar, upper bounds (in nm) of the bandwidth to bin, possibly in several chunks
+    * **bandwidth_binning**: scalar, width of the chunks of spectrum to bin between the lower and upper bounds
+    * **mode_flux**: string, choose the method to estimate the spectral flux in the outputs among:
+        * ``amplitude`` uses patterns determined in the script ``glint_geometric_calibration`` and a linear least square is performed to get the amplitude of the pattern
+        * ``model`` proceeds like ``amplitude`` but the integral of the flux is returned
+        * ``windowed`` returns a weighted mean as flux of the spectral channel. The weights is the same pattern as the other modes above
+        * ``raw`` returns the mean of the flux along the spatial axis over the whole width of the output        
     
 Second step: change the value of the variables in the **Inputs** and **Outputs** sections:
     * **datafolder**: folder containing the datacube to use.
     * **root**: path to **datafolder**.
     * **data_list**: list of files in **datafolder** to open.
-    * **calibration_path**: path to the calibration files used to process the file (location, width of the outputs, etc.)
+    * **spectral_calibration_path**: path to the spectral calibration files used to process the file
+    * **geometric_calibration_path**: path to the geometric calibration files used to process the file (location and width of the outputs per spectral channel)
     
 Third step: start the script and let it run.
 """
@@ -83,11 +92,10 @@ if __name__ == '__main__':
     warnings.filterwarnings(action="ignore", category=np.VisibleDeprecationWarning) # Ignore deprecation warning
     ''' Settings '''
     no_noise = False
-    nb_img = (0, None)
+    nb_img = (0, 1)
     debug = False
-    save = True
-    nb_files = (0, None)
-    nulls_to_invert = ['']
+    save = False
+    nb_files = (0, 1)
     bin_frames = False
     nb_frames_to_bin = 1
     spectral_binning = True
@@ -194,13 +202,13 @@ if __name__ == '__main__':
         
         ''' Compute null depth '''
         print('Computing null depths')
-        img.computeNullDepth(nulls_to_invert)
+        img.computeNullDepth()
         null_depths = np.array([img.null1, img.null2, img.null3, img.null4, img.null5, img.null6])
         null_depths_err = np.array([img.null1_err, img.null2_err, img.null3_err, img.null4_err, img.null5_err, img.null6_err])
         
         ''' Output file'''
         if save:
-            img.save(output_path+os.path.basename(f)[:-4]+'.hdf5', '2019-04-30', nulls_to_invert)
+            img.save(output_path+os.path.basename(f)[:-4]+'.hdf5', '2019-04-30')
             print('Saved')
     
         null.append(np.transpose(null_depths, axes=(1,0,2)))
@@ -229,6 +237,9 @@ if __name__ == '__main__':
         stop = time()
         print('Last: %.3f'%(stop-start))
         
+    '''
+    Store quantities for monitoring purpose
+    '''
     amplitude = np.array([selt for elt in amplitude for selt in elt])
     amplitude = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in amplitude])
     amplitude_fit = np.array([selt for elt in amplitude_fit for selt in elt])

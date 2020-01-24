@@ -97,7 +97,7 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
                     plt.subplot(211)
                     plt.plot(slices_axes[i], slices[k,j,i], 'o', label='data')
                     plt.plot(slices_axes[i], gaus(slices_axes[i], *popt), '+-', label='curve_fit '+str(popt[0]))
-                    plt.plot(slices_axes[i], popt2 [0]* simple_gaus, '+--', label='linear reg '+str(popt2[0]))
+                    plt.plot(slices_axes[i], popt2[0]* simple_gaus + popt2[1], '+--', label='linear reg '+str(popt2[0]))
                     plt.xlabel('Spatial position (px)')
                     plt.ylabel('Amplitude')
                     plt.grid()
@@ -583,14 +583,9 @@ class Null(File):
         null_err2 = (Iminus_err**2 / Iminus**2 + Iplus_err**2 / Iplus**2) * null**2
         return null_err2**0.5
     
-    def computeNullDepth(self, null_to_invert=[]):
+    def computeNullDepth(self):
         """
         Compute the null depth per spectral channel, per frame, per model, for each output.
-        
-        :Parameters:
-            **null_to_invert**: list of string
-                Contains ``nullX`` with X=1..6 to return the invert of the computed null in case the antinull output was cancelled out instead of the conventional null one during data acquisition.
-                It can be empty.
         
         :Attributes:
             Creates the following attributes
@@ -629,19 +624,6 @@ class Null(File):
         self.null4 = self.Iminus4 / self.Iplus4
         self.null5 = self.Iminus5 / self.Iplus5
         self.null6 = self.Iminus6 / self.Iplus6
-
-        if 'null1' in null_to_invert:
-            self.null1 = self.Iplus1 / self.Iminus1 
-        if 'null2' in null_to_invert:
-            self.null2 = self.Iplus2 / self.Iminus2
-        if 'null3' in null_to_invert:
-            self.null3 = self.Iplus3 / self.Iminus3
-        if 'null4' in null_to_invert:
-            self.null4 = self.Iplus4 / self.Iminus4 
-        if 'null5' in null_to_invert:
-            self.null5 = self.Iplus5 / self.Iminus5 
-        if 'null6' in null_to_invert:
-            self.null6 = self.Iplus6 / self.Iminus6 
             
         # Errors
         # With amplitude
@@ -853,7 +835,7 @@ class Null(File):
         self.px_scale = np.array([self.binning(self.px_scale[i], bandwith_px[i], axis=0, avg=True) for i in range(self.wl_scale.shape[0])])
     
                 
-    def save(self, path, date, nulls_to_invert):
+    def save(self, path, date):
         """
         Saves intermediate products for further analyses, into HDF5 file format.
         The different intensities and null are gathered into dictionaries, 
@@ -865,9 +847,6 @@ class Null(File):
                 
             **date**: str
                 date of the acquisition of the data (YYYY-MM-DD).
-                
-            **nulls_to_invert**: list,
-                list of null for which the null anf antinull outputs are swapped
                 
         :Returns:
             HDF5 file containing the measured spectral null depths, 
@@ -921,8 +900,6 @@ class Null(File):
                 f.create_dataset(key, data=dictio[key])
                 try:
                     f[key].attrs['comment'] = beams_couple[key]
-                    if key in nulls_to_invert:
-                        f[key].attrs['inverted'] = 'yes'
                 except KeyError:
                     pass
                 
