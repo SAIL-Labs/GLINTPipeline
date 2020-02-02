@@ -64,12 +64,13 @@ if __name__ == '__main__':
     nb_img = (None, None)
     debug = False
     save = False
-    
+    mode_flux = 'amplitude'
+
     ''' Inputs '''
     datafolder = '20200106/all/'
     root = "/mnt/96980F95980F72D3/glint/"
-    spectral_calibration_path = root+'reduction/201806_wavecal'
-    geometric_calibration_path = root+'reduction/'+datafolder
+    spectral_calibration_path = root+'reduction/calibration_params/'
+    geometric_calibration_path = spectral_calibration_path#root+'reduction/'+datafolder
     data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
     output_path = root+'reduction/'+datafolder
     dark = np.load(output_path+'superdark.npy')
@@ -99,8 +100,8 @@ if __name__ == '__main__':
         coeff_width = np.load(geometric_calibration_path+'coeff_width_poly.npy')
         position_poly = [np.poly1d(coeff_pos[i]) for i in range(nb_tracks)]
         width_poly = [np.poly1d(coeff_width[i]) for i in range(nb_tracks)]
-        wl_to_px_coeff = np.load(spectral_calibration_path+'/wl_to_px.npy')
-        px_to_wl_coeff = np.load(spectral_calibration_path+'/px_to_wl.npy')
+        wl_to_px_coeff = np.load(spectral_calibration_path+'wl_to_px.npy')
+        px_to_wl_coeff = np.load(spectral_calibration_path+'px_to_wl.npy')
         
         
         spatial_axis = np.arange(dark.shape[0])
@@ -110,9 +111,7 @@ if __name__ == '__main__':
         y_ends = [33, 329] # row of top and bottom-most Track
         sep = (y_ends[1] - y_ends[0])/(nb_tracks-1)
         channel_pos = np.around(np.arange(y_ends[0], y_ends[1]+sep, sep))
-        
-        beams = [1, 2, 3, 4]
-        
+                
         ''' Start the data processing '''
         superData = np.zeros((344,96))
         superNbImg = 0
@@ -148,7 +147,7 @@ if __name__ == '__main__':
         list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
         img2.getSpectralFlux(list_channels, spectral_axis, position_poly, width_poly, debug=debug)
         
-        img2.getIntensities()
+        img2.getIntensities(mode_flux)
         
         ''' Get split and coupler coefficient, biased with transmission coeff between nulling-chip and detector '''
         img2.getRatioCoeff(beam, zeta_coeff)
@@ -273,14 +272,17 @@ if __name__ == '__main__':
         plt.plot(img2.wl_scale[0], img2.p1[0])
         plt.grid()
         plt.ylim(-1)
+        if np.max(img2.p1[0])>5000: plt.ylim(ymax=5000)
 #        if np.max(np.abs(img2.p1[0])) > 1500: plt.ylim(-1, 1500)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
+        plt.ylim(ymax=5000)
         plt.subplot(3,4,2)
         plt.title('P2')
         plt.plot(img2.wl_scale[0], img2.p2[0])
         plt.grid()
         plt.ylim(-1)
+        if np.max(img2.p2[0])>5000: plt.ylim(ymax=5000)
 #        if np.max(np.abs(img2.p2[0])) > 1500: plt.ylim(-1, 1500)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
@@ -289,6 +291,7 @@ if __name__ == '__main__':
         plt.plot(img2.wl_scale[0], img2.p3[0])
         plt.grid()
         plt.ylim(-1)
+        if np.max(img2.p3[0])>5000: plt.ylim(ymax=5000)
 #        if np.max(np.abs(img2.p3[0])) > 1500: plt.ylim(-1, 1500)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
@@ -297,6 +300,7 @@ if __name__ == '__main__':
         plt.plot(img2.wl_scale[0], img2.p4[0])
         plt.grid()
         plt.ylim(-1)
+        if np.max(img2.p4[0])>5000: plt.ylim(ymax=5000)
 #        if np.max(np.abs(img2.p4[0])) > 1500: plt.ylim(-1, 1500)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
@@ -306,6 +310,7 @@ if __name__ == '__main__':
         plt.plot(img2.wl_scale[0], img2.Iplus1[0])
         plt.grid()
         plt.ylim(-1)
+        if np.max(img2.Iminus1[0])>5000 or np.max(img2.Iplus1[0])>5000: plt.ylim(ymax=5000)
 #        if np.max(np.abs(img2.Iplus1[0])) > 1500 or np.max(np.abs(img2.Iminus1[0])) > 1500: plt.ylim(-1, 1500)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
@@ -315,6 +320,7 @@ if __name__ == '__main__':
         plt.plot(img2.wl_scale[0], img2.Iplus2[0])
         plt.grid()
         plt.ylim(-1)
+        if np.max(img2.Iminus2[0])>5000 or np.max(img2.Iplus2[0])>5000: plt.ylim(ymax=5000)
 #        if np.max(np.abs(img2.Iplus2[0])) > 1500 or np.max(np.abs(img2.Iminus2[0])) > 1500: plt.ylim(-1, 1500)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
@@ -325,6 +331,7 @@ if __name__ == '__main__':
 #        if np.max(np.abs(img2.Iplus3[0])) > 1500 or np.max(np.abs(img2.Iminus3[0])) > 1500: plt.ylim(-1, 1500)
         plt.grid()
         plt.ylim(-1)
+        if np.max(img2.Iminus3[0])>5000 or np.max(img2.Iplus3[0])>5000: plt.ylim(ymax=5000)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
         plt.subplot(3,4,8)
@@ -342,6 +349,7 @@ if __name__ == '__main__':
         plt.plot(img2.wl_scale[0], img2.Iplus5[0])
         plt.grid()
         plt.ylim(-1)
+        if np.max(img2.Iminus5[0])>5000 or np.max(img2.Iplus5[0])>5000: plt.ylim(ymax=5000)
 #        if np.max(np.abs(img2.Iplus5[0])) > 1500 or np.max(np.abs(img2.Iminus5[0])) > 1500: plt.ylim(-1, 1500)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
@@ -351,9 +359,12 @@ if __name__ == '__main__':
         plt.plot(img2.wl_scale[0], img2.Iplus6[0])
         plt.grid()
         plt.ylim(-1)
+        if np.max(img2.Iminus6[0])>5000 or np.max(img2.Iplus6[0])>5000: plt.ylim(ymax=5000)
 #        if np.max(np.abs(img2.Iplus6[0])) > 1500 or np.max(np.abs(img2.Iminus6[0])) > 1500: plt.ylim(-1, 1500)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
+        plt.tight_layout()
+        plt.savefig(output_path+'fluxes_p%s.png'%(beam))
         
     keys = np.array(list(zeta_coeff.keys()))
     keys_title = np.array([elt[0].upper()+'eam '+elt[1]+' to '+elt[2:6].capitalize()+' '+elt[6:] for elt in keys]).reshape(4,6)
@@ -371,6 +382,8 @@ if __name__ == '__main__':
             if i == 3: plt.xlabel('Wavelength (nm)')
             if j == 0: plt.ylabel(r'$\zeta$ coeff')
             plt.ylim(-0.2,5)
+    plt.tight_layout()
+    plt.savefig(output_path+'zeta_coeff.png')
             
     Iplus = np.array(Iplus)
     Iminus = np.array(Iminus)
@@ -453,7 +466,8 @@ if __name__ == '__main__':
     plt.legend(loc='center left')
     plt.ylim(0,1.02)
     plt.xlim(1250)
-    
+    plt.tight_layout()
+    plt.savefig(output_path+'coupling_ratios.png')    
     
     plt.figure(figsize=(19.20,10.80))
     plt.subplot(2,2,1)
@@ -516,6 +530,8 @@ if __name__ == '__main__':
     plt.legend(loc='best')
     plt.xlabel('Wavelength (nm)')
     plt.ylabel('Splitting ratio')
+    plt.tight_layout()
+    plt.savefig(output_path+'splitting_ratios.png')
     
     #plt.figure(figsize=(19.20,10.80))
     #plt.subplot(2,3,1)
