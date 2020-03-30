@@ -92,32 +92,32 @@ if __name__ == '__main__':
     warnings.filterwarnings(action="ignore", category=np.VisibleDeprecationWarning) # Ignore deprecation warning
     ''' Settings '''
     no_noise = False
-    nb_img = (0, 1)
+    nb_img = (0, None)
     debug = False
-    save = False
-    nb_files = (0, 1)
+    save = True
+    nb_files = (0, None)
     bin_frames = False
-    nb_frames_to_bin = 1
-    spectral_binning = True
+    nb_frames_to_bin = 10
+    spectral_binning = False
     wl_bin_min, wl_bin_max = 1525, 1575# In nm
     bandwidth_binning = 50 # In nm
     mode_flux = 'amplitude'
     
     ''' Inputs '''
-    datafolder = '20200123_simulation2/'
-#    root = "C:/Users/marc-antoine/glint/"
-    root = "/mnt/96980F95980F72D3/glint/"
-    spectral_calibration_path = root+'reduction/'+'calibration_params_simu/'
-    geometric_calibration_path = spectral_calibration_path# root+'reduction/'+datafolder
-#    data_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'+datafolder
-    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'simu_0.0' in f])
+    datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence5/'
+    root = '//silo.physics.usyd.edu.au/silo4/snert/'
+#    root = "/mnt/96980F95980F72D3/glint/"
+    spectral_calibration_path = root+'GLINTprocessed/'+'calibration_params/'
+    geometric_calibration_path = root+'GLINTprocessed/'+datafolder
+    data_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'+datafolder
+#    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
+    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'n1n4' in f or 'n5n6' in f])
     if len(data_list) == 0:
         raise IndexError('Data list is empty')
     data_list = data_list[nb_files[0]:nb_files[1]]
     
     ''' Output '''
-    output_path = root+'reduction/'+datafolder
+    output_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTprocessed/'+datafolder#[:-1]+'_50nm_offset/'
     if not os.path.exists(output_path):
         os.makedirs(output_path)
     
@@ -308,6 +308,7 @@ if __name__ == '__main__':
         plt.xlabel('Frame/100', size=30)
         plt.ylabel('Fitted amplitude', size=30)
         plt.xticks(size=30);plt.yticks(size=30)
+        plt.savefig(output_path+'plot_photo_p%s.png'%(k+1))
         
     if debug:
         for k in range(1):
