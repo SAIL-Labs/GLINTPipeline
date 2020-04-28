@@ -72,7 +72,7 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
                 residuals_fit[k,i,j] = slices[k,j,i] - gaus(slices_axes[i], *popt)
                 
                 simple_gaus = np.exp(-(slices_axes[i]-positions[i,j])**2/(2*widths[i,j]**2))
-                A = np.vstack((simple_gaus, np.ones(simple_gaus.shape)))
+                A = np.vstack((simple_gaus, np.ones_like(simple_gaus)))
                 A = np.transpose(A)
                 popt2 = np.linalg.lstsq(A, slices[k,j,i])[0]
                 residuals_reg[k,i,j] = slices[k,j,i] - (popt2[0] * simple_gaus + popt2[1])
@@ -392,30 +392,6 @@ class Null(File):
         self.raw = self.slices.mean(axis=-1)
         self.raw = np.transpose(self.raw, axes=(0,2,1))
         
-#        positions_idx = np.around(positions).astype(np.int)
-#        positions_idx = np.array([[np.where(positions_idx[i,j] == slices_axes[i])[0][0] for j in range(positions_idx.shape[1])] for i in range(positions_idx.shape[0])])
-#        self.raw = []
-#        for j in range(positions_idx.shape[1]):
-#            temp = []
-#            for i in range(positions_idx.shape[0]):
-#                temp.append(self.slices[:, j, i, positions_idx[i,j]])
-#            self.raw.append(temp)       
-#        self.raw = np.array(self.raw)
-#        self.raw = np.transpose(self.raw, axes=(2,1,0))        
-
-#        self.raw = []
-#        for k in range(self.slices.shape[0]): # frames
-#            temp = []
-#            for i in range(self.slices.shape[1]): # spectral channel
-#                temp2 = []
-#                for j in range(self.slices.shape[2]): # output
-#                    interp = np.interp(positions[j,i], slices_axes[j], self.slices[k,i,j])
-#                    temp2.append(interp)
-#                temp.append(temp2)
-#            self.raw.append(temp)       
-#        self.raw = np.array(self.raw)
-#        self.raw = np.transpose(self.raw, axes=(0,2,1))   
-        
         if debug:
             self.amplitude_fit, self.amplitude, self.integ_model, self.integ_windowed, self.residuals_fit, self.residuals_reg, self.cov, self.weights = \
         _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths)
@@ -497,7 +473,7 @@ class Null(File):
                 for j in range(len(spectral_axis)):
                     # 1st estimator : amplitude of the Gaussian profil of the track, use of linear least square
                     simple_gaus = np.exp(-(slices_axes[i]-positions[i,j])**2/(2*widths[i,j]**2)) # Shape factor of the intensity profile, to be removed before computing Null depth
-                    A = np.vstack((simple_gaus, np.ones(simple_gaus.shape)))
+                    A = np.vstack((simple_gaus, np.ones_like(simple_gaus)))
                     A = np.transpose(A)
                     popt2 = np.linalg.lstsq(A, slices[k,j,i])[0]
                     residuals_reg[k,i,j] = slices[k,j,i] - (popt2[0] * simple_gaus + popt2[1])
@@ -634,7 +610,7 @@ class Null(File):
         self.null5_err = self.error_null(self.null5, self.Iminus5, self.Iplus5, self.bg_std[:,None], self.bg_std[:,None])
         self.null6_err = self.error_null(self.null6, self.Iminus6, self.Iplus6, self.bg_std[:,None], self.bg_std[:,None])
         
-    def getIntensities(self, mode):
+    def getIntensities(self, mode, wl_bounds=(0,np.inf)):
         """
         Gets the intensity per spectral channel, per frame, per model, for each output.
         
@@ -645,6 +621,8 @@ class Null(File):
                     * ``model`` proceeds like ``amplitude`` but the integral of the flux is returned
                     * ``windowed`` returns a weighted mean as flux of the spectral channel. The weights is the same pattern as the other modes above
                     * ``raw`` returns the mean of the flux along the spatial axis over the whole width of the output
+            **wl_bounds**:tup, optional
+                Set the bounds of the bandwidth to keep, in nanometer. Default is to keep all the common spectral channels to all outputs.
                     
         :Attributes:
             **pX**: ndarray,
@@ -757,6 +735,28 @@ class Null(File):
             self.p1_err = self.p2_err = self.p3_err = self.p4_err = self.raw_err  
         else:
             raise KeyError('Please select the mode among: amplitude, model, windowed and raw.')
+            
+        self.p1 = self.p1[:,(self.wl_scale[15]>=wl_bounds[0])&(self.wl_scale[15]<=wl_bounds[1])]
+        self.p2 = self.p2[:,(self.wl_scale[13]>=wl_bounds[0])&(self.wl_scale[13]<=wl_bounds[1])]
+        self.p3 = self.p3[:,(self.wl_scale[2]>=wl_bounds[0])&(self.wl_scale[2]<=wl_bounds[1])]
+        self.p4 = self.p4[:,(self.wl_scale[0]>=wl_bounds[0])&(self.wl_scale[0]<=wl_bounds[1])]
+        
+        self.Iminus1 = self.Iminus1[:,(self.wl_scale[11]>=wl_bounds[0])&(self.wl_scale[11]<=wl_bounds[1])]
+        self.Iminus2 = self.Iminus2[:,(self.wl_scale[3]>=wl_bounds[0])&(self.wl_scale[3]<=wl_bounds[1])]
+        self.Iminus3 = self.Iminus3[:,(self.wl_scale[1]>=wl_bounds[0])&(self.wl_scale[1]<=wl_bounds[1])]
+        self.Iminus4 = self.Iminus4[:,(self.wl_scale[6]>=wl_bounds[0])&(self.wl_scale[6]<=wl_bounds[1])]
+        self.Iminus5 = self.Iminus5[:,(self.wl_scale[5]>=wl_bounds[0])&(self.wl_scale[5]<=wl_bounds[1])]
+        self.Iminus6 = self.Iminus6[:,(self.wl_scale[8]>=wl_bounds[0])&(self.wl_scale[8]<=wl_bounds[1])]
+
+        self.Iplus1 = self.Iplus1[:,(self.wl_scale[9]>=wl_bounds[0])&(self.wl_scale[9]<=wl_bounds[1])]
+        self.Iplus2 = self.Iplus2[:,(self.wl_scale[12]>=wl_bounds[0])&(self.wl_scale[12]<=wl_bounds[1])]
+        self.Iplus3 = self.Iplus3[:,(self.wl_scale[14]>=wl_bounds[0])&(self.wl_scale[14]<=wl_bounds[1])]
+        self.Iplus4 = self.Iplus4[:,(self.wl_scale[4]>=wl_bounds[0])&(self.wl_scale[4]<=wl_bounds[1])]
+        self.Iplus5 = self.Iplus5[:,(self.wl_scale[7]>=wl_bounds[0])&(self.wl_scale[7]<=wl_bounds[1])]
+        self.Iplus6 = self.Iplus6[:,(self.wl_scale[10]>=wl_bounds[0])&(self.wl_scale[10]<=wl_bounds[1])]
+        
+        self.wl_scale = np.array([elt[(elt>=wl_bounds[0])&(elt<=wl_bounds[1])] for elt in self.wl_scale])
+
         
     def spectralBinning(self, wl_min, wl_max, bandwidth, wl_to_px_coeff):
         """
@@ -778,7 +778,12 @@ class Null(File):
             **wl_to_px_coeff**: array
                 Coefficient of conversion from wavelength to pixel position
         """
-        
+
+        if wl_min == None:
+            wl_min = 0
+        if wl_max == None:
+            wl_max = 10000
+            
         self.p1 = self.p1[:,(self.wl_scale[15]>=wl_min)&(self.wl_scale[15]<=wl_max)]
         self.p2 = self.p2[:,(self.wl_scale[13]>=wl_min)&(self.wl_scale[13]<=wl_max)]
         self.p3 = self.p3[:,(self.wl_scale[2]>=wl_min)&(self.wl_scale[2]<=wl_max)]
@@ -808,10 +813,12 @@ class Null(File):
             if bandwidth > wl_max - wl_min:
                 print('Bandwidth larger than selected spectrum, the whole spectrum will be binned.')
         else:
-            bandwith_px = abs(bandwidth * wl_to_px_coeff[:,0])
+            bandwith_px = np.around(abs(bandwidth * wl_to_px_coeff[:,0]))
             bandwith_px = bandwith_px.astype(np.int)
             bandwith_px[bandwith_px==0] = 1
             
+        self.bandwith_px = bandwith_px
+        
         self.p1 = self.binning(self.p1, bandwith_px[15], axis=1, avg=True)
         self.p2 = self.binning(self.p2, bandwith_px[13], axis=1, avg=True)
         self.p3 = self.binning(self.p3, bandwith_px[2], axis=1, avg=True)
