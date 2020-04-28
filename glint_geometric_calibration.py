@@ -84,14 +84,14 @@ if __name__ == '__main__':
     # =============================================================================
     ''' Settings '''
     save = True
-    monitoring = False
+    monitoring = True
     
     print("Getting the shape (position and width) of all tracks")
     ''' Inputs '''
-    datafolder = '20190715/'
+    datafolder = '20191212/'
     root = "/mnt/96980F95980F72D3/glint/"
     data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f in f]
+    data_list = [data_path+f for f in os.listdir(data_path) if 'lab_turb_04' in f in f]
     
     ''' Output '''
     output_path = root+'reduction/'+datafolder
@@ -173,6 +173,10 @@ if __name__ == '__main__':
     weight_pos = np.ones(pos.shape)
     weight_pos[52-bounds[0]:57-bounds[0],2] = 1.e-36
     weight_width = np.ones(wi.shape)
+    weight_width[33-bounds[0]:75-bounds[0], 1] = 1000
+    weight_width[33-bounds[0]:75-bounds[0], 2] = 1000
+    weight_width[33-bounds[0]:75-bounds[0], 5] = 1000
+    weight_width[33-bounds[0]:80-bounds[0], 13] = 1000
     coeff_position_poly = np.array([np.polyfit(spectral_axis[bounds[0]:bounds[1]], pos[:,i], deg=4, w=weight_pos[:,i]) for i in range(nb_tracks)])
     coeff_width_poly = np.array([np.polyfit(spectral_axis[bounds[0]:bounds[1]], wi[:,i], deg=4, w=weight_width[:,i]) for i in range(nb_tracks)])
     position_poly = [np.poly1d(coeff_position_poly[i]) for i in range(nb_tracks)]

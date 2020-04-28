@@ -97,27 +97,27 @@ if __name__ == '__main__':
     save = True
     nb_files = (0, None)
     bin_frames = False
-    nb_frames_to_bin = 10
+    nb_frames_to_bin = 600
     spectral_binning = False
     wl_bin_min, wl_bin_max = 1525, 1575# In nm
     bandwidth_binning = 50 # In nm
     mode_flux = 'amplitude'
     
     ''' Inputs '''
-    datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence5/'
-    root = '//silo.physics.usyd.edu.au/silo4/snert/'
-#    root = "/mnt/96980F95980F72D3/glint/"
-    spectral_calibration_path = root+'GLINTprocessed/'+'calibration_params/'
-    geometric_calibration_path = root+'GLINTprocessed/'+datafolder
-    data_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'+datafolder
-#    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'n1n4' in f or 'n5n6' in f])
+    datafolder = '20200312_fringetracking_injection_variation_spectrum/'
+#    root = "C:/Users/marc-antoine/glint/"
+    root = "/mnt/96980F95980F72D3/glint/"
+    spectral_calibration_path = root+'reduction/'+'calibration_params_simu/'
+    geometric_calibration_path = root+'reduction/'+'calibration_params_simu/'
+#    data_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'+datafolder
+    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
+    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'simu' in f])
     if len(data_list) == 0:
         raise IndexError('Data list is empty')
     data_list = data_list[nb_files[0]:nb_files[1]]
     
     ''' Output '''
-    output_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTprocessed/'+datafolder#[:-1]+'_50nm_offset/'
+    output_path = root+'reduction/'+datafolder
     if not os.path.exists(output_path):
         os.makedirs(output_path)
     
@@ -308,7 +308,6 @@ if __name__ == '__main__':
         plt.xlabel('Frame/100', size=30)
         plt.ylabel('Fitted amplitude', size=30)
         plt.xticks(size=30);plt.yticks(size=30)
-        plt.savefig(output_path+'plot_photo_p%s.png'%(k+1))
         
     if debug:
         for k in range(1):

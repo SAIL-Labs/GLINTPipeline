@@ -16,11 +16,11 @@ from scipy.optimize import curve_fit
 
 nonoise_switch = False
 ''' Settings '''
-nb_files = (0,10) # Number of data files to read. None = all files
+nb_files = (0,1) # Number of data files to read. None = all files
 root = "/mnt/96980F95980F72D3/glint/" # Root path containing the reduced data
 path_to_data = '/mnt/96980F95980F72D3/glint_data/'
-datafolder = '20200106/p3/' # Folder of the data to explore
-darkfolder = '20200106/p3/' # Folder of the data to explore
+datafolder = '20190718/20190718_turbulence1/' # Folder of the data to explore
+darkfolder = '20190718/20190718_dark_turbulence/' # Folder of the data to explore
 #datafolder = '201907_Data/' # Folder of the data to explore
 wl_path = root+'reduction/calibration_params/px_to_wl.npy'
 #wl_path = root+'reduction/201806_wavecal/px_to_wl.npy'
@@ -31,7 +31,7 @@ fps = 10
 
 ''' Running script '''
 data_path = path_to_data+datafolder # Full path to the data
-data_list = sorted([data_path+f for f in os.listdir(data_path) if not 'dark' in f and 'p3' in f])
+data_list = sorted([data_path+f for f in os.listdir(data_path) if 'n1n4' in f])
 data_list = data_list[nb_files[0]:nb_files[1]]
 if not nonoise_switch:
     switch_dark = False
@@ -168,7 +168,8 @@ text_antinull6 = axs[0].text(0.05, 0.3225, 'AN6', transform=axs[0].transAxes, co
         
 def init3():
     global stack, wl_scale
-    lines[-1].set_data(np.zeros(stack[0].shape))
+    # lines[-1].set_data(np.zeros(stack[0].shape))
+    lines[-1].set_data(stack[0])
     time_text.set_text('')
     for i in range(16):
             lines[i].set_data(wl_scale[i], np.zeros(wl_scale[i].size))
@@ -194,7 +195,7 @@ def run2(k):
             text_null1, text_null2, text_null3, text_null4, text_null5, text_null6,\
             text_antinull1, text_antinull2, text_antinull3, text_antinull4, text_antinull5, text_antinull6]
 
-anim = animation.FuncAnimation(fig, run2, init_func=init3, frames=data.shape[0], interval=100)#, blit=True)
+# anim = animation.FuncAnimation(fig, run2, init_func=init3, frames=data.shape[0], interval=100)#, blit=True)
 
 plt.figure(figsize=(19.20,10.80))
 for i in range(16):

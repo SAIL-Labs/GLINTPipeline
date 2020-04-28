@@ -131,11 +131,11 @@ if __name__ == '__main__':
     edge_min, edge_max = -300, 300
     
     ''' Inputs '''
-    datafolder = '20200106/p3/'
+    datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_dark_turbulence/'
     root = "/mnt/96980F95980F72D3/glint_data/"
     data_path = root+datafolder
     dark_list = [data_path+f for f in os.listdir(data_path) if 'dark' in f][nb_files[0]:nb_files[1]]
-    date = '2020-01-06'
+    date = '2020-01-29'
     
     ''' Output '''
     output_path = '/mnt/96980F95980F72D3/glint/reduction/'+datafolder
