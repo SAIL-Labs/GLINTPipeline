@@ -179,7 +179,7 @@ class File(object):
         """
 
         if data != None:
-            with h5py.File(data) as dataFile:
+            with h5py.File(data, 'r') as dataFile:
                 self.data   = np.array(dataFile['imagedata'])
                 self.data = self.data[nbimg[0]:nbimg[1]]
                 self.nbimg  = self.data.shape[0]
@@ -869,12 +869,12 @@ class Null(File):
                   'p2':self.p2, 'p2err':self.p2_err,
                   'p3':self.p3, 'p3err':self.p3_err,
                   'p4':self.p4, 'p4err':self.p4_err,
-                  'null1':self.null1, 'null1err':self.null1_err,
-                  'null2':self.null2, 'null2err':self.null2_err,
-                  'null3':self.null3, 'null3err':self.null3_err,
-                  'null4':self.null4, 'null4err':self.null4_err,
-                  'null5':self.null5, 'null5err':self.null5_err,
-                  'null6':self.null6, 'null6err':self.null6_err,
+#                  'null1':self.null1, 'null1err':self.null1_err,
+#                  'null2':self.null2, 'null2err':self.null2_err,
+#                  'null3':self.null3, 'null3err':self.null3_err,
+#                  'null4':self.null4, 'null4err':self.null4_err,
+#                  'null5':self.null5, 'null5err':self.null5_err,
+#                  'null6':self.null6, 'null6err':self.null6_err,
                   'Iminus1':self.Iminus1, 'Iplus1':self.Iplus1,
                   'Iminus2':self.Iminus2, 'Iplus2':self.Iplus2,
                   'Iminus3':self.Iminus3, 'Iplus3':self.Iplus3,
