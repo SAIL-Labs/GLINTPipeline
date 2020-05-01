@@ -94,11 +94,11 @@ if __name__ == '__main__':
     no_noise = False
     nb_img = (0, None)
     debug = False
-    save = True
-    nb_files = (0, None)
-    bin_frames = False
-    nb_frames_to_bin = 600
-    spectral_binning = False
+    save = False
+    nb_files = (0, 100)
+    bin_frames = True
+    nb_frames_to_bin = 50
+    spectral_binning = True
     wl_bin_min, wl_bin_max = 1525, 1575# In nm
     bandwidth_binning = 50 # In nm
     mode_flux = 'amplitude'
@@ -106,20 +106,20 @@ if __name__ == '__main__':
     wavelength_bounds = (1400, 1700)
     
     ''' Inputs '''
-    datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_dark_turbulence/'
+    datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence1/'
 #    root = "C:/Users/marc-antoine/glint/"
     root = "/mnt/96980F95980F72D3/glint/"
-    spectral_calibration_path = root+'reduction/'+'calibration_params/'
-    geometric_calibration_path = root+'reduction/'+'calibration_params/'
+    spectral_calibration_path = root+'GLINTprocessed/'+'calibration_params/'
+    geometric_calibration_path = root+'GLINTprocessed/'+'calibration_params/'
 #    data_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'+datafolder
     data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'dark' in f])
+    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'n1n4' in f])
     if len(data_list) == 0:
         raise IndexError('Data list is empty')
     data_list = data_list[nb_files[0]:nb_files[1]]
     
     ''' Output '''
-    output_path = root+'reduction/'+datafolder
+    output_path = root+'GLINTprocessed/'+datafolder
     if not os.path.exists(output_path):
         os.makedirs(output_path)
     
@@ -155,7 +155,7 @@ if __name__ == '__main__':
     if not 'dark' in data_list[0]:
         for f in data_list[nb_files_spectrum[0]:nb_files_spectrum[1]]:
             start = time()
-            print("Process of : %s (%d / %d)" %(f, data_list.index(f)+1, len(data_list)))
+            print("Process of : %s (%d / %d)" %(f, data_list.index(f)+1, len(data_list[nb_files_spectrum[0]:nb_files_spectrum[1]])))
             img_spectrum = glint_classes.Null(f, nbimg=nb_img)
             
             ''' Process frames '''
@@ -163,6 +163,7 @@ if __name__ == '__main__':
             
             ''' Insulating each track '''
             img_spectrum.getChannels(channel_pos, sep, spatial_axis, dark=dark_per_channel)
+            # img_spectrum.slices = img_spectrum.slices + np.random.normal(0, 459, img_spectrum.slices.shape)
     
             img_spectrum.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff)
             list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
@@ -191,6 +192,16 @@ if __name__ == '__main__':
         spectrum.p4 = spectrum.p4[0] / spectrum.p4[0].sum()
         spectra = np.array([spectrum.p1, spectrum.p2, spectrum.p3, spectrum.p4])
         del spectrum, img_spectrum
+        # plt.figure()
+        # plt.subplot(221)
+        # plt.plot(spectra[0])
+        # plt.subplot(222)
+        # plt.plot(spectra[1])
+        # plt.subplot(223)
+        # plt.plot(spectra[2])
+        # plt.subplot(224)
+        # plt.plot(spectra[3])
+        # ppp
 
     ''' Output lists for different stages of the processing.
     Include data from all processed files '''

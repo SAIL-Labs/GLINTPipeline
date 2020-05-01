@@ -755,6 +755,7 @@ class Null(File):
         self.Iplus5 = self.Iplus5[:,(self.wl_scale[7]>=wl_bounds[0])&(self.wl_scale[7]<=wl_bounds[1])]
         self.Iplus6 = self.Iplus6[:,(self.wl_scale[10]>=wl_bounds[0])&(self.wl_scale[10]<=wl_bounds[1])]
         
+        self.px_scale = np.array([self.px_scale[i][(self.wl_scale[i]>=wl_bounds[0])&(self.wl_scale[i]<=wl_bounds[1])] for i in range(self.px_scale.shape[0])])        
         self.wl_scale = np.array([elt[(elt>=wl_bounds[0])&(elt<=wl_bounds[1])] for elt in self.wl_scale])
 
         
