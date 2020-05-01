@@ -102,18 +102,18 @@ if __name__ == '__main__':
     wl_bin_min, wl_bin_max = 1525, 1575# In nm
     bandwidth_binning = 50 # In nm
     mode_flux = 'amplitude'
-    nb_files_spectrum = (0,1000)
+    nb_files_spectrum = (0,100)
     wavelength_bounds = (1400, 1700)
     
     ''' Inputs '''
-    datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence1/'
+    datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_dark_turbulence/'
 #    root = "C:/Users/marc-antoine/glint/"
     root = "/mnt/96980F95980F72D3/glint/"
     spectral_calibration_path = root+'reduction/'+'calibration_params/'
     geometric_calibration_path = root+'reduction/'+'calibration_params/'
 #    data_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'+datafolder
     data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'n1n4' in f])
+    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'dark' in f])
     if len(data_list) == 0:
         raise IndexError('Data list is empty')
     data_list = data_list[nb_files[0]:nb_files[1]]
@@ -152,38 +152,45 @@ if __name__ == '__main__':
     nb_frames = 0
     slices_spectrum = np.zeros_like(dark_per_channel)
 
-    for f in data_list[nb_files_spectrum[0]:nb_files_spectrum[1]]:
-        start = time()
-        print("Process of : %s (%d / %d)" %(f, data_list.index(f)+1, len(data_list)))
-        img_spectrum = glint_classes.Null(f, nbimg=nb_img)
-        
-        ''' Process frames '''
-        img_spectrum.cosmeticsFrames(np.zeros(dark.shape), no_noise)
-        
-        ''' Insulating each track '''
-        img_spectrum.getChannels(channel_pos, sep, spatial_axis, dark=dark_per_channel)
-        img_spectrum.slices = img_spectrum.slices + np.random.normal(0, 1271, img_spectrum.slices.shape)
-        
-        slices_spectrum = slices_spectrum + np.sum(img_spectrum.slices, axis=0)
-        nb_frames = nb_frames + img_spectrum.nbimg
-        
-    slices_spectrum = slices_spectrum / nb_frames
-    spectrum = glint_classes.Null(data=None, nbimg=(0,1))
-    spectrum.cosmeticsFrames(np.zeros(dark.shape), no_noise)
-    spectrum.getChannels(channel_pos, sep, spatial_axis, dark=dark_per_channel)
-    spectrum.slices = np.reshape(slices_spectrum, (1,slices_spectrum.shape[0], slices_spectrum.shape[1], slices_spectrum.shape[2]))
-    spectrum.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff)
-    list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
-    spectrum.getSpectralFlux(list_channels, spectral_axis, position_poly, width_poly, debug=debug)
+    if not 'dark' in data_list[0]:
+        for f in data_list[nb_files_spectrum[0]:nb_files_spectrum[1]]:
+            start = time()
+            print("Process of : %s (%d / %d)" %(f, data_list.index(f)+1, len(data_list)))
+            img_spectrum = glint_classes.Null(f, nbimg=nb_img)
+            
+            ''' Process frames '''
+            img_spectrum.cosmeticsFrames(np.zeros(dark.shape), no_noise)
+            
+            ''' Insulating each track '''
+            img_spectrum.getChannels(channel_pos, sep, spatial_axis, dark=dark_per_channel)
     
-    spectrum.getIntensities(mode=mode_flux, wl_bounds=wavelength_bounds)
-    spectrum.p1 = spectrum.p1[0] / spectrum.p1[0].sum()
-    spectrum.p2 = spectrum.p2[0] / spectrum.p2[0].sum()
-    spectrum.p3 = spectrum.p3[0] / spectrum.p3[0].sum()
-    spectrum.p4 = spectrum.p4[0] / spectrum.p4[0].sum()
-    spectra = np.array([spectrum.p1, spectrum.p2, spectrum.p3, spectrum.p4])
-    
-    del spectrum, img_spectrum
+            img_spectrum.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff)
+            list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
+            img_spectrum.getSpectralFlux(list_channels, spectral_axis, position_poly, width_poly, debug=debug)
+            
+            img_spectrum.getIntensities(mode=mode_flux, wl_bounds=wavelength_bounds)
+            
+            slices_spectrum = slices_spectrum + np.sum(img_spectrum.slices, axis=0)
+            nb_frames = nb_frames + img_spectrum.nbimg
+            stop = time()
+            print('Spectrum time:', stop-start)
+            
+        slices_spectrum = slices_spectrum / nb_frames
+        spectrum = glint_classes.Null(data=None, nbimg=(0,1))
+        spectrum.cosmeticsFrames(np.zeros(dark.shape), no_noise)
+        spectrum.getChannels(channel_pos, sep, spatial_axis, dark=dark_per_channel)
+        spectrum.slices = np.reshape(slices_spectrum, (1,slices_spectrum.shape[0], slices_spectrum.shape[1], slices_spectrum.shape[2]))
+        spectrum.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff)
+        list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
+        spectrum.getSpectralFlux(list_channels, spectral_axis, position_poly, width_poly, debug=debug)
+        
+        spectrum.getIntensities(mode=mode_flux, wl_bounds=wavelength_bounds)
+        spectrum.p1 = spectrum.p1[0] / spectrum.p1[0].sum()
+        spectrum.p2 = spectrum.p2[0] / spectrum.p2[0].sum()
+        spectrum.p3 = spectrum.p3[0] / spectrum.p3[0].sum()
+        spectrum.p4 = spectrum.p4[0] / spectrum.p4[0].sum()
+        spectra = np.array([spectrum.p1, spectrum.p2, spectrum.p3, spectrum.p4])
+        del spectrum, img_spectrum
 
     ''' Output lists for different stages of the processing.
     Include data from all processed files '''
@@ -220,7 +227,6 @@ if __name__ == '__main__':
         ''' Insulating each track '''
         print('Getting channels')
         img.getChannels(channel_pos, sep, spatial_axis, dark=dark_per_channel)
-        img.slices = img.slices + np.random.normal(0, 1271, img.slices.shape)
         
         ''' Map the spectral channels between every chosen tracks before computing 
         the null depth'''
@@ -232,9 +238,29 @@ if __name__ == '__main__':
         
         ''' Reconstruct flux in photometric channels '''
         img.getIntensities(mode=mode_flux, wl_bounds=wavelength_bounds)
-        integ = np.array([np.sum(img.p1, axis=1), np.sum(img.p2, axis=1), np.sum(img.p3, axis=1), np.sum(img.p4, axis=1)])
-        new_photo = integ[:,:,None] * spectra[:,None,:]
-        img.p1, img.p2, img.p3, img.p4 = new_photo
+        
+        if not 'dark' in data_list[0]:
+            integ = np.array([np.sum(img.p1, axis=1), np.sum(img.p2, axis=1), np.sum(img.p3, axis=1), np.sum(img.p4, axis=1)])
+            new_photo = integ[:,:,None] * spectra[:,None,:]
+    
+            # plt.figure()
+            # plt.plot(img.wl_scale[15], img.p1[0])
+            # plt.plot(img.wl_scale[15], new_photo[0][0])
+            # plt.plot(img.wl_scale[15], img.p1.mean(axis=0))
+            # plt.figure()
+            # plt.plot(img.wl_scale[13], img.p2[0])
+            # plt.plot(img.wl_scale[13], new_photo[1][0])
+            # plt.plot(img.wl_scale[15], img.p2.mean(axis=0))
+            # plt.figure()
+            # plt.plot(img.wl_scale[2], img.p3[0])
+            # plt.plot(img.wl_scale[2], new_photo[2][0])
+            # plt.plot(img.wl_scale[15], img.p3.mean(axis=0))
+            # plt.figure()
+            # plt.plot(img.wl_scale[0], img.p4[0])
+            # plt.plot(img.wl_scale[0], new_photo[3][0])
+            # plt.plot(img.wl_scale[15], img.p4.mean(axis=0))
+            # ppp
+            img.p1, img.p2, img.p3, img.p4 = new_photo
 
         if spectral_binning:
             img.spectralBinning(wl_bin_min, wl_bin_max, bandwidth_binning, wl_to_px_coeff)
