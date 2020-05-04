@@ -19,8 +19,8 @@ nonoise_switch = False
 nb_files = (0,1) # Number of data files to read. None = all files
 root = "/mnt/96980F95980F72D3/glint/" # Root path containing the reduced data
 path_to_data = '/mnt/96980F95980F72D3/glint_data/'
-datafolder = '20190718/20190718_turbulence1/' # Folder of the data to explore
-darkfolder = '20190718/20190718_dark_turbulence/' # Folder of the data to explore
+datafolder = '20200201/AlfBoo/' # Folder of the data to explore
+darkfolder = '20200201/dark3/' # Folder of the data to explore
 #datafolder = '201907_Data/' # Folder of the data to explore
 wl_path = root+'reduction/calibration_params/px_to_wl.npy'
 #wl_path = root+'reduction/201806_wavecal/px_to_wl.npy'
@@ -31,7 +31,9 @@ fps = 10
 
 ''' Running script '''
 data_path = path_to_data+datafolder # Full path to the data
-data_list = sorted([data_path+f for f in os.listdir(data_path) if 'n1n4' in f])
+data_list = sorted([data_path+f for f in os.listdir(data_path) if 'AlfBoo' in f])
+if len(data_list) == 0:
+    raise IndexError('Data list is empty')
 data_list = data_list[nb_files[0]:nb_files[1]]
 if not nonoise_switch:
     switch_dark = False
@@ -195,7 +197,7 @@ def run2(k):
             text_null1, text_null2, text_null3, text_null4, text_null5, text_null6,\
             text_antinull1, text_antinull2, text_antinull3, text_antinull4, text_antinull5, text_antinull6]
 
-# anim = animation.FuncAnimation(fig, run2, init_func=init3, frames=data.shape[0], interval=100)#, blit=True)
+anim = animation.FuncAnimation(fig, run2, init_func=init3, frames=data.shape[0], interval=100)#, blit=True)
 
 plt.figure(figsize=(19.20,10.80))
 for i in range(16):
@@ -214,47 +216,30 @@ for i in range(16):
     if i == 1 or i == 3 or i == 12 or i == 14:
         plt.xlabel('Frame')
 plt.tight_layout()        
-#plt.figure(figsize=(19.20,10.80))
-#for i in range(16):
-#    if i<4: 
-#        plt.subplot(4,4,i+1)
-#        plt.plot(data[:,i,40:75].sum(axis=-1))
-#        plt.grid()
-#        plt.title(titles_photo[i])
-#    elif i%2==0:
-#        plt.subplot(4,4,i+1)
-#        plt.plot(data[:,i,50:51].sum(axis=-1)/data[:,i+1,50:51].sum(axis=-1))
-#        plt.grid()
-#        plt.title(titles_photo[i]+' and '+titles_photo[i+1])
-#plt.tight_layout()  
-#
-#plt.figure(figsize=(19.20,10.80))
-#for i in range(16):
-#    plt.subplot(4,4,i+1)
-#    b = com_wl[:,i]
-#    histo = np.histogram(b, int(b.size**0.5))
-#    plt.plot(histo[1][:-1], histo[0], 'o-')
-#    plt.grid()
-#    plt.title('Histogram of COM of '+titles_photo[i])
-#plt.tight_layout()
-#    
-#plt.figure(figsize=(19.20,10.80))
-#for i in range(16):
-#    plt.subplot(4,4,i+1)
-#    plt.plot(com_wl[:,i], 'o-')
-#    plt.grid()
-#    plt.title('Center of mass of '+titles_photo[i])
-#plt.tight_layout()
-#
-#plt.figure(figsize=(19.20,10.80))
-#for i in range(16):
-#    plt.subplot(4,4,i+1)
-#    b = data[:,i,40:75].sum(axis=-1)
-#    histo = np.histogram(b, int(b.size**0.5))
-#    plt.plot(histo[1][:-1], histo[0], 'o-')
-#    plt.grid()
-#    plt.title('Histogram of flux of '+titles_photo[i])
-#plt.tight_layout()
+plt.figure(figsize=(19.20,10.80))
+for i in range(16):
+    if i<4: 
+        plt.subplot(4,4,i+1)
+        plt.plot(data[:,i,40:75].sum(axis=-1))
+        plt.grid()
+        plt.title(titles_photo[i])
+    elif i%2==0:
+        plt.subplot(4,4,i+1)
+        plt.plot(data[:,i,50:51].sum(axis=-1)/data[:,i+1,50:51].sum(axis=-1))
+        plt.grid()
+        plt.title(titles_photo[i]+' and '+titles_photo[i+1])
+plt.tight_layout()  
+
+
+plt.figure(figsize=(19.20,10.80))
+for i in range(16):
+    plt.subplot(4,4,i+1)
+    b = data[:,i,40:75].sum(axis=-1)
+    histo = np.histogram(b, int(b.size**0.5))
+    plt.plot(histo[1][:-1], histo[0], 'o-')
+    plt.grid()
+    plt.title('Histogram of flux of '+titles_photo[i])
+plt.tight_layout()
 
 
 #plt.figure(figsize=(19.20,10.80))
@@ -268,62 +253,62 @@ plt.tight_layout()
 #plt.xlim(1400, 1700)
 #plt.tight_layout()
 
-plt.figure(figsize=(19.20,10.80))
-plt.plot(wl_scale[0], data[300,0], lw=3, label='P1')
-plt.plot(wl_scale[1], data[300,1], lw=3, label='P2')
-plt.plot(wl_scale[4], data[300,4], lw=3, label='N1')
-plt.plot(wl_scale[5], data[300,5], lw=3, label='AN1')
-plt.grid()
-plt.xticks(size=35);plt.yticks(size=35)
-plt.legend(loc='best', fontsize=35)
-plt.xlabel('Wavelength (nm)', size=40)
-plt.ylabel('Intensity (AU)', size=40)
-plt.xlim(1400, 1700)
-plt.tight_layout()
+# plt.figure(figsize=(19.20,10.80))
+# plt.plot(wl_scale[0], data[300,0], lw=3, label='P1')
+# plt.plot(wl_scale[1], data[300,1], lw=3, label='P2')
+# plt.plot(wl_scale[4], data[300,4], lw=3, label='N1')
+# plt.plot(wl_scale[5], data[300,5], lw=3, label='AN1')
+# plt.grid()
+# plt.xticks(size=35);plt.yticks(size=35)
+# plt.legend(loc='best', fontsize=35)
+# plt.xlabel('Wavelength (nm)', size=40)
+# plt.ylabel('Intensity (AU)', size=40)
+# plt.xlim(1400, 1700)
+# plt.tight_layout()
 
-plt.figure(figsize=(19.20,10.80))
-plt.plot(wl_scale[2], data[:,2].mean(axis=0), lw=3, label='P3')
-plt.plot(wl_scale[3], data[:,3].mean(axis=0), lw=3, label='P4')
-plt.plot(wl_scale[10], data[:,10].mean(axis=0), lw=3, label='N4')
-plt.plot(wl_scale[11], data[:,11].mean(axis=0), lw=3, label='AN4')
-plt.grid()
-plt.xticks(size=35);plt.yticks(size=35)
-plt.legend(loc='best', fontsize=35)
-plt.xlabel('Wavelength (nm)', size=40)
-plt.ylabel('Intensity (AU)', size=40)
-plt.xlim(1400, 1700)
-plt.tight_layout()
+# plt.figure(figsize=(19.20,10.80))
+# plt.plot(wl_scale[2], data[:,2].mean(axis=0), lw=3, label='P3')
+# plt.plot(wl_scale[3], data[:,3].mean(axis=0), lw=3, label='P4')
+# plt.plot(wl_scale[10], data[:,10].mean(axis=0), lw=3, label='N4')
+# plt.plot(wl_scale[11], data[:,11].mean(axis=0), lw=3, label='AN4')
+# plt.grid()
+# plt.xticks(size=35);plt.yticks(size=35)
+# plt.legend(loc='best', fontsize=35)
+# plt.xlabel('Wavelength (nm)', size=40)
+# plt.ylabel('Intensity (AU)', size=40)
+# plt.xlim(1400, 1700)
+# plt.tight_layout()
 
-photo1 = data[:,0].copy()
-photo2 = data[:,1].copy()
-photo3 = data[:,2].copy()
-photo4 = data[:,3].copy()
-photo1 /= photo1.max(axis=1)[:,None]
-photo2 /= photo2.max(axis=1)[:,None]
-photo3 /= photo3.max(axis=1)[:,None]
-photo4 /= photo4.max(axis=1)[:,None]
+# photo1 = data[:,0].copy()
+# photo2 = data[:,1].copy()
+# photo3 = data[:,2].copy()
+# photo4 = data[:,3].copy()
+# photo1 /= photo1.max(axis=1)[:,None]
+# photo2 /= photo2.max(axis=1)[:,None]
+# photo3 /= photo3.max(axis=1)[:,None]
+# photo4 /= photo4.max(axis=1)[:,None]
 
-plt.figure(figsize=(19.20,10.80))
-plt.plot(wl_scale[0], photo1.mean(axis=0), lw=3, label='P1')
-plt.plot(wl_scale[1], photo2.mean(axis=0), lw=3, label='P2')
-plt.plot(wl_scale[2], photo3.mean(axis=0), lw=3, label='P3')
-plt.plot(wl_scale[3], photo4.mean(axis=0), lw=3, label='P4')
-plt.grid()
-plt.xticks(size=30);plt.yticks(size=30)
-plt.legend(loc='best', fontsize=35)
-plt.xlabel('Wavelength (nm)', size=35)
-plt.ylabel('Intensity (AU)', size=35)
-plt.title('Visual check of wiggles', size=40)
-plt.xlim(1400, 1700)
-plt.ylim(-0.05, 1.05)
-plt.tight_layout()
+# plt.figure(figsize=(19.20,10.80))
+# plt.plot(wl_scale[0], photo1.mean(axis=0), lw=3, label='P1')
+# plt.plot(wl_scale[1], photo2.mean(axis=0), lw=3, label='P2')
+# plt.plot(wl_scale[2], photo3.mean(axis=0), lw=3, label='P3')
+# plt.plot(wl_scale[3], photo4.mean(axis=0), lw=3, label='P4')
+# plt.grid()
+# plt.xticks(size=30);plt.yticks(size=30)
+# plt.legend(loc='best', fontsize=35)
+# plt.xlabel('Wavelength (nm)', size=35)
+# plt.ylabel('Intensity (AU)', size=35)
+# plt.title('Visual check of wiggles', size=40)
+# plt.xlim(1400, 1700)
+# plt.ylim(-0.05, 1.05)
+# plt.tight_layout()
 
 
 
-plt.figure(figsize=(19.20,10.80))
-for k in range(16):
-    plt.subplot(4,4,k+1)
-    plt.title(titles_photo[k])
-    plt.plot(frame_axis, maxi[k])
-    plt.grid()
-plt.tight_layout()
+# plt.figure(figsize=(19.20,10.80))
+# for k in range(16):
+#     plt.subplot(4,4,k+1)
+#     plt.title(titles_photo[k])
+#     plt.plot(frame_axis, maxi[k])
+#     plt.grid()
+# plt.tight_layout()
