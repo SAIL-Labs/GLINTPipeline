@@ -254,31 +254,10 @@ if __name__ == '__main__':
             integ = np.array([np.sum(img.p1, axis=1), np.sum(img.p2, axis=1), np.sum(img.p3, axis=1), np.sum(img.p4, axis=1)])
             new_photo = integ[:,:,None] * spectra[:,None,:]
     
-            stack = np.transpose(img.slices[:,:,15,:], (1,0,2))
-            stack = stack[img.px_scale[15]]
-            stack = stack.mean(axis=0) # Integer along spectral axis
-            stack_err = stack[:,(np.arange(20)<=5)|(np.arange(20)>=15)].std() * np.ones_like(stack)
-            x = img.slices_axes[15]
-            
-            def model2(x, amp, x0, sigma):
-                expo = np.exp(-(x-x0)**2/(2*sigma**2))
-                return amp * expo / expo.sum()
-            popt, pcov = curve_fit(model2, x, stack[0], [stack[0].max(), x.mean(), 2], stack_err[0], True)
-
-            plt.figure()
-            plt.plot(img.wl_scale[15], img.p1[0])
-            plt.plot(img.wl_scale[15], new_photo[0][0])
-            plt.plot(img.wl_scale[15], img.p1.mean(axis=0))
-            plt.plot(img.wl_scale[15], spectra[0]*popt[0]*img.wl_scale[15].size)
-            
-            plt.figure()
-            plt.plot(abs(new_photo[0][0]-img.p1[0])/img.p1[0])
-            plt.plot(abs(img.p1.mean(axis=0)-img.p1[0])/img.p1[0])
-            plt.plot(abs(spectra[0]*popt[0]*img.wl_scale[15].size-img.p1[0])/img.p1[0])
-            
-            print(np.mean(abs(new_photo[0][0]-img.p1[0])/img.p1[0]))
-            print(np.mean(abs(img.p1.mean(axis=0)-img.p1[0])/img.p1[0]))
-            print(np.mean(abs(spectra[0]*popt[0]*img.wl_scale[15].size-img.p1[0])/img.p1[0]))
+            # plt.figure()
+            # plt.plot(img.wl_scale[15], img.p1[0])
+            # plt.plot(img.wl_scale[15], new_photo[0][0])
+            # plt.plot(img.wl_scale[15], img.p1.mean(axis=0))
             # plt.figure()
             # plt.plot(img.wl_scale[13], img.p2[0])
             # plt.plot(img.wl_scale[13], new_photo[1][0])
@@ -291,7 +270,7 @@ if __name__ == '__main__':
             # plt.plot(img.wl_scale[0], img.p4[0])
             # plt.plot(img.wl_scale[0], new_photo[3][0])
             # plt.plot(img.wl_scale[15], img.p4.mean(axis=0))
-            ppp
+            # ppp
             img.p1, img.p2, img.p3, img.p4 = new_photo
 
         if spectral_binning:
