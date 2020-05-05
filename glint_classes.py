@@ -72,6 +72,7 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
                 residuals_fit[k,i,j] = slices[k,j,i] - gaus(slices_axes[i], *popt)
                 
                 simple_gaus = np.exp(-(slices_axes[i]-positions[i,j])**2/(2*widths[i,j]**2))
+                simple_gaus = simple_gaus / simple_gaus.sum()
                 A = np.vstack((simple_gaus, np.ones_like(simple_gaus)))
                 A = np.transpose(A)
                 popt2 = np.linalg.lstsq(A, slices[k,j,i])[0]
@@ -473,6 +474,7 @@ class Null(File):
                 for j in range(len(spectral_axis)):
                     # 1st estimator : amplitude of the Gaussian profil of the track, use of linear least square
                     simple_gaus = np.exp(-(slices_axes[i]-positions[i,j])**2/(2*widths[i,j]**2)) # Shape factor of the intensity profile, to be removed before computing Null depth
+                    simple_gaus = simple_gaus / simple_gaus.sum()
                     A = np.vstack((simple_gaus, np.ones_like(simple_gaus)))
                     A = np.transpose(A)
                     popt2 = np.linalg.lstsq(A, slices[k,j,i])[0]

@@ -95,15 +95,16 @@ if __name__ == '__main__':
     nb_img = (0, None)
     debug = False
     save = False
-    nb_files = (0, 100)
-    bin_frames = True
+    nb_files = (0, None)
+    bin_frames = False
     nb_frames_to_bin = 50
-    spectral_binning = True
+    spectral_binning = False
     wl_bin_min, wl_bin_max = 1525, 1575# In nm
     bandwidth_binning = 50 # In nm
     mode_flux = 'amplitude'
-    nb_files_spectrum = (0,100)
+    nb_files_spectrum = (0,10)
     wavelength_bounds = (1400, 1700)
+    ron = 0
     
     ''' Inputs '''
     datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence1/'
@@ -116,7 +117,6 @@ if __name__ == '__main__':
     data_list = sorted([data_path+f for f in os.listdir(data_path) if 'n1n4' in f])
     if len(data_list) == 0:
         raise IndexError('Data list is empty')
-    data_list = data_list[nb_files[0]:nb_files[1]]
     
     ''' Output '''
     output_path = root+'GLINTprocessed/'+datafolder
@@ -163,11 +163,10 @@ if __name__ == '__main__':
             
             ''' Insulating each track '''
             img_spectrum.getChannels(channel_pos, sep, spatial_axis, dark=dark_per_channel)
-            # img_spectrum.slices = img_spectrum.slices + np.random.normal(0, 459, img_spectrum.slices.shape)
     
             img_spectrum.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff)
             list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
-            img_spectrum.getSpectralFlux(list_channels, spectral_axis, position_poly, width_poly, debug=debug)
+            img_spectrum.getSpectralFlux(list_channels, spectral_axis, position_poly, width_poly)
             
             img_spectrum.getIntensities(mode=mode_flux, wl_bounds=wavelength_bounds)
             
@@ -179,11 +178,11 @@ if __name__ == '__main__':
         slices_spectrum = slices_spectrum / nb_frames
         spectrum = glint_classes.Null(data=None, nbimg=(0,1))
         spectrum.cosmeticsFrames(np.zeros(dark.shape), no_noise)
-        spectrum.getChannels(channel_pos, sep, spatial_axis, dark=dark_per_channel)
+        spectrum.getChannels(channel_pos, sep, spatial_axis)
         spectrum.slices = np.reshape(slices_spectrum, (1,slices_spectrum.shape[0], slices_spectrum.shape[1], slices_spectrum.shape[2]))
         spectrum.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff)
         list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
-        spectrum.getSpectralFlux(list_channels, spectral_axis, position_poly, width_poly, debug=debug)
+        spectrum.getSpectralFlux(list_channels, spectral_axis, position_poly, width_poly)
         
         spectrum.getIntensities(mode=mode_flux, wl_bounds=wavelength_bounds)
         spectrum.p1 = spectrum.p1[0] / spectrum.p1[0].sum()
@@ -224,9 +223,9 @@ if __name__ == '__main__':
     
     ''' Start the data processing '''
     nb_frames = 0
-    for f in data_list:
+    for f in data_list[nb_files[0]:nb_files[1]]:
         start = time()
-        print("Process of : %s (%d / %d)" %(f, data_list.index(f)+1, len(data_list)))
+        print("Process of : %s (%d / %d)" %(f, data_list.index(f)+1, len(data_list[nb_files[0]:nb_files[1]])))
         img = glint_classes.Null(f, nbimg=nb_img)
         
         ''' Process frames '''
@@ -238,6 +237,7 @@ if __name__ == '__main__':
         ''' Insulating each track '''
         print('Getting channels')
         img.getChannels(channel_pos, sep, spatial_axis, dark=dark_per_channel)
+        img.slices = img.slices + np.random.normal(0, ron, img.slices.shape)
         
         ''' Map the spectral channels between every chosen tracks before computing 
         the null depth'''
@@ -254,10 +254,31 @@ if __name__ == '__main__':
             integ = np.array([np.sum(img.p1, axis=1), np.sum(img.p2, axis=1), np.sum(img.p3, axis=1), np.sum(img.p4, axis=1)])
             new_photo = integ[:,:,None] * spectra[:,None,:]
     
-            # plt.figure()
-            # plt.plot(img.wl_scale[15], img.p1[0])
-            # plt.plot(img.wl_scale[15], new_photo[0][0])
-            # plt.plot(img.wl_scale[15], img.p1.mean(axis=0))
+            stack = np.transpose(img.slices[:,:,15,:], (1,0,2))
+            stack = stack[img.px_scale[15]]
+            stack = stack.mean(axis=0) # Integer along spectral axis
+            stack_err = stack[:,(np.arange(20)<=5)|(np.arange(20)>=15)].std() * np.ones_like(stack)
+            x = img.slices_axes[15]
+            
+            def model2(x, amp, x0, sigma):
+                expo = np.exp(-(x-x0)**2/(2*sigma**2))
+                return amp * expo / expo.sum()
+            popt, pcov = curve_fit(model2, x, stack[0], [stack[0].max(), x.mean(), 2], stack_err[0], True)
+
+            plt.figure()
+            plt.plot(img.wl_scale[15], img.p1[0])
+            plt.plot(img.wl_scale[15], new_photo[0][0])
+            plt.plot(img.wl_scale[15], img.p1.mean(axis=0))
+            plt.plot(img.wl_scale[15], spectra[0]*popt[0]*img.wl_scale[15].size)
+            
+            plt.figure()
+            plt.plot(abs(new_photo[0][0]-img.p1[0])/img.p1[0])
+            plt.plot(abs(img.p1.mean(axis=0)-img.p1[0])/img.p1[0])
+            plt.plot(abs(spectra[0]*popt[0]*img.wl_scale[15].size-img.p1[0])/img.p1[0])
+            
+            print(np.mean(abs(new_photo[0][0]-img.p1[0])/img.p1[0]))
+            print(np.mean(abs(img.p1.mean(axis=0)-img.p1[0])/img.p1[0]))
+            print(np.mean(abs(spectra[0]*popt[0]*img.wl_scale[15].size-img.p1[0])/img.p1[0]))
             # plt.figure()
             # plt.plot(img.wl_scale[13], img.p2[0])
             # plt.plot(img.wl_scale[13], new_photo[1][0])
@@ -270,7 +291,7 @@ if __name__ == '__main__':
             # plt.plot(img.wl_scale[0], img.p4[0])
             # plt.plot(img.wl_scale[0], new_photo[3][0])
             # plt.plot(img.wl_scale[15], img.p4.mean(axis=0))
-            # ppp
+            ppp
             img.p1, img.p2, img.p3, img.p4 = new_photo
 
         if spectral_binning:
@@ -499,3 +520,50 @@ if __name__ == '__main__':
 #plt.ylabel('Count (normalized)', size=35)
 #plt.xlabel('Null depth', size=35)
 #plt.title('Histogram of N4', size=40)
+
+# from scipy.optimize import curve_fit
+# def model1(x, amp):
+#     global x0, sigma
+#     return amp * np.exp(-(x-x0)**2/(2*sigma**2))
+
+# popt_list = []
+# pcov_list = []
+# for k in range(96):
+#     x0 = positions_tracks[15,k]
+#     sigma = width_tracks[15, k]
+#     y = img.slices[-1,k,15,:]
+#     yerr = img.slices[:,:10,15,:].std() * np.ones_like(y)
+#     yerr = y[(np.arange(20)<=5)|(np.arange(20)>=15)].std() * np.ones_like(y)
+#     x = img.slices_axes[15]
+#     popt, pcov = curve_fit(model1, x, y, [1], yerr, True)
+#     popt_list.append(popt)
+#     pcov_list.append(pcov)
+    
+# popt_list = np.array(popt_list)
+# pcov_list = np.array(pcov_list)
+
+# popt_list = popt_list[img.px_scale[15]]
+# pcov_list = pcov_list[img.px_scale[15]]
+# integ = popt_list.mean(axis=0)
+# var_integ = pcov_list.sum(axis=0) / popt_list.size**2
+# snr = integ / np.diag(var_integ)**0.5
+
+# stack = img.slices[-1,:,15,:]
+# stack = stack[img.px_scale[15]]
+# stack = stack.mean(axis=0)
+# stack_err = img.slices[:,:10,15,:].std() * img.px_scale[15].size**0.5 * np.ones_like(stack)
+# stack_err = stack[(np.arange(20)<=5)|(np.arange(20)>=15)].std() * np.ones_like(stack)
+# x = img.slices_axes[15]
+
+# def model2(x, amp):
+#     x0 = positions_tracks[15].mean()
+#     sigma = width_tracks[15].mean()
+#     return amp * np.exp(-(x-x0)**2/(2*sigma**2))
+
+# popt, pcov = curve_fit(model2, x, stack, [stack.max()], stack_err, True)
+# snr2 = popt/np.diag(pcov)**0.5
+
+# print(snr)
+# print(snr2)
+# print(integ, np.diag(var_integ)**0.5)
+# print(popt, np.diag(pcov)**0.5)
