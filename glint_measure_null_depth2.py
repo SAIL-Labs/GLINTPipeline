@@ -94,7 +94,7 @@ if __name__ == '__main__':
     no_noise = False
     nb_img = (0, None)
     debug = False
-    save = False
+    save = True
     nb_files = (0, None)
     bin_frames = False
     nb_frames_to_bin = 50
@@ -102,19 +102,21 @@ if __name__ == '__main__':
     wl_bin_min, wl_bin_max = 1525, 1575# In nm
     bandwidth_binning = 50 # In nm
     mode_flux = 'amplitude'
-    nb_files_spectrum = (0,10)
+    nb_files_spectrum = (0,10000)
+    activate_estimate_spectrum = True
     wavelength_bounds = (1400, 1700)
-    ron = 0
+#    ron = 0
     
     ''' Inputs '''
-    datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence1/'
+    datafolder = '20190907/eps_peg/'
 #    root = "C:/Users/marc-antoine/glint/"
-    root = "/mnt/96980F95980F72D3/glint/"
+#    root = "/mnt/96980F95980F72D3/glint/"
+    root = "//silo.physics.usyd.edu.au/silo4/snert/"
     spectral_calibration_path = root+'GLINTprocessed/'+'calibration_params/'
-    geometric_calibration_path = root+'GLINTprocessed/'+'calibration_params/'
-#    data_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'+datafolder
-    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'n1n4' in f])
+    geometric_calibration_path = root+'GLINTprocessed/'+datafolder
+    data_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'+datafolder
+#    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
+    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'eps_peg' in f])
     if len(data_list) == 0:
         raise IndexError('Data list is empty')
     
@@ -152,7 +154,8 @@ if __name__ == '__main__':
     nb_frames = 0
     slices_spectrum = np.zeros_like(dark_per_channel)
 
-    if not 'dark' in data_list[0]:
+    if not 'dark' in data_list[0] and not os.path.exists(output_path+'spectra.npy') and activate_estimate_spectrum:
+        print('Determining spectrum\n')
         for f in data_list[nb_files_spectrum[0]:nb_files_spectrum[1]]:
             start = time()
             print("Process of : %s (%d / %d)" %(f, data_list.index(f)+1, len(data_list[nb_files_spectrum[0]:nb_files_spectrum[1]])))
@@ -191,15 +194,16 @@ if __name__ == '__main__':
         spectrum.p4 = spectrum.p4[0] / spectrum.p4[0].sum()
         spectra = np.array([spectrum.p1, spectrum.p2, spectrum.p3, spectrum.p4])
         del spectrum, img_spectrum
-        # plt.figure()
-        # plt.subplot(221)
-        # plt.plot(spectra[0])
-        # plt.subplot(222)
-        # plt.plot(spectra[1])
-        # plt.subplot(223)
-        # plt.plot(spectra[2])
-        # plt.subplot(224)
-        # plt.plot(spectra[3])
+        np.save(output_path+'spectra', spectra)
+#         plt.figure()
+#         plt.subplot(221)
+#         plt.plot(spectra[0])
+#         plt.subplot(222)
+#         plt.plot(spectra[1])
+#         plt.subplot(223)
+#         plt.plot(spectra[2])
+#         plt.subplot(224)
+#         plt.plot(spectra[3])
         # ppp
 
     ''' Output lists for different stages of the processing.
@@ -221,6 +225,9 @@ if __name__ == '__main__':
     p3 = []
     p4 = []
     
+    if os.path.exists(output_path+'spectra.npy') and activate_estimate_spectrum:
+        spectra = np.load(output_path+'spectra.npy')
+    
     ''' Start the data processing '''
     nb_frames = 0
     for f in data_list[nb_files[0]:nb_files[1]]:
@@ -237,7 +244,7 @@ if __name__ == '__main__':
         ''' Insulating each track '''
         print('Getting channels')
         img.getChannels(channel_pos, sep, spatial_axis, dark=dark_per_channel)
-        img.slices = img.slices + np.random.normal(0, ron, img.slices.shape)
+#        img.slices = img.slices + np.random.normal(0, ron, img.slices.shape)
         
         ''' Map the spectral channels between every chosen tracks before computing 
         the null depth'''
@@ -250,27 +257,28 @@ if __name__ == '__main__':
         ''' Reconstruct flux in photometric channels '''
         img.getIntensities(mode=mode_flux, wl_bounds=wavelength_bounds)
         
-        if not 'dark' in data_list[0]:
+        if not 'dark' in data_list[0] and activate_estimate_spectrum:
             integ = np.array([np.sum(img.p1, axis=1), np.sum(img.p2, axis=1), np.sum(img.p3, axis=1), np.sum(img.p4, axis=1)])
             new_photo = integ[:,:,None] * spectra[:,None,:]
     
-            # plt.figure()
-            # plt.plot(img.wl_scale[15], img.p1[0])
-            # plt.plot(img.wl_scale[15], new_photo[0][0])
-            # plt.plot(img.wl_scale[15], img.p1.mean(axis=0))
-            # plt.figure()
-            # plt.plot(img.wl_scale[13], img.p2[0])
-            # plt.plot(img.wl_scale[13], new_photo[1][0])
-            # plt.plot(img.wl_scale[15], img.p2.mean(axis=0))
-            # plt.figure()
-            # plt.plot(img.wl_scale[2], img.p3[0])
-            # plt.plot(img.wl_scale[2], new_photo[2][0])
-            # plt.plot(img.wl_scale[15], img.p3.mean(axis=0))
-            # plt.figure()
-            # plt.plot(img.wl_scale[0], img.p4[0])
-            # plt.plot(img.wl_scale[0], new_photo[3][0])
-            # plt.plot(img.wl_scale[15], img.p4.mean(axis=0))
-            # ppp
+            if debug:
+                plt.figure()
+                plt.plot(img.wl_scale[15], img.p1[0])
+                plt.plot(img.wl_scale[15], new_photo[0][0])
+                plt.plot(img.wl_scale[15], img.p1.mean(axis=0))
+                plt.figure()
+                plt.plot(img.wl_scale[13], img.p2[0])
+                plt.plot(img.wl_scale[13], new_photo[1][0])
+                plt.plot(img.wl_scale[15], img.p2.mean(axis=0))
+                plt.figure()
+                plt.plot(img.wl_scale[2], img.p3[0])
+                plt.plot(img.wl_scale[2], new_photo[2][0])
+                plt.plot(img.wl_scale[15], img.p3.mean(axis=0))
+                plt.figure()
+                plt.plot(img.wl_scale[0], img.p4[0])
+                plt.plot(img.wl_scale[0], new_photo[3][0])
+                plt.plot(img.wl_scale[15], img.p4.mean(axis=0))
+                # ppp
             img.p1, img.p2, img.p3, img.p4 = new_photo
 
         if spectral_binning:
@@ -380,7 +388,7 @@ if __name__ == '__main__':
         plt.ylabel('Counts (normalised)', size=40)
         txt = r'$\mu_{p%s} = %.3f$'%(k+1, popt[1]) + '\n' + r'$\sigma_{p%s} = %.3f$'%(k+1,popt[2])
         plt.text(0.05,0.3, txt, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
-        plt.savefig(output_path+'plot_histo_p%s.png'%(k+1))
+        if save: plt.savefig(output_path+'plot_histo_p%s.png'%(k+1))
     
     for k in range(len(photometries)):
         plt.figure(figsize=(19.20, 10.80))

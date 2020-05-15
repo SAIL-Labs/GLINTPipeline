@@ -540,8 +540,8 @@ def getErrorPDF(data_null, data_null_err, null_axis):
 def doubleGaussCdf(x, mu1, mu2, sig1, sig2, A):
     return sig1/(sig1+A*sig2) * ndtr((x-mu1)/(sig1)) + A*sig2/(sig1+A*sig2) * ndtr((x-mu2)/(sig2))
 
-def getErrorBinomNorm(cdf, data_size, width):
-    cdf_err = ((cdf * (1 - cdf*width))/(data_size**width))**0.5 # binom-norm
+def getErrorBinomNorm(pdf, data_size):
+    cdf_err = ((pdf * (1 - pdf))/(data_size))**0.5 # binom-norm
     cdf_err[cdf_err==0] = cdf_err[cdf_err!=0].min()
     return cdf_err
 
