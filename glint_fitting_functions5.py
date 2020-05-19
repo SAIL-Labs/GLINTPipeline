@@ -300,7 +300,7 @@ def computeNullDepth(na, IA, IB, wavelength, opd, phase_bias, dphase_bias, dark_
             2 * np.sqrt(IA * IB) * np.sqrt(zeta_minus_A*zeta_minus_B) * visibility * sine + \
             dark_null
         Iplus = IA*zeta_plus_A + IB*zeta_plus_B - \
-            2 * np.sqrt(IA * IB) * np.sqrt(zeta_plus_A*zeta_plus_B) * visibility *sine + \
+            2 * np.sqrt(IA * IB) * np.sqrt(zeta_plus_A*zeta_plus_B) * visibility * sine + \
             dark_antinull
         null = Iplus / Iminus        
     else:
@@ -308,7 +308,7 @@ def computeNullDepth(na, IA, IB, wavelength, opd, phase_bias, dphase_bias, dark_
             2 * np.sqrt(IA * IB) * np.sqrt(zeta_minus_A*zeta_minus_B) * visibility * sine + \
             dark_null
         Iplus = IA*zeta_plus_A + IB*zeta_plus_B + \
-            2 * np.sqrt(IA * IB) * np.sqrt(zeta_plus_A*zeta_plus_B) * visibility *sine + \
+            2 * np.sqrt(IA * IB) * np.sqrt(zeta_plus_A*zeta_plus_B) * visibility * sine + \
             dark_antinull
         null = Iminus / Iplus
     return null, Iminus, Iplus
