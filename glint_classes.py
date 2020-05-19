@@ -55,6 +55,7 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
     residuals_reg = np.zeros((nbimg, nb_tracks, len(spectral_axis), slices_axes.shape[1]))
     cov = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
     weights = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
+    labels = ['P4', 'N3', 'P3', 'N2', 'AN4', 'N5', 'N4', 'N6', 'AN1', 'AN6', 'N1', 'AN2', 'P2', 'AN3', 'AN5', 'P1']
 
     # With fitted amplitude
     for k in range(nbimg):
@@ -72,7 +73,6 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
                 residuals_fit[k,i,j] = slices[k,j,i] - gaus(slices_axes[i], *popt)
                 
                 simple_gaus = np.exp(-(slices_axes[i]-positions[i,j])**2/(2*widths[i,j]**2))
-                simple_gaus = simple_gaus / simple_gaus.sum()
                 A = np.vstack((simple_gaus, np.ones_like(simple_gaus)))
                 A = np.transpose(A)
                 popt2 = np.linalg.lstsq(A, slices[k,j,i])[0]
@@ -103,7 +103,7 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
                     plt.ylabel('Amplitude')
                     plt.grid()
                     plt.legend(loc='best')
-                    plt.title('Frame '+str(k)+'/ Track '+str(i+1)+'/ Column '+str(j))
+                    plt.title('Frame '+str(k)+'/ Track '+str(i+1)+'/ Column '+str(j)+'/ '+labels[i])
 #                    plt.subplot(312)
 #                    plt.plot(slices[k,j,i], residuals_fit[k,i,j], 'o', label='fit')
 #                    plt.plot(slices[k,j,i], residuals_reg[k,i,j], 'd', label='linear reg')
@@ -326,7 +326,7 @@ class Null(File):
             self.slices = self.slices - self.med_slices[:,None,:,None]
 
         
-    def getSpectralFlux(self, which_tracks, spectral_axis, position_poly, width_poly, debug=False):
+    def getSpectralFlux(self, which_tracks, spectral_axis, positions, widths, mode_flux, debug=False):
         """
         Wrapper getting the flux per spectral channel of each output.
         
@@ -337,12 +337,10 @@ class Null(File):
                 (in the way the frame are loaded)
             **spectral_axis**: ndarray
                 Common spectral axis in pixel for every outputs
-            **position_poly**: array-like
-                Estimated polynomial coefficients of the positions of each 
-                output respect to wavelength.
-            **width_poly**: array-like
-                Estimated polynomial coefficients of the widths of each 
-                output respect to wavelength, assuming a gaussian profile.
+            **position**: array-like
+                Positions of each output respect to the column of pixels.
+            **width**: array-like
+                Widths of each output respect to the column of pixels.
             **debug**: bol
                 Debug mode.
                 If ``True``, use the python/numpy function ``_getSpectralFlux`` which is 
@@ -388,22 +386,25 @@ class Null(File):
         """
         nbimg = self.data.shape[0]
         slices_axes, slices = self.slices_axes, self.slices
-        positions = np.array([p(spectral_axis) for p in position_poly])
-        widths = np.array([p(spectral_axis) for p in width_poly])
+        # positions = np.array([p(spectral_axis) for p in position_poly])
+        # widths = np.array([p(spectral_axis) for p in width_poly])
+        # positions = position
+        # widths = width
         self.raw = self.slices.mean(axis=-1)
         self.raw = np.transpose(self.raw, axes=(0,2,1))
-        
-        if debug:
-            self.amplitude_fit, self.amplitude, self.integ_model, self.integ_windowed, self.residuals_fit, self.residuals_reg, self.cov, self.weights = \
-        _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths)
-        else:
-            self.amplitude, self.integ_model, self.integ_windowed, self.residuals_reg, self.weights = \
-            self._getSpectralFluxNumba(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths)
-
         self.raw_err = self.bg_std * slices_axes.shape[-1]**0.5
-        self.windowed_err = self.bg_std * np.sum(self.weights)**0.5
         
-        return positions, widths
+        if mode_flux != 'raw':
+            if debug:
+                self.amplitude_fit, self.amplitude, self.integ_model, self.integ_windowed, self.residuals_fit, self.residuals_reg, self.cov, self.weights = \
+            _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths)
+            else:
+                self.amplitude, self.integ_model, self.integ_windowed, self.residuals_reg, self.weights = \
+                self._getSpectralFluxNumba(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths)
+    
+            self.windowed_err = self.bg_std * np.sum(self.weights)**0.5
+        
+        # return positions, widths
         
     @staticmethod
     @jit(nopython=True)
@@ -474,19 +475,22 @@ class Null(File):
                 for j in range(len(spectral_axis)):
                     # 1st estimator : amplitude of the Gaussian profil of the track, use of linear least square
                     simple_gaus = np.exp(-(slices_axes[i]-positions[i,j])**2/(2*widths[i,j]**2)) # Shape factor of the intensity profile, to be removed before computing Null depth
-                    simple_gaus = simple_gaus / simple_gaus.sum()
                     A = np.vstack((simple_gaus, np.ones_like(simple_gaus)))
                     A = np.transpose(A)
-                    popt2 = np.linalg.lstsq(A, slices[k,j,i])[0]
+                    if j >= 20:
+                        popt2 = np.linalg.lstsq(A, slices[k,j,i])[0]
+                    else:
+                        popt2 = np.array([0.])
                     residuals_reg[k,i,j] = slices[k,j,i] - (popt2[0] * simple_gaus + popt2[1])
                     amplitude[k,i,j] = popt2[0]
                     
                     # 2nd estimator : integration of the energy knowing the amplitude
-                    integ_model[k,i,j] = np.sum(simple_gaus * popt2[0] / np.sum(simple_gaus))
+                    integ_model[k,i,j] = np.sum(simple_gaus * popt2[0])
                     
                     # 3rd estimator : weighted mean of the track in a column of pixels
                     weight = np.exp(-(slices_axes[i]-positions[i,j])**2/(2*2**2)) # Same weight window for every tracks and spectral channel to make it removed when doing the ratio of intensity
-                    integ_windowed[k,i,j] = np.sum(weight * slices[k,j,i] / np.sum(simple_gaus))
+                    weight /= weight.sum()
+                    integ_windowed[k,i,j] = np.sum(weight * slices[k,j,i])
                     weights[k,i,j] = weight.sum()
                     
         return amplitude, integ_model, integ_windowed, residuals_reg, weights
