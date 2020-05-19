@@ -63,16 +63,16 @@ if __name__ == '__main__':
     no_noise = False
     nb_img = (None, None)
     debug = False
-    save = False
-    mode_flux = 'amplitude'
+    save = True
+    mode_flux = 'windowed'
 
     ''' Inputs '''
     datafolder = '20200106/all/'
     root = "/mnt/96980F95980F72D3/glint/"
-    spectral_calibration_path = root+'reduction/calibration_params/'
-    geometric_calibration_path = spectral_calibration_path#root+'reduction/'+datafolder
+    spectral_calibration_path = root+'GLINTprocessed/calibration_params/'
+    geometric_calibration_path = root+'GLINTprocessed/'+datafolder
     data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    output_path = root+'reduction/'+datafolder
+    output_path = root+'GLINTprocessed/'+datafolder
     dark = np.load(output_path+'superdark.npy')
     
     Iminus = []
@@ -84,7 +84,7 @@ if __name__ == '__main__':
         data_list = [data_path+f for f in os.listdir(data_path) if 'p'+str(beam) in f]
         
         ''' Output '''
-        output_path = root+'reduction/'+datafolder
+        output_path = root+'GLINTprocessed/'+datafolder
         if not os.path.exists(output_path):
             os.makedirs(output_path)
         
@@ -96,12 +96,15 @@ if __name__ == '__main__':
         ''' Set processing configuration and load instrumental calibration data '''
         nb_tracks = 16 # Number of tracks
         which_tracks = np.arange(16) # Tracks to process
-        coeff_pos = np.load(geometric_calibration_path+'20200130_coeff_position_poly.npy')
-        coeff_width = np.load(geometric_calibration_path+'20200130_coeff_width_poly.npy')
-        position_poly = [np.poly1d(coeff_pos[i]) for i in range(nb_tracks)]
-        width_poly = [np.poly1d(coeff_width[i]) for i in range(nb_tracks)]
-        wl_to_px_coeff = np.load(spectral_calibration_path+'20200130_wl_to_px.npy')
-        px_to_wl_coeff = np.load(spectral_calibration_path+'20200130_px_to_wl.npy')
+        # coeff_pos = np.load(geometric_calibration_path+'20200130_coeff_position_poly.npy')
+        # coeff_width = np.load(geometric_calibration_path+'20200130_coeff_width_poly.npy')
+        # position_poly = [np.poly1d(coeff_pos[i]) for i in range(nb_tracks)]
+        # width_poly = [np.poly1d(coeff_width[i]) for i in range(nb_tracks)]
+        pattern_coeff = np.load(geometric_calibration_path+'pattern_coeff.npy')
+        position_outputs = pattern_coeff[:,:,1].T
+        width_outputs = pattern_coeff[:,:,2].T
+        wl_to_px_coeff = np.load(spectral_calibration_path+'wl_to_px.npy')
+        px_to_wl_coeff = np.load(spectral_calibration_path+'px_to_wl.npy')
         
         
         spatial_axis = np.arange(dark.shape[0])
@@ -145,7 +148,7 @@ if __name__ == '__main__':
         
         ''' Measurement of flux per frame, per spectral channel, per track '''
         list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
-        img2.getSpectralFlux(list_channels, spectral_axis, position_poly, width_poly, debug=debug)
+        img2.getSpectralFlux(list_channels, spectral_axis, position_outputs, width_outputs, debug=debug)
         
         img2.getIntensities(mode_flux)
         
@@ -587,7 +590,7 @@ if __name__ == '__main__':
     
     if save:
         import h5py
-        with h5py.File(output_path+'/zeta_coeff.hdf5', 'w') as f:
+        with h5py.File(output_path+'/zeta_coeff_'+mode_flux+'.hdf5', 'w') as f:
             f.create_dataset('wl_scale', data=img2.wl_scale.mean(axis=0))
             f['wl_scale'].attrs['comment'] = 'wl in nm'
             for key in zeta_coeff.keys():
