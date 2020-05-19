@@ -101,22 +101,23 @@ if __name__ == '__main__':
     spectral_binning = False
     wl_bin_min, wl_bin_max = 1525, 1575# In nm
     bandwidth_binning = 50 # In nm
-    mode_flux = 'amplitude'
-    nb_files_spectrum = (0,10000)
+    mode_flux = 'raw'
+    nb_files_spectrum = (0,1000)
     activate_estimate_spectrum = True
     wavelength_bounds = (1400, 1700)
 #    ron = 0
     
     ''' Inputs '''
-    datafolder = '20190907/eps_peg/'
-#    root = "C:/Users/marc-antoine/glint/"
-#    root = "/mnt/96980F95980F72D3/glint/"
-    root = "//silo.physics.usyd.edu.au/silo4/snert/"
+    datafolder = '20191212/'
+    # root = "C:/Users/marc-antoine/glint/"
+    root = "/mnt/96980F95980F72D3/glint/"
+#    root = "//silo.physics.usyd.edu.au/silo4/snert/"
     spectral_calibration_path = root+'GLINTprocessed/'+'calibration_params/'
     geometric_calibration_path = root+'GLINTprocessed/'+datafolder
-    data_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'+datafolder
-#    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'eps_peg' in f])
+    # data_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'+datafolder
+#    data_path = 'C:/Users/marc-antoine/glint//GLINTData/'+datafolder
+    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
+    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'lab_turb_01' in f])
     if len(data_list) == 0:
         raise IndexError('Data list is empty')
     
@@ -134,10 +135,13 @@ if __name__ == '__main__':
     
     ''' Set processing configuration and load instrumental calibration data '''
     nb_tracks = 16 # Number of tracks
-    coeff_pos = np.load(geometric_calibration_path+'coeff_position_poly.npy')
-    coeff_width = np.load(geometric_calibration_path+'coeff_width_poly.npy')
-    position_poly = [np.poly1d(coeff_pos[i]) for i in range(nb_tracks)]
-    width_poly = [np.poly1d(coeff_width[i]) for i in range(nb_tracks)]
+    # coeff_pos = np.load(geometric_calibration_path+'coeff_position_poly.npy')
+    # coeff_width = np.load(geometric_calibration_path+'coeff_width_poly.npy')
+    # position_poly = [np.poly1d(coeff_pos[i]) for i in range(nb_tracks)]
+    # width_poly = [np.poly1d(coeff_width[i]) for i in range(nb_tracks)]
+    pattern_coeff = np.load(geometric_calibration_path+'pattern_coeff.npy')
+    position_outputs = pattern_coeff[:,:,1].T
+    width_outputs = pattern_coeff[:,:,2].T
     wl_to_px_coeff = np.load(spectral_calibration_path+'wl_to_px.npy')
     px_to_wl_coeff = np.load(spectral_calibration_path+'px_to_wl.npy')
     
@@ -147,7 +151,7 @@ if __name__ == '__main__':
     
     ''' Define bounds of each track '''
     y_ends = [33, 329] # row of top and bottom-most Track
-    sep = (y_ends[1] - y_ends[0])/(nb_tracks-1)
+    sep =  (y_ends[1] - y_ends[0])/(nb_tracks-1)
     channel_pos = np.around(np.arange(y_ends[0], y_ends[1]+sep, sep))
     
     ''' Get the spectrum of photometric channels '''
@@ -169,7 +173,7 @@ if __name__ == '__main__':
     
             img_spectrum.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff)
             list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
-            img_spectrum.getSpectralFlux(list_channels, spectral_axis, position_poly, width_poly)
+            img_spectrum.getSpectralFlux(list_channels, spectral_axis, position_outputs, width_outputs, mode_flux)
             
             img_spectrum.getIntensities(mode=mode_flux, wl_bounds=wavelength_bounds)
             
@@ -185,7 +189,7 @@ if __name__ == '__main__':
         spectrum.slices = np.reshape(slices_spectrum, (1,slices_spectrum.shape[0], slices_spectrum.shape[1], slices_spectrum.shape[2]))
         spectrum.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff)
         list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
-        spectrum.getSpectralFlux(list_channels, spectral_axis, position_poly, width_poly)
+        spectrum.getSpectralFlux(list_channels, spectral_axis, position_outputs, width_outputs, mode_flux)
         
         spectrum.getIntensities(mode=mode_flux, wl_bounds=wavelength_bounds)
         spectrum.p1 = spectrum.p1[0] / spectrum.p1[0].sum()
@@ -195,16 +199,16 @@ if __name__ == '__main__':
         spectra = np.array([spectrum.p1, spectrum.p2, spectrum.p3, spectrum.p4])
         del spectrum, img_spectrum
         np.save(output_path+'spectra', spectra)
-#         plt.figure()
-#         plt.subplot(221)
-#         plt.plot(spectra[0])
-#         plt.subplot(222)
-#         plt.plot(spectra[1])
-#         plt.subplot(223)
-#         plt.plot(spectra[2])
-#         plt.subplot(224)
-#         plt.plot(spectra[3])
-        # ppp
+        # plt.figure()
+        # plt.subplot(221)
+        # plt.plot(spectra[0])
+        # plt.subplot(222)
+        # plt.plot(spectra[1])
+        # plt.subplot(223)
+        # plt.plot(spectra[2])
+        # plt.subplot(224)
+        # plt.plot(spectra[3])
+         
 
     ''' Output lists for different stages of the processing.
     Include data from all processed files '''
@@ -252,33 +256,33 @@ if __name__ == '__main__':
         
         ''' Measurement of flux per frame, per spectral channel, per track '''
         list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
-        positions_tracks, width_tracks = img.getSpectralFlux(list_channels, spectral_axis, position_poly, width_poly, debug=debug)
+        positions_tracks, width_tracks = img.getSpectralFlux(list_channels, spectral_axis, position_outputs, width_outputs, mode_flux, debug=debug)
         
         ''' Reconstruct flux in photometric channels '''
         img.getIntensities(mode=mode_flux, wl_bounds=wavelength_bounds)
         
-        if not 'dark' in data_list[0] and activate_estimate_spectrum:
+        if activate_estimate_spectrum:
             integ = np.array([np.sum(img.p1, axis=1), np.sum(img.p2, axis=1), np.sum(img.p3, axis=1), np.sum(img.p4, axis=1)])
             new_photo = integ[:,:,None] * spectra[:,None,:]
     
-            if debug:
-                plt.figure()
-                plt.plot(img.wl_scale[15], img.p1[0])
-                plt.plot(img.wl_scale[15], new_photo[0][0])
-                plt.plot(img.wl_scale[15], img.p1.mean(axis=0))
-                plt.figure()
-                plt.plot(img.wl_scale[13], img.p2[0])
-                plt.plot(img.wl_scale[13], new_photo[1][0])
-                plt.plot(img.wl_scale[15], img.p2.mean(axis=0))
-                plt.figure()
-                plt.plot(img.wl_scale[2], img.p3[0])
-                plt.plot(img.wl_scale[2], new_photo[2][0])
-                plt.plot(img.wl_scale[15], img.p3.mean(axis=0))
-                plt.figure()
-                plt.plot(img.wl_scale[0], img.p4[0])
-                plt.plot(img.wl_scale[0], new_photo[3][0])
-                plt.plot(img.wl_scale[15], img.p4.mean(axis=0))
-                # ppp
+            
+            # plt.figure()
+            # plt.plot(img.wl_scale[15], img.p1[0])
+            # plt.plot(img.wl_scale[15], new_photo[0][0])
+            # plt.plot(img.wl_scale[15], img.p1.mean(axis=0))
+            # plt.figure()
+            # plt.plot(img.wl_scale[13], img.p2[0])
+            # plt.plot(img.wl_scale[13], new_photo[1][0])
+            # plt.plot(img.wl_scale[15], img.p2.mean(axis=0))
+            # plt.figure()
+            # plt.plot(img.wl_scale[2], img.p3[0])
+            # plt.plot(img.wl_scale[2], new_photo[2][0])
+            # plt.plot(img.wl_scale[15], img.p3.mean(axis=0))
+            # plt.figure()
+            # plt.plot(img.wl_scale[0], img.p4[0])
+            # plt.plot(img.wl_scale[0], new_photo[3][0])
+            # plt.plot(img.wl_scale[15], img.p4.mean(axis=0))
+            
             img.p1, img.p2, img.p3, img.p4 = new_photo
 
         if spectral_binning:
