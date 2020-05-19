@@ -57,7 +57,7 @@ def MCfunction(bins0, na, mu_opd, sig_opd):
     global rv_IA_list
 
     # Test
-    global Iplus
+    global Iplus, rv_interfplus, liste_rv_interfminus, liste_rv_interfplus, liste_rv_dark_Iminus, liste_rv_dark_Iplus
     
     count += 1
     print(int(count), na, mu_opd, sig_opd)
@@ -77,6 +77,11 @@ def MCfunction(bins0, na, mu_opd, sig_opd):
         
     ''' Number of samples to simulate is high and the memory is low so we iterate to create an average histogram '''
     for _ in range(nloop):
+        liste_rv_interfminus = cp.zeros((wl_scale0.size, n_samp_per_loop), dtype=cp.float32)
+        liste_rv_interfplus = cp.zeros((wl_scale0.size, n_samp_per_loop), dtype=cp.float32)
+        liste_rv_dark_Iminus = cp.zeros((wl_scale0.size, n_samp_per_loop), dtype=cp.float32)
+        liste_rv_dark_Iplus = cp.zeros((wl_scale0.size, n_samp_per_loop), dtype=cp.float32)
+
         rv_opd = cp.random.normal(mu_opd, sig_opd, n_samp_per_loop)
         rv_opd = rv_opd.astype(cp.float32)
 #        rv_opd = skewnorm.rvs(skew, loc=mu_opd, scale=sig_opd, size=n_samp_per_loop) # Skewd Gaussian distribution
@@ -126,7 +131,13 @@ def MCfunction(bins0, na, mu_opd, sig_opd):
                 bins = cp.asarray(bins0[k], dtype=cp.float32)
                 pdf_null = cp.histogram(rv_null, bins)[0]
                 accum[k] += pdf_null / cp.sum(pdf_null)#*bin_width)
-
+                
+            ''' Save some debug stuff '''
+            liste_rv_interfminus[k] = rv_interfminus
+            liste_rv_interfplus[k] = rv_interfplus
+            liste_rv_dark_Iminus[k] = rv_dark_Iminus
+            liste_rv_dark_Iplus[k] = rv_dark_Iplus
+                
         if activate_spectral_binning: 
 #            interfminus_binned = interfminus_binned / wl_scale0.size
 #            interfplus_binned = interfplus_binned / wl_scale0.size
@@ -206,8 +217,8 @@ def basin_hoppin_values(mu_opd0, sig_opd0, na0, bounds_mu, bounds_sig, bounds_na
         
 
 ''' Settings '''  
-wl_min = 1545 # lower bound of the bandwidth to process
-wl_max = 1550 # Uppber bound of the bandwidth to process
+wl_min = 1525 # lower bound of the bandwidth to process
+wl_max = 1575
 wl_mid = (wl_max + wl_min)/2 # Centre wavelength of the bandwidth
 n_samp_total = int(1e+8)
 n_samp_per_loop = int(1e+7) # number of samples per loop
@@ -217,191 +228,32 @@ phase_bias_switch = True # Implement a non-null achromatic phase in the null mod
 opd_bias_switch = True # Implement an offset OPD in the null model
 zeta_switch = True # Use the measured zeta coeff. If False, value are set to 0.5
 oversampling_switch = True # Include the loss of coherence when OPD is too far from 0, according to a sinc envelop
-skip_fit = False # Do not fit, plot the histograms of data and model given the initial guesses
+skip_fit = True # Do not fit, plot the histograms of data and model given the initial guesses
 chi2_map_switch = False # Map the parameters space over astronull, DeltaPhi mu and sigma
 nb_files_data = (0, 1000) #(20782, None) # Which data files to load
 nb_files_dark = (0, 1000) # Which dark files to load
 basin_hopping_nloop = (0, 1) # lower and upper bound of the iteration loop for basin hopping method
 activate_random_init_guesses = True
-activate_spectral_binning = True
+activate_spectral_binning = False
 activate_use_photometry = False
 activate_dark_correction = False
 activate_save_basic_esti = False
 which_nulls = ['null1', 'null4', 'null5', 'null6'][1:2]
 map_na_sz = 10
-map_mu_sz = 500
+map_mu_sz = 200
 map_sig_sz = 10
+nb_rows_plot = 3
 
-
-##    # =============================================================================
-## NullerData_SubaruJuly2019/20190718/20190718_turbulence1/ - 50 nm
-## =============================================================================
-#''' Set the bounds of the parameters to fit '''
-#nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
-#nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
-#bounds_mu0  = [(0, 400),      (2200, 2500), (2200, 2500), (0, 600),      (3000, 3500), (0, 700)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(100, 300),    (200, 300),   (200, 300),   (50,250),      (50, 600),  (100, 400)] # bounds for DeltaPhi sig
-#bounds_na0  = [(-0.1, 0.1),   (-0.2, 0.2),  (-0.2, 0.2),  (-0.01, 0.01), (-0.025, 0.025), (-0.01, 0.01)] # bounds for astronull
-##    bounds_sig0 = [(100, 300),    (200, 300),   (200, 300),   (50,300),      (50, 600),  (100, 400)] # 1271
-##    bounds_na0  = [(-0.1, 0.1),   (-0.2, 0.2),  (-0.2, 0.2),  (-0.01, 0.02), (-0.025, 0.025), (-0.01, 0.01)] # 1271
-##    bounds_mu0[4] = (-6600, -5900)
-##    bounds_sig0[4] = (200, 500)
-#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#bin_bounds0 = [(-0.02, 0.6), (-0.1, 0.4), (-0.1, 0.4), (-0.02, 0.6), (-0.02, 0.4), (-0.02, 1.)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
-##    bin_bounds0 = [(-0.2, 0.6), (-0.1, 0.4), (-0.1, 0.4), (-0.2, 0.6), (-0.02, 0.4), (-0.02, 1.)] # 1271 ron
-##    bin_bounds0 = [(-0.1, 0.6), (-0.1, 0.4), (-0.1, 0.4), (-0.1, 0.6), (-0.02, 0.4), (-0.02, 1.)] # 459 ron
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([200, 2400, 2400, 300, 3200, 400]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([200, 260, 260, 150, 200, 250]) # initial guess of DeltaPhi sig
-#na0 = np.array([0, 0, 0, 0, 0, 0]) # initial guess of astro null
-#
-#''' Import real data '''
-#datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence1_50nm_offset/'
-#darkfolder = 'NullerData_SubaruJuly2019/20190718/20190718_dark_turbulence_50nm_offset/'
-##    root = "//silo.physics.usyd.edu.au/silo4/snert/"
-#root = "C:/Users/marc-antoine/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output/'
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n1n4' in f][nb_files_data[0]:nb_files_data[1]]
-##    data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n5n6' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-#
-## =============================================================================
-## NullerData_SubaruJuly2019/20190718/20190718_turbulence2/ - 50 nm
-## =============================================================================
-#''' Set the bounds of the parameters to fit '''
-#nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
-#nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
-#bounds_mu0  = [(0, 400),      (2200, 2500), (2200, 2500), (0, 600), (3000, 4000), (0, 700)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(50, 300),    (200, 300),   (200, 300),   (50,200),      (50, 450),  (50, 400)] # bounds for DeltaPhi sig
-#bounds_na0  = [(-0.1, 0.1),   (-0.2, 0.2),  (-0.2, 0.2),  (-0.01, 0.01), (-0.01, 0.01), (-0.01, 0.01)] # bounds for astronull
-##    bounds_mu0[4] = (-6600, -5900)
-##    bounds_sig0[4] = (200, 500)
-#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#bin_bounds0 = [(-0.02, 0.6), (-0.1, 0.4), (-0.1, 0.4), (-0.02, 0.6), (-0.02, 0.4), (-0.02, 1.)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([200, 2400, 2400, 300, 3700, 400]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([200, 260, 260, 150, 200, 250]) # initial guess of DeltaPhi sig
-#na0 = np.array([0, 0, 0, 0, 0, 0]) # initial guess of astro null
-#
-#''' Import real data '''
-#datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence2_50nm_offset/'
-#darkfolder = 'NullerData_SubaruJuly2019/20190718/20190718_dark_turbulence_50nm_offset/'
-##    root = "//silo.physics.usyd.edu.au/silo4/snert/"
-#root = "C:/Users/marc-antoine/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output/'
-##    data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n1n4' in f][nb_files_data[0]:nb_files_data[1]]
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n5n6' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-#
-## =============================================================================m
-## NullerData_SubaruJuly2019/20190718/20190718_turbulence3/ - 50 nm
-## =============================================================================
-#''' Set the bounds of the parameters to fit '''
-#nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
-#nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
-#bounds_mu0  = [(0, 400),      (2200, 2500), (2200, 2500), (0, 400), (3000, 3500), (0, 700)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(50, 150),    (200, 300),   (200, 300),   (50,150),      (50, 150),  (100, 200)] # bounds for DeltaPhi sig
-#bounds_na0  = [(-0.1, 0.1),   (-0.2, 0.2),  (-0.2, 0.2),  (-0.01, 0.01), (-0.01, 0.01), (-0.01, 0.01)] # bounds for astronull
-##    bounds_mu0[4] = (-6600, -5900)
-##    bounds_sig0[4] = (200, 500)
-#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#bin_bounds0 = [(-0.02, 0.3), (-0.1, 0.4), (-0.1, 0.4), (-0.02, 0.4), (-0.02, 0.2), (-0.02, 0.4)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([200, 2400, 2400, 300, 3300, 400]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([100, 260, 260, 100, 120, 140]) # initial guess of DeltaPhi sig
-#na0 = np.array([0, 0, 0, 0, 0, 0]) # initial guess of astro null
-#
-#''' Import real data '''
-#datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence3_50nm_offset/'
-#darkfolder = 'NullerData_SubaruJuly2019/20190718/20190718_dark_turbulence_50nm_offset/'
-##    root = "//silo.physics.usyd.edu.au/silo4/snert/"
-#root = "C:/Users/marc-antoine/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output/'
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n1n4' in f][nb_files_data[0]:nb_files_data[1]]
-##    data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n5n6' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-#
-## =============================================================================
-## NullerData_SubaruJuly2019/20190718/20190718_turbulence4/ - 50 nm
-## =============================================================================
-#''' Set the bounds of the parameters to fit '''
-#nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
-#nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
-#bounds_mu0  = [(0, 400),      (2200, 2500), (2200, 2500), (0, 600), (3000, 4000), (0, 600)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(50, 300),    (200, 300),   (200, 300),   (50,200),      (100, 400),  (50, 200)] # bounds for DeltaPhi sig
-#bounds_na0  = [(-0.1, 0.1),   (-0.2, 0.2),  (-0.2, 0.2),  (-0.01, 0.01), (-0.05, 0.05), (-0.01, 0.01)] # bounds for astronull
-##    bounds_mu0[4] = (-6600, -5900)
-##    bounds_sig0[4] = (200, 500)
-#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#bin_bounds0 = [(-0.02, 0.4), (-0.1, 0.4), (-0.1, 0.4), (-0.02, 0.6), (-0.01, 0.2), (-0.02, 0.4)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([200, 2400, 2400, 300, 3700, 400]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([200, 260, 260, 150, 150, 100]) # initial guess of DeltaPhi sig
-#na0 = np.array([0, 0, 0, 0, 0, 0]) # initial guess of astro null
-#
-#''' Import real data '''
-#datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence4_50nm_offset/'
-#darkfolder = 'NullerData_SubaruJuly2019/20190718/20190718_dark_turbulence_50nm_offset/'
-##    root = "//silo.physics.usyd.edu.au/silo4/snert/"
-#root = "C:/Users/marc-antoine/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output/'
-##    data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n1n4' in f][nb_files_data[0]:nb_files_data[1]]
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n5n6' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-#
-## =============================================================================
-## NullerData_SubaruJuly2019/20190718/20190718_turbulence5/ - 50 nm
-## =============================================================================
-#''' Set the bounds of the parameters to fit '''
-#nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
-#nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
-#bounds_mu0  = [(0, 800),      (2200, 2500), (2200, 2500), (0, 600), (3000, 4000), (0, 600)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(100, 300),    (200, 300),   (200, 300),   (50,200),      (50, 250),  (50, 200)] # bounds for DeltaPhi sig
-#bounds_na0  = [(-0.01, 0.01),   (-0.2, 0.2),  (-0.2, 0.2),  (-0.01, 0.01), (-0.05, 0.05), (-0.01, 0.01)] # bounds for astronull
-##    bounds_mu0[4] = (-6600, -5900)
-##    bounds_sig0[4] = (200, 500)
-#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#bin_bounds0 = [(-0.01, 0.1), (-0.1, 0.4), (-0.1, 0.4), (-0.01, 0.3), (-0.01, 0.2), (-0.01, 0.2)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([200, 2400, 2400, 300, 3600, 400]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([200, 260, 260, 150, 100, 100]) # initial guess of DeltaPhi sig
-#na0 = np.array([0, 0, 0, 0, 0, 0]) # initial guess of astro null
-#
-#''' Import real data '''
-#datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence5_50nm_offset/'
-#darkfolder = 'NullerData_SubaruJuly2019/20190718/20190718_dark_turbulence_50nm_offset/'
-##    root = "//silo.physics.usyd.edu.au/silo4/snert/"
-#root = "C:/Users/marc-antoine/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output/'
-##    data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n1n4' in f][nb_files_data[0]:nb_files_data[1]]
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n5n6' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-#
 # =============================================================================
-# NullerData_SubaruJuly2019/20190718/20190718_turbulence1/
+# 20191212/lab_static
 # =============================================================================
 ''' Set the bounds of the parameters to fit '''
 nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
 nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
-bounds_mu0  = [(0, 400),      (2200, 2500), (2200, 2500), (0, 600), (4500, 5000), (0, 700)] # bounds for DeltaPhi mu, one tuple per null
-bounds_sig0 = [(100, 300),    (200, 300),   (200, 300),   (10,200),      (100, 500),  (100, 400)] # bounds for DeltaPhi sig
+bounds_mu0  = [(0, 600),      (2200, 2500), (2200, 2500), (100, 600), (4500, 5000), (0, 700)] # bounds for DeltaPhi mu, one tuple per null
+bounds_sig0 = [(0, 500),    (200, 300),   (200, 300),   (100,400),      (100, 500),  (100, 400)] # bounds for DeltaPhi sig
 #    bounds_sig0 = [(100, 400),    (200, 300),   (200, 300),   (50,300),      (100, 500),  (100, 400)] # ron 1271
-bounds_na0  = [(-0.01, 0.01),   (-0.2, 0.2),  (-0.2, 0.2),  (-0.01, 0.01), (-0.05, 0.05), (-0.01, 0.01)] # bounds for astronull
+bounds_na0  = [(-1, 0.01),   (-0.2, 0.2),  (-0.2, 0.2),  (-0.01, 0.01), (-0.05, 0.05), (-0.01, 0.01)] # bounds for astronull
 #    bounds_mu0[4] = (-6600, -5900)
 #    bounds_sig0[4] = (200, 500)
 diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
@@ -411,495 +263,22 @@ bin_bounds0 = [(-0.02, 0.2), (-0.1, 0.4), (-0.1, 0.4), (-0.02, 0.3), (-0.02, 0.1
 #    bin_bounds0 = [(-0.6, 1.2), (-0.1, 0.4), (-0.1, 0.4), (-0.6, 1.2), (-0.02, 0.1), (-0.02, 0.2)] # 1271
 
 ''' Set the initial conditions '''
-mu_opd0 = np.array([200, 2400, 2400, 400, 4700, 400]) # initial guess of DeltaPhi mu
+mu_opd0 = np.array([200, 2400, 2400, 300, 4700, 400]) # initial guess of DeltaPhi mu
 sig_opd0 = np.array([200, 260, 260, 160, 300, 250]) # initial guess of DeltaPhi sig
 na0 = np.array([0., 0, 0, 0, 0, 0]) # initial guess of astro null
 
-mu_opd0[3] = 3.99969575e+02
-sig_opd0[3] = 1.60272727e+02
-na0[3] = 1.04135253e-03
-
 ''' Import real data '''
-datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence1/'
-darkfolder = 'NullerData_SubaruJuly2019/20190718/20190718_dark_turbulence/'
-root = "//silo.physics.usyd.edu.au/silo4/snert/"
-#root = "C:/Users/marc-antoine/glint/"
-# root = "/mnt/96980F95980F72D3/glint/"
+datafolder = '20191212_raw_sum/'
+darkfolder = '20191212_raw_sum/'
+# root = "//silo.physics.usyd.edu.au/silo4/snert/"
+# root = "C:/Users/marc-antoine/glint/"
+root = "/mnt/96980F95980F72D3/glint/"
 file_path = root+'GLINTprocessed/'+datafolder
 save_path = file_path+'output_test/'
-data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n1n4' in f][nb_files_data[0]:nb_files_data[1]]
+data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'lab_turb_01' in f][nb_files_data[0]:nb_files_data[1]]
 #data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n5n6' in f][nb_files_data[0]:nb_files_data[1]]
-dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
+dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark_01' in f][nb_files_dark[0]:nb_files_dark[1]]
 
-## =============================================================================
-## NullerData_SubaruJuly2019/20190718/20190718_turbulence2/
-## =============================================================================
-#''' Set the bounds of the parameters to fit '''
-#nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
-#nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
-#bounds_mu0  = [(0, 400),      (2200, 2500), (2200, 2500), (0, 600), (4500, 5500), (0, 700)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(100, 300),    (200, 300),   (200, 300),   (10,200),      (100, 500),  (100, 400)] # bounds for DeltaPhi sig
-#bounds_na0  = [(-0.01, 0.01),   (-0.2, 0.2),  (-0.2, 0.2),  (-0.01, 0.01), (-0.05, 0.05), (-0.01, 0.01)] # bounds for astronull
-##    bounds_mu0[4] = (-6600, -5900)
-##    bounds_sig0[4] = (200, 500)
-#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#bin_bounds0 = [(-0.02, 0.2), (-0.1, 0.4), (-0.1, 0.4), (-0.02, 0.3), (-0.02, 0.1), (-0.02, 0.2)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([200, 2400, 2400, 400, 4700, 400]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([200, 260, 260, 160, 300, 250]) # initial guess of DeltaPhi sig
-#na0 = np.array([0, 0, 0, 0, 0, 0]) # initial guess of astro null
-#
-#''' Import real data '''
-#datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence2/'
-#darkfolder = 'NullerData_SubaruJuly2019/20190718/20190718_dark_turbulence/'
-#root = "//silo.physics.usyd.edu.au/silo4/snert/"
-##root = "C:/Users/marc-antoine/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output/'
-##data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n1n4' in f][nb_files_data[0]:nb_files_data[1]]
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n5n6' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-#
-## =============================================================================
-## NullerData_SubaruJuly2019/20190718/20190718_turbulence3/
-## =============================================================================
-#''' Set the bounds of the parameters to fit '''
-#nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
-#nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
-#bounds_mu0  = [(0, 400),      (2200, 2500), (2200, 2500), (0, 600), (4500, 5500), (0, 700)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(100, 300),    (200, 300),   (200, 300),   (10,200),      (100, 500),  (100, 400)] # bounds for DeltaPhi sig
-#bounds_na0  = [(-0.01, 0.01),   (-0.2, 0.2),  (-0.2, 0.2),  (-0.01, 0.01), (-0.05, 0.05), (-0.01, 0.01)] # bounds for astronull
-##    bounds_mu0[4] = (-6600, -5900)
-##    bounds_sig0[4] = (200, 500)
-#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#bin_bounds0 = [(-0.02, 0.2), (-0.1, 0.4), (-0.1, 0.4), (-0.02, 0.3), (-0.02, 0.1), (-0.02, 0.2)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([200, 2400, 2400, 400, 4700, 400]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([200, 260, 260, 160, 300, 250]) # initial guess of DeltaPhi sig
-#na0 = np.array([0, 0, 0, 0, 0, 0]) # initial guess of astro null
-#
-#''' Import real data '''
-#datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence3/'
-#darkfolder = 'NullerData_SubaruJuly2019/20190718/20190718_dark_turbulence/'
-##    root = "//silo.physics.usyd.edu.au/silo4/snert/"
-#root = "C:/Users/marc-antoine/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output/'
-##    data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n1n4' in f][nb_files_data[0]:nb_files_data[1]]
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n5n6' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-#
-## =============================================================================
-## NullerData_SubaruJuly2019/20190718/20190718_turbulence4/
-## =============================================================================
-#''' Set the bounds of the parameters to fit '''
-#nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
-#nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
-#bounds_mu0  = [(0, 400),      (2200, 2500), (2200, 2500), (0, 600), (4500, 5500), (0, 700)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(100, 300),    (200, 300),   (200, 300),   (10,200),      (100, 500),  (100, 400)] # bounds for DeltaPhi sig
-#bounds_na0  = [(-0.01, 0.01),   (-0.2, 0.2),  (-0.2, 0.2),  (-0.01, 0.01), (-0.05, 0.05), (-0.01, 0.01)] # bounds for astronull
-##    bounds_mu0[4] = (-6600, -5900)
-##    bounds_sig0[4] = (200, 500)
-#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#bin_bounds0 = [(-0.02, 0.2), (-0.1, 0.4), (-0.1, 0.4), (-0.02, 0.3), (-0.02, 0.1), (-0.02, 0.2)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([200, 2400, 2400, 400, 4700, 400]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([200, 260, 260, 160, 300, 250]) # initial guess of DeltaPhi sig
-#na0 = np.array([0, 0, 0, 0, 0, 0]) # initial guess of astro null
-#
-#''' Import real data '''
-#datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence4/'
-#darkfolder = 'NullerData_SubaruJuly2019/20190718/20190718_dark_turbulence/'
-##    root = "//silo.physics.usyd.edu.au/silo4/snert/"
-#root = "C:/Users/marc-antoine/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output/'
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n1n4' in f][nb_files_data[0]:nb_files_data[1]]
-##    data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n5n6' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-#
-## =============================================================================
-## NullerData_SubaruJuly2019/20190718/20190718_turbulence5/
-## =============================================================================
-#''' Set the bounds of the parameters to fit '''
-#nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
-#nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
-#bounds_mu0  = [(0, 400),      (2200, 2500), (2200, 2500), (0, 600), (5000, 5500), (0, 700)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(100, 300),    (200, 300),   (200, 300),   (10,200),      (50, 150),  (100, 400)] # bounds for DeltaPhi sig
-#bounds_na0  = [(-0.01, 0.01),   (-0.2, 0.2),  (-0.2, 0.2),  (-0.01, 0.01), (-0.01, 0.01), (-0.01, 0.01)] # bounds for astronull
-##    bounds_mu0[4] = (-6600, -5900)
-##    bounds_sig0[4] = (200, 500)
-#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#bin_bounds0 = [(-0.02, 0.2), (-0.1, 0.4), (-0.1, 0.4), (-0.02, 0.3), (-0.02, 0.1), (-0.02, 0.2)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([200, 2400, 2400, 400, 5100, 400]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([200, 260, 260, 160, 100, 250]) # initial guess of DeltaPhi sig
-#na0 = np.array([0, 0, 0, 0, 0, 0]) # initial guess of astro null
-#
-#''' Import real data '''
-#datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence5/'
-#darkfolder = 'NullerData_SubaruJuly2019/20190718/20190718_dark_turbulence/'
-##    root = "//silo.physics.usyd.edu.au/silo4/snert/"
-#root = "C:/Users/marc-antoine/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output/'
-##    data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n1n4' in f][nb_files_data[0]:nb_files_data[1]]
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n5n6' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-#
-## =============================================================================
-## NullerData_SubaruJuly2019/20190718/20190718_turbulence2/
-## =============================================================================
-#''' Set the bounds of the parameters to fit '''
-#nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
-#nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
-#bounds_mu0  = [(-wl_mid, wl_mid),      (2200, 2500), (2200, 2500), (0, 600), (4500, 5000), (0, 700)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(50, 300),    (200, 300),   (200, 300),   (50,200),      (50, 500),  (50, 400)] # bounds for DeltaPhi sig
-#bounds_na0  = [(-0.1, 0.1),   (-0.2, 0.2),  (-0.2, 0.2),  (-0.01, 0.01), (-0.05, 0.05), (-0.01, 0.01)] # bounds for astronull
-##    bounds_mu0[4] = (-6600, -5900)
-##    bounds_sig0[4] = (200, 500)
-#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#bin_bounds0 = [(-0.02, 0.6), (-0.1, 0.4), (-0.1, 0.4), (-0.02, 0.6), (-0.02, 0.4), (-0.02, 1.)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([200, 2400, 2400, 300, 4700, 400]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([200, 260, 260, 150, 300, 250]) # initial guess of DeltaPhi sig
-#na0 = np.array([0, 0, 0, 0, 0, 0]) # initial guess of astro null
-#
-#''' Import real data '''
-#datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence2/'
-#darkfolder = 'NullerData_SubaruJuly2019/20190718/20190718_dark_turbulence/'
-##    root = "//silo.physics.usyd.edu.au/silo4/snert/"
-#root = "C:/Users/marc-antoine/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output/'
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n1n4' in f][nb_files_data[0]:nb_files_data[1]]
-##    data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n5n6' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-
-## =============================================================================
-## 20191128/turbulence/  - Null1 is inverted, null4 is ok
-## =============================================================================
-#''' Set the bounds of the parameters to fit '''
-#bounds_mu0 = [(0, 600), (2200, 2500), (2200, 2500), (1554/4-300, 1554/4+300), (2200, 2500), (2200, 2500)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(50, 500), (200, 300), (200, 300), (50,150), (50, 247), (200, 300)] # bounds for DeltaPhi sig
-#bounds_na0 = [(-0.2, 0.2), (0., 0.05), (0., 0.01), (-0.05, 0.05), (0., 0.05), (0., 0.05)] # bounds for astronull
-#diffstep = [0.02, 50, 50] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([100, 2400, 2400, 1554/4, 2300, 2300]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([180, 260, 260, 100, 200, 201]) # initial guess of DeltaPhi sig
-#na0 = np.array([0., 0.001, 0.001, 0.04, 0.001, 0.001]) # initial guess of astro null
-#
-#datafolder = '20191128/turbulence/'
-#darkfolder = '20191128/dark_turbulence/'
-#root = "C:/Users/marc-antoine/glint/"
-##root = "/mnt/96980F95980F72D3/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output/'
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-    
-## =============================================================================
-## 20191128/turbulence/  - 50nm - Null1 is inverted, null4 is ok
-## =============================================================================
-#''' Set the bounds of the parameters to fit '''
-#bounds_mu0 = [(-400, 1000), (2200, 2500), (2200, 2500), (0, 1000), (2200, 2500), (2200, 2500)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(50, 500), (200, 300), (200, 300), (50,150), (50, 500), (200, 300)] # bounds for DeltaPhi sig
-#bounds_na0 = [(-0.2, 0.2), (0., 0.05), (0., 0.01), (-0.2, 0.2), (0., 0.05), (0., 0.05)] # bounds for astronull
-#diffstep = [0.02, 50, 50] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([100, 2400, 2400, 1554/4, 2300, 2300]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([180, 260, 260, 100, 200, 201]) # initial guess of DeltaPhi sig
-#na0 = np.array([0.01, 0.001, 0.001, 0.04, 0.001, 0.001]) # initial guess of astro null
-#
-#datafolder = '20191128/turbulence1554/'
-#darkfolder = '20191128/dark_turbulence1554/'
-#root = "C:/Users/marc-antoine/glint/"
-##root = "/mnt/96980F95980F72D3/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output/'
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-#
-## =============================================================================
-## omi cet - Null1 is inverted, null4 is ok
-## =============================================================================
-#nulls_to_invert = ['null1'] # If one null and antinull outputs are swapped in the data processing
-#nulls_to_invert_model = ['null1'] # If one null and antinull outputs are swapped in the data processing
-#''' Set the bounds of the parameters to fit '''
-#bounds_mu0 = [(400, 1000), (2200, 2500), (2200, 2500), (0, 400), (-9100, -8000), (4000, 5300)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(100, 500), (200, 300), (200, 300), (40,140), (100, 500), (100, 400)] # bounds for DeltaPhi sig
-#bounds_na0 = [(0.1, 0.4), (0., 0.05), (0., 0.01), (0., 0.06), (0., 0.1), (0.1, 0.3)] # bounds for astronull
-#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#bin_bounds0 = [(-0.5, 1.5), (-0.1, 0.4), (-0.1, 0.4), (-0.5, 1.), (-0.2, 0.5), (-0.1, 1.)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([600, 2400, 2400, 200, -8500, 5000]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([250, 260, 260, 50, 300, 250]) # initial guess of DeltaPhi sig
-#na0 = np.array([0.3, 0.001, 0.001, 0.04, 0.06, 0.16]) # initial guess of astro null
-#
-#''' Import real data '''
-#datafolder = '20190907/omi_cet_v1/'
-#darkfolder = '20190907/dark_v1/'
-#root = "//silo.physics.usyd.edu.au/silo4/snert/"
-##root = "/mnt/96980F95980F72D3/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output_test/'
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'omi_cet' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-
-# # =============================================================================
-# # omi cet - 50 nm - Null1 is inverted, null4 is ok
-# # =============================================================================
-# nulls_to_invert = ['null1'] # If one null and antinull outputs are swapped in the data processing
-# nulls_to_invert_model = ['null1'] # If one null and antinull outputs are swapped in the data processing
-# ''' Set the bounds of the parameters to fit '''
-# bounds_mu0 = [(50, 500), (2200, 2500), (2200, 2500), (0, wl_mid/4), (-400, 300), (4280, 5200)] # bounds for DeltaPhi mu, one tuple per null
-# bounds_sig0 = [(100, 500), (200, 300), (200, 300), (50,150), (100, 500), (100, 400)] # bounds for DeltaPhi sig
-# bounds_na0 = [(0., 0.35), (0., 0.05), (0., 0.01), (0.0, 0.2), (0.0, 0.1), (0.1, 0.3)] # bounds for astronull
-# #    bounds_mu0[4] = (-6600, -5900)
-# #    bounds_sig0[4] = (200, 500)
-# diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-# xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-# bin_bounds0 = [(-0.5, 1.5), (-0.1, 0.4), (-0.1, 0.4), (-0.1, 0.4), (-0.1, 0.4), (0, 2.)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
-#
-# ''' Set the initial conditions '''
-# mu_opd0 = np.array([300, 2400, 2400, 300, -150, 4500]) # initial guess of DeltaPhi mu
-# sig_opd0 = np.array([150, 260, 260, 100, 300, 250]) # initial guess of DeltaPhi sig
-# na0 = np.array([0.3, 0.001, 0.001, 0.1, 0.04, 0.16]) # initial guess of astro null
-#
-# ''' Import real data '''
-# datafolder = '20190907/omi_cet_50nm_offset/'
-# darkfolder = '20190907/dark_50nm_offset/'
-# root = "//silo.physics.usyd.edu.au/silo4/snert/"
-# #root = "/mnt/96980F95980F72D3/glint/"
-# file_path = root+'GLINTprocessed/'+datafolder
-# save_path = file_path+'output/'
-# data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'omi_cet' in f][nb_files_data[0]:nb_files_data[1]]
-# dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-#
-
-## =============================================================================
-##eps peg - 50 nm - Null1 is inverted, null4 is ok
-## =============================================================================
-#nulls_to_invert = ['null1'] # If one null and antinull outputs are swapped in the data processing
-#nulls_to_invert_model = ['null1'] # If one null and antinull outputs are swapped in the data processing
-#''' Set the bounds of the parameters to fit '''
-#bounds_mu0  = [(50, 500),   (2200, 2500), (2200, 2500), (0, wl_mid/4), (-600, 400), (5900, 7000)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(100, 500),  (200, 300),   (200, 300),   (20,100),      (100, 500),  (100, 400)] # bounds for DeltaPhi sig
-#bounds_na0  = [(-0.2, 0.2), (-0.2, 0.2),   (-0.2, 0.2),   (-0.2, 0.2), (-0.2, 0.2), (-0.2, 0.2)] # bounds for astronull
-##    bounds_mu0[4] = (-6600, -5900)
-##    bounds_sig0[4] = (200, 500)
-#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#bin_bounds0 = [(-0.5, 1.5), (-0.1, 0.4), (-0.1, 0.4), (-0.5, 1), (-0.5, 1.), (-0.2, 2.)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([300, 2400, 2400, 300, -150, 6000]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([150, 260, 260, 80, 300, 250]) # initial guess of DeltaPhi sig
-#na0 = np.array([-0.001, -0.001, -0.001, -0.001, -0.001, -0.001]) # initial guess of astro null
-#
-#''' Import real data '''
-#datafolder = '20190907/eps_peg_50nm_offset/'
-#darkfolder = '20190907/dark_50nm_offset/'
-#root = "//silo.physics.usyd.edu.au/silo4/snert/"
-##root = "/mnt/96980F95980F72D3/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output/'
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'eps_peg' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-#
-## =============================================================================
-##eps peg - Null1 is inverted, null4 is ok
-## =============================================================================
-#nulls_to_invert = ['null1'] # If one null and antinull outputs are swapped in the data processing
-#nulls_to_invert_model = ['null1'] # If one null and antinull outputs are swapped in the data processing
-#''' Set the bounds of the parameters to fit '''
-#bounds_mu0  = [(0, 500),   (2200, 2500), (2200, 2500), (0, wl_mid/4), (-400, 400), (6250, 7700)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(50, 450),  (200, 300),   (200, 300),   (50,200),      (100, 500),  (200, 600)] # bounds for DeltaPhi sig
-#bounds_na0  = [(-0.1, 0.1), (-0.2, 0.2),   (-0.2, 0.2),   (-0.1, 0.1), (-0.1, 0.1), (-0.1, 0.1)] # bounds for astronull
-##    bounds_mu0[4] = (-6600, -5900)
-##    bounds_sig0[4] = (200, 500)
-#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#bin_bounds0 = [(-1., 2.), (-0.1, 0.4), (-0.1, 0.4), (-1, 1.5), (-0.5, 1.), (-0.5, 2.)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([300, 2400, 2400, 300, -150, 7000]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([150, 260, 260, 80, 300, 250]) # initial guess of DeltaPhi sig
-#na0 = np.array([-0.001, -0.001, -0.001, -0.001, -0.001, -0.001]) # initial guess of astro null
-#
-#''' Import real data '''
-#datafolder = '20190907/eps_peg_v1/'
-#darkfolder = '20190907/dark_v1/'
-#root = "//silo.physics.usyd.edu.au/silo4/snert/"
-##root = "/mnt/96980F95980F72D3/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output_basic/'
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'eps_peg' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-
-    
-## =============================================================================
-##  20200201/RLeo2/
-## =============================================================================
-#''' Set the bounds of the parameters to fit '''
-#bounds_mu0 = [(-2*wl_mid, 2*wl_mid), (2200, 2500), (2200, 2500), (-1600, -600), (2200, 2500), (2200, 2500)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(50, 150), (200, 300), (200, 300), (80,150), (150, 250), (200, 300)] # bounds for DeltaPhi sig
-#bounds_na0 = [(0., 0.4), (0., 0.05), (0., 0.01), (0., 0.5), (-0.01, 0.1), (0., 0.05)] # bounds for astronull
-#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([389, 2400, 2400, -1200, 2300, 2300]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([100, 260, 260, 110, 200, 201]) # initial guess of DeltaPhi sig
-#na0 = np.array([0.25, 0.001, 0.001, 0.2, 0.001, 0.001]) # initial guess of astro null
-#
-#
-#''' Import real data '''
-#datafolder = '20200201/RLeo2/'
-#darkfolder = '20200201/dark2/'
-#root = "//silo.physics.usyd.edu.au/silo4/snert/"
-##root = "/mnt/96980F95980F72D3/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output/'
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'rleo' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-    
-## =============================================================================
-##  20200201/AlfBoo/
-## =============================================================================
-#''' Set the bounds of the parameters to fit '''
-#nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
-#nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
-#bounds_mu0 = [(400, 1000), (2200, 2500), (2200, 2500), (0, 400), (2200, 2500), (2200, 2500)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(100, 300), (200, 300), (200, 300), (80,250), (80, 250), (200, 300)] # bounds for DeltaPhi sig
-#bounds_na0 = [(0.0, 0.1), (0., 0.05), (0., 0.01), (0.0, 0.1), (-0.05, 0.15), (0., 0.05)] # bounds for astronull
-#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#bin_bounds0 = [(-0.1, 1.), (-0.1, 0.4), (-0.1, 0.4), (-0.1, 1.), (-0.1, 0.4), (-0.1, 0.4)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([600, 2400, 2400, 200, 2300, 2300], dtype=np.float64) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([220, 260, 260, 215, 200, 201], dtype=np.float64) # initial guess of DeltaPhi sig
-#na0 = np.array([0.08, 0.001, 0.001, 0.014, 0.001, 0.001], dtype=np.float64) # initial guess of astro null
-#mu_opd0[0] = 617
-#sig_opd0[0] = 247
-#na0[0] = 0.052
-#''' Import real data '''
-#datafolder = '20200201/AlfBoo/'
-#darkfolder = '20200201/dark3/'
-#root = "//silo.physics.usyd.edu.au/silo4/snert/"
-##root = "/mnt/96980F95980F72D3/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output_pouf/'
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'AlfBoo' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-
-## =============================================================================
-##  20200201/AlfBoo2/
-## =============================================================================
-#''' Set the bounds of the parameters to fit '''
-#nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
-#nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
-#bounds_mu0 = [(480, 780), (2200, 2500), (2200, 2500), (450, 750), (3000, 3500),(0, 400)] #(1950, 2300) , 2100 for N6 bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(100, 300), (200, 300), (200, 300), (80,250), (100, 300), (150, 300)] # bounds for DeltaPhi sig
-#bounds_na0 = [(0.0, 0.1), (0., 0.05), (0., 0.01), (0.0, 0.05), (0, 0.1), (0., 0.2)] # bounds for astronull
-#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#bin_bounds0 = [(-0.1, 1.), (-0.1, 0.4), (-0.1, 0.4), (-0.1, 1.), (-0.1, 0.4), (0., 1.)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([655, 2400, 2400, 570, 3300, 230]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([220, 260, 260, 148, 140, 160]) # initial guess of DeltaPhi sig
-#na0 = np.array([0.07, 0.001, 0.001, 0.014, 0.04, 0.08]) # initial guess of astro null
-#
-#
-#''' Import real data '''
-#datafolder = '20200201/AlfBoo2/'
-#darkfolder = '20200201/dark3/'
-#root = "//silo.physics.usyd.edu.au/silo4/snert/"
-##root = "/mnt/96980F95980F72D3/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output/'
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'AlfBoo' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-
-## =============================================================================
-## omi cet - Null1 is inverted, null4 is ok v2 measured null depth
-## =============================================================================
-#nulls_to_invert = ['null1'] # If one null and antinull outputs are swapped in the data processing
-#nulls_to_invert_model = ['null1'] # If one null and antinull outputs are swapped in the data processing
-#''' Set the bounds of the parameters to fit '''
-#bounds_mu0 = [(0, 400), (2200, 2500), (2200, 2500), (0, 400), (-9100, -8000), (4000, 5300)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(50, 150), (200, 300), (200, 300), (40,140), (100, 500), (100, 400)] # bounds for DeltaPhi sig
-#bounds_na0 = [(0.05, 0.2), (0., 0.05), (0., 0.01), (0., 0.06), (0., 0.1), (0.1, 0.3)] # bounds for astronull
-#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#bin_bounds0 = [(-0.1, 1.), (-0.1, 0.4), (-0.1, 0.4), (-0.1, 1.), (-0.2, 0.4), (0, 1.)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([300, 2400, 2400, 200, -8500, 5000]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([90, 260, 260, 50, 300, 250]) # initial guess of DeltaPhi sig
-#na0 = np.array([0.17, 0.001, 0.001, 0.04, 0.06, 0.16]) # initial guess of astro null
-#mu_opd0[3] =  2.69748750e+02
-#sig_opd0[3] = 5.83540297e+01
-#na0[3] = 1.46326299e-02
-#
-#''' Import real data '''
-#datafolder = '20190907/omi_cet/'
-#darkfolder = '20190907/dark/'
-#root = "//silo.physics.usyd.edu.au/silo4/snert/"
-##root = "/mnt/96980F95980F72D3/glint/"
-##root = "C:/Users/marc-antoine/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output_basic/'
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'omi_cet' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
-
-## =============================================================================
-##eps peg - Null1 is inverted, null4 is ok - v2
-## =============================================================================
-#nulls_to_invert = ['null1'] # If one null and antinull outputs are swapped in the data processing
-#nulls_to_invert_model = ['null1'] # If one null and antinull outputs are swapped in the data processing
-#''' Set the bounds of the parameters to fit '''
-#bounds_mu0  = [(0, 500),   (2200, 2500), (2200, 2500), (0, wl_mid/4), (-400, 400), (6250, 7700)] # bounds for DeltaPhi mu, one tuple per null
-#bounds_sig0 = [(50, 450),  (200, 300),   (200, 300),   (50,200),      (100, 500),  (200, 600)] # bounds for DeltaPhi sig
-#bounds_na0  = [(-0.1, 0.1), (-0.2, 0.2),   (-0.2, 0.2),   (-0.1, 0.1), (-0.1, 0.1), (-0.1, 0.1)] # bounds for astronull
-##    bounds_mu0[4] = (-6600, -5900)
-##    bounds_sig0[4] = (200, 500)
-#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-#bin_bounds0 = [(-1., 2.), (-0.1, 0.4), (-0.1, 0.4), (-1, 1.5), (-0.5, 1.), (-0.5, 2.)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
-#
-#''' Set the initial conditions '''
-#mu_opd0 = np.array([300, 2400, 2400, 300, -150, 7000]) # initial guess of DeltaPhi mu
-#sig_opd0 = np.array([150, 260, 260, 80, 300, 250]) # initial guess of DeltaPhi sig
-#na0 = np.array([-0.001, -0.001, -0.001, -0.001, -0.001, -0.001]) # initial guess of astro null
-#
-#''' Import real data '''
-#datafolder = '20190907/eps_peg/'
-#darkfolder = '20190907/dark/'
-#root = "//silo.physics.usyd.edu.au/silo4/snert/"
-##root = "/mnt/96980F95980F72D3/glint/"
-#file_path = root+'GLINTprocessed/'+datafolder
-#save_path = file_path+'output_basic/'
-#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'eps_peg' in f][nb_files_data[0]:nb_files_data[1]]
-#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f][nb_files_dark[0]:nb_files_dark[1]]
 
 # =============================================================================
 # Rock 'n roll
@@ -907,8 +286,8 @@ dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINT
 if len(data_list) == 0 or len(dark_list) == 0:
     raise UserWarning('data list or dark list is empty')
     
-calib_params_path = root+'GLINTprocessed/'+'calibration_params/'
-zeta_coeff_path = calib_params_path + 'zeta_coeff.hdf5'
+calib_params_path = file_path#root+'GLINTprocessed/calibration_params/'
+zeta_coeff_path = calib_params_path + '20200106_zeta_coeff_raw.hdf5'
 
 if not os.path.exists(save_path):
     os.makedirs(save_path)
@@ -974,7 +353,7 @@ for key in which_nulls: # Iterate over the null to fit
     key_antinull = null_table[key][2] # Select the index of the antinull output to process
     data_IA, data_IB = data['photo'][0], data['photo'][1] # Set photometries in dedicated variable into specific variables for clarity. A and B are the generic id of the beams for the processed baseiune
     dark_IA, dark_IB = dark['photo'][0], dark['photo'][1]
-    
+
     zeta_minus_A, zeta_minus_B = zeta_coeff['b%s%s'%(idx_photo[0]+1, key)], zeta_coeff['b%s%s'%(idx_photo[1]+1, key)] # Set zeta coeff linking null and photometric outputs into dedicated variables for clarity
     zeta_plus_A, zeta_plus_B = zeta_coeff['b%s%s'%(idx_photo[0]+1, key_antinull)], zeta_coeff['b%s%s'%(idx_photo[1]+1, key_antinull)] # Set zeta coeff linking antinull and photometric outputs into dedicated variables for clarity
 
@@ -983,15 +362,20 @@ for key in which_nulls: # Iterate over the null to fit
     # Get CDF of dark and photometries
     # =============================================================================
     ''' Get CDF of dark currents in interferometric outputs for generating random values in the MC function '''
+    dark_size = [len(np.linspace(dark['Iminus'][i].min(), dark['Iminus'][i].max(), \
+                             np.size(np.unique(dark['Iminus'][i])), endpoint=False)) for i in range(len(wl_scale0))]
     dark_Iminus_axis = cp.array([np.linspace(dark['Iminus'][i].min(), dark['Iminus'][i].max(), \
-                                             np.size(np.unique(dark['Iminus'][i])), endpoint=False) for i in range(len(wl_scale0))], \
+                                             min(dark_size), endpoint=False) for i in range(len(wl_scale0))], \
                                              dtype=cp.float32)
 
     dark_Iminus_cdf = cp.array([cp.asnumpy(gff.computeCdf(dark_Iminus_axis[i], dark['Iminus'][i], 'cdf', True)) \
                                 for i in range(len(wl_scale0))], dtype=cp.float32)
 
+    dark_size = [len(np.linspace(dark['Iplus'][i].min(), dark['Iplus'][i].max(), \
+                             np.size(np.unique(dark['Iminus'][i])), endpoint=False)) for i in range(len(wl_scale0))]
+
     dark_Iplus_axis = cp.array([np.linspace(dark['Iplus'][i].min(), dark['Iplus'][i].max(), \
-                                            np.size(np.unique(dark['Iplus'][i])), endpoint=False) for i in range(len(wl_scale0))], \
+                                            min(dark_size), endpoint=False) for i in range(len(wl_scale0))], \
                                             dtype=cp.float32)
 
     dark_Iplus_cdf = cp.array([cp.asnumpy(gff.computeCdf(dark_Iplus_axis[i], dark['Iplus'][i], 'cdf', True)) \
@@ -1014,6 +398,7 @@ for key in which_nulls: # Iterate over the null to fit
                 ((var_data[:,None]-var_dark[:,None])/var_data[:,None])**0.5 + mean_data[:,None] - mean_dark[:,None]
                 
             if np.any(np.isnan(injection)) or np.any(np.isinf(injection)):
+                print('Restore injection')
                 injection = injection_saved.copy()
         
         data_IA_axis = cp.linspace(injection[0].min(), injection[0].max(), np.size(np.unique(injection[0])), dtype=cp.float32)
@@ -1063,16 +448,12 @@ for key in which_nulls: # Iterate over the null to fit
         ''' Create the histogram (one per wavelegnth) '''
         pdf = np.histogram(data_null[wl], null_axis[wl], density=False)[0]
         pdf_size = np.sum(pdf)
-        print('Histogram size=', np.sum(pdf), np.sum(pdf)/data_null[wl].size)
         bin_width = null_axis[wl][1]-null_axis[wl][0]
         pdf = pdf / np.sum(pdf)
         null_pdf.append(pdf)
         
-        start = time()
         # pdf_err = gff.getErrorPDF(data_null[wl], data_null_err[wl], null_axis[wl]) # Barnaby's method, tend to underestimate the error
         pdf_err = gff.getErrorBinomNorm(pdf, pdf_size) # Classic method
-        stop = time()
-        print('Time PDF error=', stop-start)
         null_pdf_err.append(pdf_err)
                                     
     null_pdf = np.array(null_pdf)
@@ -1207,7 +588,7 @@ for key in which_nulls: # Iterate over the null to fit
             ''' Display the results of the fit'''
             # Each figure display the histogram of 10 wavelength, if more than 10 are fitted, extra figures are created                    
             wl_idx0 = np.arange(wl_scale.size)
-            wl_idx0 = list(gff.divide_chunks(wl_idx0, 10)) # Subset of wavelength displayed in one figure
+            wl_idx0 = list(gff.divide_chunks(wl_idx0, nb_rows_plot*2)) # Subset of wavelength displayed in one figure
             
             for wl_idx in wl_idx0:
                 f = plt.figure(figsize=(19.20,10.80))
@@ -1219,16 +600,16 @@ for key in which_nulls: # Iterate over the null to fit
                 axs = []
                 for wl in wl_idx[::-1]:
                     if len(wl_idx) > 1:
-                        ax = f.add_subplot(5,2,count+1)
+                        ax = f.add_subplot(nb_rows_plot,2,count+1)
                     else:
                         ax = f.add_subplot(1,1,count+1)
                     axs.append(ax)
-                    plt.title('%s nm'%wl_scale[wl], size=15)
+                    plt.title('%s nm'%wl_scale[wl], size=20)
                     plt.errorbar(null_axis[wl][:-1], null_pdf[wl], yerr=null_pdf_err[wl], fmt='.', markersize=5, label='Data')
                     plt.errorbar(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], markersize=5, lw=3, alpha=0.8, label='Fit')                    
                     plt.grid()
 #                    plt.legend(loc='best', fontsize=25)
-                    if count >= 8 or len(wl_idx) == 1: plt.xlabel('Null depth', size=20)
+                    if list(wl_idx).index(wl) <= 1 or len(wl_idx) == 1: plt.xlabel('Null depth', size=20)
                     if count %2 == 0: plt.ylabel('Frequency', size=20)
                     plt.xticks(size=15);plt.yticks(size=15)
 #                    plt.ylim(0, 0.003)
@@ -1247,6 +628,46 @@ for key in which_nulls: # Iterate over the null to fit
                 if activate_spectral_binning: string = string + '_sb'
                 plt.savefig(save_path+string+'.png')
 
+            ''' Display the details of the fit: make sure the reconstructed null and antinull match with the real ones '''
+            histom = [np.histogram(Iminus[k], bins=int(Iminus[k].size**0.5), density=True) for k in range(wl_scale.size)]
+            histom2 = [np.histogram(cp.asnumpy(liste_rv_interfminus[k]), bins=int(liste_rv_interfminus[k].size**0.5), density=True) for k in range(wl_scale.size)]
+            histop = [np.histogram(Iplus[k], bins=int(Iplus[k].size**0.5), density=True) for k in range(wl_scale.size)]
+            histop2 = [np.histogram(cp.asnumpy(liste_rv_interfplus[k]), bins=int(liste_rv_interfplus[k].size**0.5), density=True) for k in range(wl_scale.size)]
+            histodkm = [np.histogram(dark['Iminus'][k], bins=int(dark['Iminus'][k].size**0.5), density=True) for k in range(wl_scale.size)]
+            histodkp = [np.histogram(dark['Iplus'][k], bins=int(dark['Iplus'][k].size**0.5), density=True) for k in range(wl_scale.size)]
+            
+            for wl_idx in wl_idx0:
+                f = plt.figure(figsize=(19.20,10.80))
+                count = 0
+                axs = []
+                for wl in wl_idx[::-1]:
+                    if len(wl_idx) > 1:
+                        ax = f.add_subplot(nb_rows_plot,2,count+1)
+                    else:
+                        ax = f.add_subplot(1,1,count+1)
+                    axs.append(ax)
+                    plt.title('%s nm'%wl_scale[wl], size=20)
+                    plt.plot(histom[wl][1][:-1], histom[wl][0], '.', label='Iminus')
+                    plt.plot(histom2[wl][1][:-1], histom2[wl][0], label='rv minus')
+                    plt.plot(histop[wl][1][:-1], histop[wl][0], '.', label='Iplus')
+                    plt.plot(histop2[wl][1][:-1], histop2[wl][0], label='rv plus')
+                    plt.plot(histodkm[wl][1][:-1], histodkm[wl][0], label='Dark minus')
+                    plt.plot(histodkp[wl][1][:-1], histodkp[wl][0], label='Dark plus')
+                    plt.grid()
+                    plt.xticks(size=15);plt.yticks(size=15)
+                    if count %2 == 0: plt.ylabel('Frequency', size=20)
+                    if count == 0: plt.legend(loc='best', ncol=3, fontsize=15)
+                    if list(wl_idx).index(wl) <= 1 or len(wl_idx) == 1: plt.xlabel('Flux (AU)', size=20)
+                    count += 1
+                plt.tight_layout()
+                string = key+'_details_'+'%03d'%(basin_hopping_count)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(wl_scale[wl_idx[-1]])
+                if not oversampling_switch: string = string + '_nooversamplinginmodel'
+                if not zeta_switch: string = string + '_nozetainmodel'
+                if not skip_fit: 
+                    string = string + '_fit_pdf'
+                if activate_spectral_binning: string = string + '_sb'
+                plt.savefig(save_path+string+'.png')
+                
             ''' Plot the histogram of the photometries '''
             ''' Photo A '''
             for wl_idx in wl_idx0:
@@ -1257,20 +678,20 @@ for key in which_nulls: # Iterate over the null to fit
                     histo_IA = np.histogram(data_IA[wl], int(data_IA[wl].size**0.5), density=True)
                     histo_dIA = np.histogram(dark['photo'][0][wl], int(np.size(dark['photo'][0][wl])**0.5), density=True)
                     if len(wl_idx) > 1:
-                        ax = f.add_subplot(5,2,count+1)
+                        ax = f.add_subplot(nb_rows_plot,2,count+1)
                     else:
                         ax = f.add_subplot(1,1,count+1)
                     axs.append(ax)
-                    plt.title('%s nm'%wl_scale[wl])
+                    plt.title('%s nm'%wl_scale[wl], size=20)
                     plt.plot(histo_IA[1][:-1], histo_IA[0], '.', markersize=5, label='P%s'%(null_table[key][1][0]+1))
                     plt.plot(histo_dIA[1][:-1], histo_dIA[0], '.', markersize=5, label='Dark')
                     plt.grid()
-                    plt.legend(loc='best', fontsize=25)
-                    plt.xlabel('Flux', size=30)
-                    plt.ylabel('Frequency', size=30)
-                    plt.xticks(size=25);plt.yticks(size=25)
+                    plt.legend(loc='best', fontsize=15)
+                    plt.xlabel('Flux (AU)', size=20)
+                    plt.ylabel('Frequency', size=20)
+                    plt.xticks(size=15);plt.yticks(size=20)
                     count += 1
-                plt.tight_layout(rect=[0., 0.05, 1, 1])
+                plt.tight_layout()
                 string = 'P%s'%(null_table[key][1][0]+1)+'_'+key+'_'+'%03d'%(basin_hopping_count)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(wl_scale[wl_idx[-1]])
                 if activate_spectral_binning: string = string + '_sb'
                 plt.savefig(save_path+string+'.png')
@@ -1284,20 +705,20 @@ for key in which_nulls: # Iterate over the null to fit
                     histo_IB = np.histogram(data_IB[wl], int(data_IB[wl].size**0.5), density=True)
                     histo_dIB = np.histogram(dark['photo'][1][wl], int(np.size(dark['photo'][1][wl])**0.5), density=True)
                     if len(wl_idx) > 1:
-                        ax = f.add_subplot(5,2,count+1)
+                        ax = f.add_subplot(nb_rows_plot,2,count+1)
                     else:
                         ax = f.add_subplot(1,1,count+1)
                     axs.append(ax)
-                    plt.title('%s nm'%wl_scale[wl])
+                    plt.title('%s nm'%wl_scale[wl], size=20)
                     plt.plot(histo_IB[1][:-1], histo_IB[0], '.', markersize=5, label='P%s'%(null_table[key][1][1]+1))
                     plt.plot(histo_dIB[1][:-1], histo_dIB[0], '.', markersize=5, label='Dark')
                     plt.grid()
-                    plt.legend(loc='best', fontsize=25)
-                    plt.xlabel('Flux', size=30)
-                    plt.ylabel('Frequency', size=30)
-                    plt.xticks(size=25);plt.yticks(size=25)
+                    plt.legend(loc='best', fontsize=15)
+                    plt.xlabel('Flux (AU)', size=20)
+                    plt.ylabel('Frequency', size=20)
+                    plt.xticks(size=15);plt.yticks(size=15)
                     count += 1
-                plt.tight_layout(rect=[0., 0.05, 1, 1])
+                plt.tight_layout()
                 string = 'P%s'%(null_table[key][1][1]+1)+'_'+key+'_'+'%03d'%(basin_hopping_count)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(wl_scale[wl_idx[-1]])
                 if activate_spectral_binning: string = string + '_sb'
                 plt.savefig(save_path+string+'.png')
@@ -1456,21 +877,167 @@ plt.show()
 
 print('-- End --')
 
-interfminus_binned = cp.asnumpy(interfminus_binned)
-interfminus_binned = interfminus_binned[~np.isnan(interfminus_binned)]
-interfplus_binned = cp.asnumpy(interfplus_binned)
-interfplus_binned = interfplus_binned[~np.isnan(interfplus_binned)]
-interfplus_binned2 = interfplus_binned - interfplus_binned.mean() + Iplus.mean()
+# interfminus_binned = cp.asnumpy(interfminus_binned)
+# interfminus_binned = interfminus_binned[~np.isnan(interfminus_binned)]
+# interfplus_binned = cp.asnumpy(interfplus_binned)
+# interfplus_binned = interfplus_binned[~np.isnan(interfplus_binned)]
 
-histom = np.histogram(Iminus[0], bins=int(Iminus.size**0.5), density=True)
-histom2 = np.histogram(interfminus_binned, bins=int(interfminus_binned.size**0.5), density=True)
-histop = np.histogram(Iplus[0], bins=int(Iplus.size**0.5), density=True)
-histop2 = np.histogram(interfplus_binned, bins=int(interfplus_binned.size**0.5), density=True)
-histop2bis = np.histogram(interfplus_binned2, bins=int(interfplus_binned2.size**0.5), density=True)
-plt.figure()
-plt.plot(histom[1][:-1], histom[0], '.', label='Iminus')
-plt.plot(histom2[1][:-1], histom2[0], label='rv minus')
-plt.plot(histop[1][:-1], histop[0], '.', label='Iplus')
-plt.plot(histop2[1][:-1], histop2[0], label='rv plus')
-plt.plot(histop2bis[1][:-1], histop2bis[0], label='rv scaled')
-plt.legend(loc='best')
+# histom = np.histogram(Iminus[0], bins=int(Iminus.size**0.5), density=True)
+# histom2 = np.histogram(interfminus_binned, bins=int(interfminus_binned.size**0.5), density=True)
+# histop = np.histogram(Iplus[0], bins=int(Iplus.size**0.5), density=True)
+# histop2 = np.histogram(interfplus_binned, bins=int(interfplus_binned.size**0.5), density=True)
+
+# histodkA = np.histogram(dark_IA.sum(axis=0), bins=int(np.size(dark_IA.sum(axis=0))**0.5), density=True)
+# histodkB = np.histogram(dark_IB.sum(axis=0), bins=int(np.size(dark_IB.sum(axis=0))**0.5), density=True)
+# histoA = np.histogram(data_IA.sum(axis=0), bins=int(np.size(data_IA.sum(axis=0))**0.5), density=True)
+# histoB = np.histogram(data_IB.sum(axis=0), bins=int(np.size(data_IB.sum(axis=0))**0.5), density=True)
+
+# opd_rv = np.random.normal(387, 20, data_IA.shape[1])
+# # darkm_rv = np.random.normal(dark['Iminus'].mean(), dark['Iminus'].std(), data_IA.shape)
+# # darkp_rv = np.random.normal(dark['Iplus'].mean(), dark['Iplus'].std(), data_IA.shape)
+# darkm_rv = np.array([np.random.normal(dark['Iminus'][k].mean(), dark['Iminus'][k].std(), data_IA[k].size) for k in range(wl_scale.size)])
+# darkp_rv = np.array([np.random.normal(dark['Iplus'][k].mean(), dark['Iplus'][k].std(), data_IA[k].size) for k in range(wl_scale.size)])
+
+# data_IA0, data_IB0 = data_IA.copy(), data_IB.copy()
+# mean_dataA, var_dataA = np.mean(data_IA, axis=-1), np.var(data_IA, axis=-1)
+# mean_darkA, var_darkA = np.mean(dark['photo'][0], axis=-1), np.var(dark['photo'][0], axis=-1)
+
+# data_IA = (data_IA - mean_dataA[:,None]) * \
+#     ((var_dataA[:,None]-var_darkA[:,None])/var_darkA[:,None])**0.5 + mean_dataA[:,None] - mean_darkA[:,None]
+
+# mean_dataB, var_dataB = np.mean(data_IB, axis=-1), np.var(data_IB, axis=-1)
+# mean_darkB, var_darkB = np.mean(dark['photo'][1], axis=-1), np.var(dark['photo'][1], axis=-1)
+
+# data_IB = (data_IB - mean_dataB[:,None]) * \
+#     ((var_dataB[:,None]-var_darkB[:,None])/var_darkB[:,None])**0.5 + mean_dataB[:,None] - mean_darkB[:,None]
+
+
+
+# reconstruct_minus = (data_IA) * zeta_minus_A[:,None] + (data_IB) * zeta_minus_B[:,None] - \
+#                 2 * ((data_IA) * zeta_minus_A[:,None] * (data_IB) * zeta_minus_B[:,None])**0.5 * np.sin(2*np.pi/(wl_scale0[:,None])*opd_rv) + darkm_rv
+
+# reconstruct_plus = (data_IA) * zeta_plus_A[:,None] + (data_IB) * zeta_plus_B[:,None] +\
+#                 2 * ((data_IA) * zeta_plus_A[:,None] * (data_IB) * zeta_plus_B[:,None])**0.5 * np.sin(2*np.pi/(wl_scale0[:,None])*opd_rv) + darkp_rv
+
+# reconstruct_minus = reconstruct_minus.sum(axis=0)             
+# reconstruct_minus = reconstruct_minus[~np.isnan(reconstruct_minus)]
+
+# reconstruct_plus = reconstruct_plus.sum(axis=0)
+# reconstruct_plus = reconstruct_plus[~np.isnan(reconstruct_plus)]
+
+# histo_reconm = np.histogram(reconstruct_minus, histom[1], density=True)
+# histo_reconp = np.histogram(reconstruct_plus, histop[1], density=True)
+
+# plt.figure(figsize=(19.20,10.80))
+# plt.plot(histom[1][:-1], histom[0], '.', label='Iminus')
+# plt.plot(histom2[1][:-1], histom2[0], label='rv minus')
+# plt.plot(histop[1][:-1], histop[0], '.', label='Iplus')
+# plt.plot(histop2[1][:-1], histop2[0], label='rv plus')
+# plt.plot(histo_reconm[1][:-1], histo_reconm[0], '--', label='recons -')
+# plt.plot(histo_reconp[1][:-1], histo_reconp[0], '--', label='recons +')
+# plt.plot(histodkA[1][:-1], histodkA[0], label='Dark A')
+# plt.plot(histodkB[1][:-1], histodkB[0], label='Dark B')
+# plt.plot(histoA[1][:-1], histoA[0], label='P A')
+# plt.plot(histoB[1][:-1], histoB[0], label='P B')
+# plt.legend(loc='best')
+# plt.grid()
+# plt.xlim(-300, 4000)
+# plt.ylim(-1e-3, 0.033)
+# #plt.ylim(5e-5, 1.4e-3)
+# plt.tight_layout()
+
+# plt.figure()
+# plt.plot(histodkA[1][:-1]-np.mean(dark_IA.sum(axis=0)), histodkA[0], label='Dark A')
+# plt.plot(histodkB[1][:-1]-np.mean(dark_IB.sum(axis=0)), histodkB[0], label='Dark B')
+# plt.plot(histoA[1][:-1]-np.mean(data_IA.sum(axis=0)), histoA[0], label='P A')
+# plt.plot(histoB[1][:-1]-np.mean(data_IB.sum(axis=0)), histoB[0], label='P B')
+# plt.legend(loc='best')
+
+
+
+
+
+liste_rv_interfminus = cp.asnumpy(liste_rv_interfminus)
+liste_rv_interfplus = cp.asnumpy(liste_rv_interfplus)
+
+if activate_spectral_binning:
+    liste_rv_interfminus = np.sum(liste_rv_interfminus, axis=0).reshape(1,-1)
+    liste_rv_interfplus = np.sum(liste_rv_interfplus, axis=0).reshape(1,-1)
+
+liste_rv_interfminus = [liste_rv_interfminus[k][~np.isnan(liste_rv_interfminus[k])] for k in range(wl_scale.size)]
+liste_rv_interfplus = [liste_rv_interfplus[k][~np.isnan(liste_rv_interfplus[k])] for k in range(wl_scale.size)]
+
+histom = [np.histogram(Iminus[k], bins=int(Iminus[k].size**0.5), density=True) for k in range(wl_scale.size)]
+histom2 = [np.histogram(liste_rv_interfminus[k], bins=int(liste_rv_interfminus[k].size**0.5), density=True) for k in range(wl_scale.size)]
+histop = [np.histogram(Iplus[k], bins=int(Iplus[k].size**0.5), density=True) for k in range(wl_scale.size)]
+histop2 = [np.histogram(liste_rv_interfplus[k], bins=int(liste_rv_interfplus[k].size**0.5), density=True) for k in range(wl_scale.size)]
+
+histodkA = [np.histogram(dark_IA[k], bins=int(np.size(dark_IA[k])**0.5), density=True) for k in range(wl_scale.size)]
+histodkB = [np.histogram(dark_IB[k], bins=int(np.size(dark_IB[k])**0.5), density=True) for k in range(wl_scale.size)]
+histoA = [np.histogram(data_IA[k], bins=int(np.size(data_IA[k])**0.5), density=True) for k in range(wl_scale.size)]
+histoB = [np.histogram(data_IB[k], bins=int(np.size(data_IB[k])**0.5), density=True) for k in range(wl_scale.size)]
+
+darkm_rv = np.array([np.random.normal(dark['Iminus'][k].mean(), dark['Iminus'][k].std(), data_IA[k].size) for k in range(wl_scale.size)])
+darkp_rv = np.array([np.random.normal(dark['Iplus'][k].mean(), dark['Iplus'][k].std(), data_IA[k].size) for k in range(wl_scale.size)])
+darkm_rv = np.random.normal(dark['Iminus'].mean(), dark['Iminus'].std(), data_IA.shape)
+darkp_rv = np.random.normal(dark['Iplus'].mean(), dark['Iplus'].std(), data_IA.shape)
+darkm_rv = cp.asnumpy(liste_rv_dark_Iminus[:,:data_IA.shape[1]])
+darkp_rv = cp.asnumpy(liste_rv_dark_Iplus[:,:data_IA.shape[1]])
+
+if activate_dark_correction:
+    data_IA0, data_IB0 = data_IA.copy(), data_IB.copy()
+    mean_dataA, var_dataA = np.mean(data_IA, axis=-1), np.var(data_IA, axis=-1)
+    mean_darkA, var_darkA = np.mean(dark['photo'][0], axis=-1), np.var(dark['photo'][0], axis=-1)
+    
+    data_IA = (data_IA - mean_dataA[:,None]) * \
+        ((var_dataA[:,None]-var_darkA[:,None])/var_darkA[:,None])**0.5 + mean_dataA[:,None] - mean_darkA[:,None]
+    
+    mean_dataB, var_dataB = np.mean(data_IB, axis=-1), np.var(data_IB, axis=-1)
+    mean_darkB, var_darkB = np.mean(dark['photo'][1], axis=-1), np.var(dark['photo'][1], axis=-1)
+    
+    data_IB = (data_IB - mean_dataB[:,None]) * \
+        ((var_dataB[:,None]-var_darkB[:,None])/var_darkB[:,None])**0.5 + mean_dataB[:,None] - mean_darkB[:,None]
+
+opd_rv = np.random.normal(popt[0][1], popt[0][2], data_IA.shape[1])
+reconstruct_minus = (data_IA) * zeta_minus_A[:,None] + (data_IB) * zeta_minus_B[:,None] - \
+                2 * ((data_IA) * zeta_minus_A[:,None] * (data_IB) * zeta_minus_B[:,None])**0.5 * np.sin(2*np.pi/(wl_scale0[:,None])*opd_rv) + darkm_rv
+
+reconstruct_plus = (data_IA) * zeta_plus_A[:,None] + (data_IB) * zeta_plus_B[:,None] +\
+                2 * ((data_IA) * zeta_plus_A[:,None] * (data_IB) * zeta_plus_B[:,None])**0.5 * np.sin(2*np.pi/(wl_scale0[:,None])*opd_rv) + darkp_rv
+
+if activate_spectral_binning:
+    reconstruct_minus = reconstruct_minus.sum(axis=0).reshape(1,-1)           
+    reconstruct_plus = reconstruct_plus.sum(axis=0).reshape(1,-1)
+
+reconstruct_minus = [reconstruct_minus[k][~np.isnan(reconstruct_minus[k])] for k in range(wl_scale.size)]
+reconstruct_plus = [reconstruct_plus[k][~np.isnan(reconstruct_plus[k])] for k in range(wl_scale.size)]
+
+histo_reconm = [np.histogram(reconstruct_minus[k], histom[k][1], density=True) for k in range(wl_scale.size)]
+histo_reconp = [np.histogram(reconstruct_plus[k], histop[k][1], density=True) for k in range(wl_scale.size)]
+
+
+for wl_idx in wl_idx0:
+    f = plt.figure(figsize=(19.20,10.80))
+    count = 0
+    axs = []
+    for wl in wl_idx[::-1]:
+        if len(wl_idx) > 1:
+            ax = f.add_subplot(nb_rows_plot,2,count+1)
+        else:
+            ax = f.add_subplot(1,1,count+1)
+        axs.append(ax)
+        plt.title('%s nm'%wl_scale[wl], size=15)
+        plt.plot(histom[wl][1][:-1], histom[wl][0], '.', label='Iminus')
+        plt.plot(histom2[wl][1][:-1], histom2[wl][0], label='rv minus')
+        plt.plot(histop[wl][1][:-1], histop[wl][0], '.', label='Iplus')
+        plt.plot(histop2[wl][1][:-1], histop2[wl][0], label='rv plus')
+        plt.plot(histo_reconm[wl][1][:-1], histo_reconm[wl][0], '--', label='recons -')
+        plt.plot(histo_reconp[wl][1][:-1], histo_reconp[wl][0], '--', label='recons +')
+        plt.plot(histodkA[wl][1][:-1], histodkA[wl][0], label='Dark A')
+        plt.plot(histodkB[wl][1][:-1], histodkB[wl][0], label='Dark B')
+        plt.plot(histoA[wl][1][:-1], histoA[wl][0], label='P A')
+        plt.plot(histoB[wl][1][:-1], histoB[wl][0], label='P B')
+        plt.grid()
+        if count == 0: plt.legend(loc='best', ncol=3)
+        count += 1
+    plt.tight_layout()
