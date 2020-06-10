@@ -297,21 +297,50 @@ def computeNullDepth(na, IA, IB, wavelength, opd, phase_bias, dphase_bias, dark_
         
     if switch_invert_null: # Data was recorded with a constant pi shift
         Iminus = IA*zeta_minus_A + IB*zeta_minus_B + \
-            2 * np.sqrt(IA * IB) * np.sqrt(zeta_minus_A*zeta_minus_B) * visibility * sine + \
-            dark_null
+            2 * np.sqrt(IA * IB) * np.sqrt(zeta_minus_A*zeta_minus_B) * visibility * sine #+ dark_null
         Iplus = IA*zeta_plus_A + IB*zeta_plus_B - \
-            2 * np.sqrt(IA * IB) * np.sqrt(zeta_plus_A*zeta_plus_B) * visibility * sine + \
-            dark_antinull
+            2 * np.sqrt(IA * IB) * np.sqrt(zeta_plus_A*zeta_plus_B) * visibility * sine #+ dark_antinull
+#        Iminus = cp.random.normal(Iminus, Iminus**0.5, size=Iminus.shape)
+#        Iplus = cp.random.normal(Iplus, Iplus**0.5, size=Iplus.shape)
+        Iminus = Iminus + dark_null
+        Iplus = Iplus + dark_antinull
         null = Iplus / Iminus        
     else:
         Iminus = IA*zeta_minus_A + IB*zeta_minus_B - \
-            2 * np.sqrt(IA * IB) * np.sqrt(zeta_minus_A*zeta_minus_B) * visibility * sine + \
-            dark_null
+            2 * np.sqrt(IA * IB) * np.sqrt(zeta_minus_A*zeta_minus_B) * visibility * sine #+ dark_null
         Iplus = IA*zeta_plus_A + IB*zeta_plus_B + \
-            2 * np.sqrt(IA * IB) * np.sqrt(zeta_plus_A*zeta_plus_B) * visibility * sine + \
-            dark_antinull
+            2 * np.sqrt(IA * IB) * np.sqrt(zeta_plus_A*zeta_plus_B) * visibility * sine #+ dark_antinull
+#        Iminus = cp.random.normal(Iminus, Iminus**0.5, size=Iplus.shape)
+#        Iplus = cp.random.normal(Iplus, Iplus**0.5, size=Iplus.shape)
+        Iminus = Iminus + dark_null
+        Iplus = Iplus + dark_antinull
         null = Iminus / Iplus
     return null, Iminus, Iplus
+
+def computeNullDepthNoAntinull(IA, IB, wavelength, opd, dark_null, dark_antinull, 
+                     zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B, spec_chan_width, oversampling_switch, switch_invert_null):
+    
+    wave_number = 1./wavelength
+    sine = cp.sin(2*np.pi*wave_number*(opd))
+    if oversampling_switch:
+        delta_wave_number = abs(1/(wavelength + spec_chan_width/2) - 1/(wavelength - spec_chan_width/2))
+        arg = np.pi*delta_wave_number * (opd)
+        sinc = cp.sin(arg) / arg
+        sine = sine * sinc
+        
+    if switch_invert_null: # Data was recorded with a constant pi shift
+        Iminus = IA*zeta_minus_A + IB*zeta_minus_B + \
+            2 * np.sqrt(IA * IB) * np.sqrt(zeta_minus_A*zeta_minus_B)
+        Iplus = IA*zeta_plus_A + IB*zeta_plus_B - \
+            2 * np.sqrt(IA * IB) * np.sqrt(zeta_plus_A*zeta_plus_B) * sine + \
+            dark_antinull
+    else:
+        Iminus = IA*zeta_minus_A + IB*zeta_minus_B - \
+            2 * np.sqrt(IA * IB) * np.sqrt(zeta_minus_A*zeta_minus_B) * sine + \
+            dark_null
+        Iplus = IA*zeta_plus_A + IB*zeta_plus_B + \
+            2 * np.sqrt(IA * IB) * np.sqrt(zeta_plus_A*zeta_plus_B)
+    return Iminus, Iplus
 
 def computeNullDepth2(na, IA, IB, wavelength, opd, phase_bias, dphase_bias, dark_null, dark_antinull, 
                      zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B, spec_chan_width, oversampling_switch, switch_invert_null, sig_opd):
