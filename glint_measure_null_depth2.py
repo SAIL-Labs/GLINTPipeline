@@ -29,6 +29,13 @@ The monitoring is activated by setting the boolean variable **debug = True**.
 In that case, it is strongly advised deactivate the save of the results and 
 to process one frame of one datacube to avoid extremely long data processing.
 
+
+In order to increase the SNR in the extraction of the flux in the photometric output, ones can create the spectra in them by averaging the frames.
+The spectra are then normalized so that their integral in the bandwidth is equal to 1.
+Therefore, the extraction of the photometries on a frame basis first estimates the total flux in bandwidth then the spectral flux is given by the product of this total flux with the spectra.
+However, the gain of SNR is barely significant so this mode should not be used.
+
+
 This script is used in 3 steps.
 
 First step: simply change the value of the variables in the **Settings** section:
@@ -48,7 +55,10 @@ First step: simply change the value of the variables in the **Settings** section
         * ``model`` proceeds like ``amplitude`` but the integral of the flux is returned
         * ``windowed`` returns a weighted mean as flux of the spectral channel. The weights is the same pattern as the other modes above
         * ``raw`` returns the mean of the flux along the spatial axis over the whole width of the output        
-    
+    * **activate_estimate_spectrum**, boolean, if ``True``, the spectrum of the source in the photometric output is created.
+    * **nb_files_spectrum**: tuple, range of files to read to get the spectra.
+    * **wavelength_bounds**: tuple, bounds of the bandwidth one wants to keep after the extraction. Used in the method ``getIntensities``. It works independantly of **wl_bin_min** and **wl_bin_max**.
+
 Second step: change the value of the variables in the **Inputs** and **Outputs** sections:
     * **datafolder**: folder containing the datacube to use.
     * **root**: path to **datafolder**.
@@ -102,8 +112,8 @@ if __name__ == '__main__':
     wl_bin_min, wl_bin_max = 1525, 1575# In nm
     bandwidth_binning = 50 # In nm
     mode_flux = 'raw'
-    nb_files_spectrum = (5000,10000)
     activate_estimate_spectrum = False
+    nb_files_spectrum = (5000,10000)
     wavelength_bounds = (1400, 1700)
 #    ron = 0
     
@@ -170,8 +180,7 @@ if __name__ == '__main__':
             img_spectrum.getChannels(channel_pos, sep, spatial_axis, dark=dark_per_channel)
     
             img_spectrum.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff)
-            list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
-            img_spectrum.getSpectralFlux(list_channels, spectral_axis, position_outputs, width_outputs, mode_flux)
+            img_spectrum.getSpectralFlux(spectral_axis, position_outputs, width_outputs, mode_flux)
             
             img_spectrum.getIntensities(mode=mode_flux, wl_bounds=wavelength_bounds)
             
@@ -186,8 +195,7 @@ if __name__ == '__main__':
         spectrum.getChannels(channel_pos, sep, spatial_axis)
         spectrum.slices = np.reshape(slices_spectrum, (1,slices_spectrum.shape[0], slices_spectrum.shape[1], slices_spectrum.shape[2]))
         spectrum.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff)
-        list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
-        spectrum.getSpectralFlux(list_channels, spectral_axis, position_outputs, width_outputs, mode_flux)
+        spectrum.getSpectralFlux(spectral_axis, position_outputs, width_outputs, mode_flux)
         
         spectrum.getIntensities(mode=mode_flux, wl_bounds=wavelength_bounds)
         spectrum.p1 = spectrum.p1[0] / spectrum.p1[0].sum()
@@ -253,8 +261,7 @@ if __name__ == '__main__':
         img.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff)
         
         ''' Measurement of flux per frame, per spectral channel, per track '''
-        list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
-        img.getSpectralFlux(list_channels, spectral_axis, position_outputs, width_outputs, mode_flux, debug=debug)
+        img.getSpectralFlux(spectral_axis, position_outputs, width_outputs, mode_flux, debug=debug)
         
         ''' Reconstruct flux in photometric channels '''
         img.getIntensities(mode=mode_flux, wl_bounds=wavelength_bounds)

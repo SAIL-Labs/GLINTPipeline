@@ -198,7 +198,10 @@ class File(object):
 
     def cosmeticsFrames(self, dark, nonoise=False):
         """ 
-        Deprecated: ``dark`` should be a 2d-array full of 0.
+        NOTE FROM 2020-06-26:
+        Deprecated: ``dark`` must be a 2d-array full of 0.
+        The cosmetics is performed on the outputs themselves instead of the whole frame.
+        The attributes are meaningless but kept for comptability and further changes.
         
         Remove dark and bias from data frames.
         Directly acts on ``data`` attribute.
@@ -206,15 +209,15 @@ class File(object):
         in a signal-free area of the frames.
 
         :Parameters:
-            **dark: 2d-array**
+            **dark**: 2d-array
                 Average dark
                 
-            **nbimg: tup (optional)**
+            **nbimg**: tup (optional)
                 Load all frames of the datacube at path ``data`` from the first 
                 to the second-1 element of the tuple.
                 It cannot be ``(None, None)`` if mock data is created.
                 
-            **nonoise: bol**
+            **nonoise**: bool
                 Set to ``True`` if data does not have any detector noise (e.g. simulated one).
                 It skips the cosmetics and set estimation of the 
                 background variance/std to zero
@@ -328,22 +331,23 @@ class Null(File):
             self.slices = self.slices - self.med_slices[:,None,:,None]
             
         
-    def getSpectralFlux(self, which_tracks, spectral_axis, positions, widths, mode_flux, debug=False):
+    def getSpectralFlux(self, spectral_axis, positions, widths, mode_flux, debug=False):
         """
         Wrapper getting the flux per spectral channel of each output.
         
         :Parameters:
-            **which_tracks**: list
-                list of the output from which to measure the flux.
-                Outputs are numbered from 0 to 15 from top to bottom 
-                (in the way the frame are loaded)
             **spectral_axis**: ndarray
                 Common spectral axis in pixel for every outputs
             **position**: array-like
                 Positions of each output respect to the column of pixels.
             **width**: array-like
                 Widths of each output respect to the column of pixels.
-            **debug**: bol
+            **mode_flux**: string, choose the method to estimate the spectral flux in the outputs among:
+                * ``amplitude`` uses patterns determined in the script ``glint_geometric_calibration`` and a linear least square is performed to get the amplitude of the pattern
+                * ``model`` proceeds like ``amplitude`` but the integral of the flux is returned
+                * ``windowed`` returns a weighted mean as flux of the spectral channel. The weights is the same pattern as the other modes above
+                * ``raw`` returns the mean of the flux along the spatial axis over the whole width of the output. If chosen, other modes are not calculated and ``positions``, ``widths`` are not used. Otherwise, the raw mode is used as well as the given mode.
+            **debug**: bool
                 Debug mode.
                 If ``True``, use the python/numpy function ``_getSpectralFlux`` which is 
                 slow and allow visual check of the well behaviour of the model fitting.
@@ -357,7 +361,7 @@ class Null(File):
             
             **raw**: ndarray 
                 Estimation of the spectral flux by simply summing ``slices`` along spatial axis
-            **raw_err**:ndarray
+            **raw_err**:ndarray, deprecated
                 Estimation of the uncertainty of the estimation of the raw flux.
             **amplitude**: ndarray
                 Estimation of the spectral flux as the amplitude of the Gaussian 
@@ -386,6 +390,7 @@ class Null(File):
                 From debug-mode only.
                 Covariance estimated by the scipy's curve_fit method
         """
+        which_tracks = np.arange(16)
         nbimg = self.data.shape[0]
         slices_axes, slices = self.slices_axes, self.slices
         # positions = np.array([p(spectral_axis) for p in position_poly])
@@ -547,6 +552,8 @@ class Null(File):
         
     def error_null(self, null, Iminus, Iplus, Iminus_err, Iplus_err):
         """
+        Deprecated.
+        
         Propagate the error on intensities estimations to the null depth.
         We assume independant and Gaussian distributed values.
         
@@ -569,6 +576,7 @@ class Null(File):
     
     def computeNullDepth(self):
         """
+        Deprecated.
         Compute the null depth per spectral channel, per frame, per model, for each output.
         
         :Attributes:
@@ -854,8 +862,7 @@ class Null(File):
     def save(self, path, date):
         """
         Saves intermediate products for further analyses, into HDF5 file format.
-        The different intensities and null are gathered into dictionaries, 
-        according to which estimator is used.
+        The different intensities and null are gathered into dictionaries.
         
         :Parameters:
             **path**: str
@@ -865,8 +872,7 @@ class Null(File):
                 date of the acquisition of the data (YYYY-MM-DD).
                 
         :Returns:
-            HDF5 file containing the measured spectral null depths, 
-            spectral intensities of each output, for each frames, 
+            HDF5 file containing the measured spectral intensities of each output, for each frames, 
             and their uncertainties.
             
             Keywords identifies the nature of the stored data.

@@ -10,11 +10,12 @@ To get them, either you can try to be out of the coherent envelop for all baseli
 or having a large time-varying phase.
 In the last case, the average frame of the datacube blurs the fringe.
 
-The outputs products are:
-        * The polynomial coefficients determining the location of 16 outputs respect to spectral axis
-        * The polynomial coefficients determining the width of 16 outputs respect to spectral axis
+The product is:
+        * the coefficients of the Gaussian profile as an array of shape: (spectral channels, output, coefficient).
         
-The outputs are saved into numpy-format file (.npy).
+The saved coefficients are in this order: the amplitude, the location, the sigma and the offset of the Gaussian.
+While only the location and the sigma are really useful for the DRS, the others are kept for deep diagnotics.        
+The product is saved into numpy-format file (.npy).
 
 This script is used in 3 steps.
 
@@ -27,6 +28,9 @@ Second step: change the value of the variables in the **Inputs** and **Outputs**
     * **root**: path to **datafolder**.
     * **data_list**: list of files in **datafolder** to open.
     * **output_path**: path to the folder where the products are saved.
+    * **spectral_calibration_path**: path to the files of the spectral calibration
+    * **wl_to_px_coeff**: file of the conversion of wavelength (nm) to pixel
+    * **px_to_wl_coeff**:file of the conversion of pixel to wavelength (nm)
     
 Third step: start the script and let it run.
 """

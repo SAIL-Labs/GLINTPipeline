@@ -65,7 +65,14 @@ Step by step
 
 Locating the null
 -----------------
-To do
+The script is ready but needs to be documented.
+Before the observation, scans of the fringe are done.
+The frames and the real-time scan are saved.
+The frames allow to analyse the scan of the fringes, spectrally.
+The location of the null is done by fitting on one hand the non-dispersed scan and on the other hand the spectrally dispersed fringes.
+The non-dispersed scan gives a quick look of the portion of the envelop the scan was made while the dispersed scan gives an accurate location of the null depth.
+However the parameter space is periodic and the fitting algorithm is easily fooled so set boundaries on the OPD is mandatory.
+The feeling and the agreement between the two fits (dispersed and non-dispersed) on an OPD confirms the real position of the null depth.
 
 How to use the pipeline
 =======================
@@ -109,6 +116,11 @@ Run the script in the following order:
 4. :doc:`glint_measure_null_depth` with *data frames*
 5. Feed the model fitting script with the products
 
+How to self-calibrate the null depth
+====================================
+The self-calibration of the null depth relies on the modelling of the statistical behaviour of the measured null depth because of the fluctuations
+of intensities and phase.
+The code BARNACLE (BAttling for the measuRements of the Null depth at Any Cost Like a bEast) handles this and its documentation is on its way.
 
 Indices and tables
 ==================

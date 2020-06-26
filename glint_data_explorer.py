@@ -1,9 +1,34 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Thu Jun 20 09:58:33 2019
-@author: Marc-Antoine Martinod
-Just fill the settings and run the script.
+Script's name: **glint_data_explorer.py**
+
+This script quickly explores the data.
+Several plots are generated but you can still add or remove according to your needs.
+The script saves anything.
+It is not designed to handle a lot of data and the reading of hundred of files is long.
+It is recommended to load 10 or 20 files.
+
+The most common plots are:
+    * Animated plot showing the frames and the 1D-plot of every outputs, it loops over all the loaded frames
+    * Visual check of the wiggles in the photometries
+    * Evolution along frames of the average flux of every outputs
+    * Evolution along frames of the null dephts
+    * Distributions of the photometries, null depths and interferometric outputs
+    
+Inputs:
+    * **nonoise_switch**: bool, set to True to avoid loading a dark
+    * **nb_files**: tup, range of file to load (start, stop, step)
+    * **root**: str, common path to all the required files
+    * **path_to_data**: str, path to the directory containing the folder where data to load is
+    * **datafolder**: str, folder containing the data to load
+    * **darkfolder**: str, folder containing the dark to load
+    * **wl_path**: str, path to the spectral calibration files
+    * **output_path**: str, path containing preprocessed data to ease the loading of the data to explore (optional)
+    * **dark_path**: path to the average dark, if already created (optional)
+    * **fps**: float, frame rate at which the animated plot will read the frames
+    
+
 """
 
 import numpy as np
@@ -11,8 +36,6 @@ import h5py
 import matplotlib.pyplot as plt
 from matplotlib import animation
 import os
-from skimage.measure import moments
-from scipy.optimize import curve_fit
 
 def binning(arr, binning, axis=0, avg=False):
     """
@@ -65,7 +88,6 @@ darkfolder = 'data202006/AlfBoo/'
 wl_path = root+'GLINTprocessed/'+datafolder+'20200601_px_to_wl.npy'
 output_path = root+'GLINTprocessed/'+datafolder # Path to reduced data
 dark_path = output_path+'superdark.npy'
-wl_min, wl_max = 1400,1650
 fps = 10
 
 ''' Running script '''
