@@ -69,24 +69,20 @@ if __name__ == '__main__':
     ''' Inputs '''
     print("-----------------------------\nSpectral calibration")
     datafolder = 'data202006/wavecal/'
-    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    output_path = '/mnt/96980F95980F72D3/glint/GLINTprocessed/'+datafolder
+    data_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'+datafolder
+    output_path = 'C:/Users/marc-antoine/glint/GLINTprocessed/'+datafolder
 
     ''' Output '''
     if not os.path.exists(output_path):
         os.makedirs(output_path)
     
     ''' Iterate on wavelength '''
-    wavelength = [1400, 1450, 1500, 1550, 1600]
+    wavelength = [1400, 1450, 1500, 1550, 1600][1:]
     data_list0 = [[data_path+f for f in os.listdir(data_path) if '1400' in f],
                  [data_path+f for f in os.listdir(data_path) if '1450bis' in f],
                  [data_path+f for f in os.listdir(data_path) if '1500bis' in f],
                  [data_path+f for f in os.listdir(data_path) if '1550bis' in f],
-                 [data_path+f for f in os.listdir(data_path) if '1600' in f]]
-
-    wavelength = [1500, 1550]
-    data_list0 = [[data_path+f for f in os.listdir(data_path) if '1500bis' in f],
-                 [data_path+f for f in os.listdir(data_path) if '1550bis' in f]]
+                 [data_path+f for f in os.listdir(data_path) if '1600' in f]][1:]
     
     ''' Remove dark from the frames and average them to increase SNR '''
     dark = np.load(output_path+'superdark.npy')
