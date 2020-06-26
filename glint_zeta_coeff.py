@@ -65,14 +65,17 @@ if __name__ == '__main__':
     debug = False
     save = True
     mode_flux = 'raw'
+    suffix = ''
 
     ''' Inputs '''
-    datafolder = 'data202006/zeta/'
-    root = "/mnt/96980F95980F72D3/glint/"
+    datafolder = 'data202006/20200607/zetacoeff/'
+#    root = "/mnt/96980F95980F72D3/glint/"
+    root = "//silo.physics.usyd.edu.au/silo4/snert/"
     output_path = root+'GLINTprocessed/'+datafolder
     spectral_calibration_path = output_path
     geometric_calibration_path = output_path
-    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
+#    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
+    data_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'+datafolder
     dark = np.load(output_path+'superdark.npy')
     
     Iminus = []
@@ -366,7 +369,7 @@ if __name__ == '__main__':
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
         plt.tight_layout()
-        plt.savefig(output_path+'fluxes_p%s.png'%(beam))
+        plt.savefig(output_path+'fluxes_p%s'%(beam)+suffix+'.png')
         
     keys = np.array(list(zeta_coeff.keys()))
     keys_title = np.array([elt[0].upper()+'eam '+elt[1]+' to '+elt[2:6].capitalize()+' '+elt[6:] for elt in keys]).reshape(4,6)
@@ -385,7 +388,7 @@ if __name__ == '__main__':
             if j == 0: plt.ylabel(r'$\zeta$ coeff')
             plt.ylim(-0.2,5)
     plt.tight_layout()
-    plt.savefig(output_path+'zeta_coeff.png')
+    plt.savefig(output_path+'zeta_coeff'+suffix+'.png')
             
     Iplus = np.array(Iplus)
     Iminus = np.array(Iminus)
@@ -469,7 +472,7 @@ if __name__ == '__main__':
     plt.ylim(0,1.02)
     plt.xlim(1250)
     plt.tight_layout()
-    plt.savefig(output_path+'coupling_ratios.png')    
+    plt.savefig(output_path+'coupling_ratios'+suffix+'.png')    
     
     plt.figure(figsize=(19.20,10.80))
     plt.subplot(2,2,1)
@@ -533,7 +536,7 @@ if __name__ == '__main__':
     plt.xlabel('Wavelength (nm)')
     plt.ylabel('Splitting ratio')
     plt.tight_layout()
-    plt.savefig(output_path+'splitting_ratios.png')
+    plt.savefig(output_path+'splitting_ratios'+suffix+'.png')
     
     #plt.figure(figsize=(19.20,10.80))
     #plt.subplot(2,3,1)
@@ -589,7 +592,7 @@ if __name__ == '__main__':
     
     if save:
         import h5py
-        with h5py.File(output_path+'/zeta_coeff_'+mode_flux+'.hdf5', 'w') as f:
+        with h5py.File(output_path+'/zeta_coeff_'+mode_flux+suffix+'.hdf5', 'w') as f:
             f.create_dataset('wl_scale', data=img2.wl_scale.mean(axis=0))
             f['wl_scale'].attrs['comment'] = 'wl in nm'
             for key in zeta_coeff.keys():
