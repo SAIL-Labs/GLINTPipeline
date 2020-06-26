@@ -28,7 +28,6 @@ First step: simply change the value of the variables in the **Settings** section
     
 Second step: change the value of the variables in the **Inputs** and **Outputs** sections:
     * **datafolder**: folder containing the datacube to use.
-    * **root**: path to **datafolder**.
     * **dark_list**: list of files in **datafolder** to open.
     * **date**: str, date of the acquisition of the data in format YYY-MM-DD.
     
@@ -63,7 +62,7 @@ def gaus(x, a, x0, sig):
     """
     return a * np.exp(-(x-x0)**2/(2*sig**2))
 
-def saveFile(path, data, date, mode='channel'):
+def saveFile(path, data, mode='channel'):
     """
     Save the histogram of the dark into a HDF5 file.
     
@@ -93,13 +92,11 @@ def saveFile(path, data, date, mode='channel'):
                     'null1':11, 'null2':3, 'null3':1, 'null4':6, 'null5':5, 'null6':8,\
                     'antinull1':9, 'antinull2':12, 'antinull3':14, 'antinull4':4, 'antinull5':7, 'antinull6':10}
         
-        with h5py.File(path, opening_mode) as f:
-            f.attrs['date'] = date        
+        with h5py.File(path, opening_mode) as f:  
             for key, value in track_id.items():
                 f.create_dataset(key, data=data[value])
     else:
         with h5py.File(path, opening_mode) as f:
-            f.attrs['date'] = date
             f.create_dataset('histogram', data=data)
 
 def getHistogram(data, bins):
@@ -131,14 +128,15 @@ if __name__ == '__main__':
     edge_min, edge_max = -300, 300
     
     ''' Inputs '''
-    datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_dark_turbulence/'
-    root = "/mnt/96980F95980F72D3/glint_data/"
-    data_path = root+datafolder
+    datafolder = 'data202006/20200602/scans/'
+    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
     dark_list = [data_path+f for f in os.listdir(data_path) if 'dark' in f][nb_files[0]:nb_files[1]]
-    date = '2020-01-29'
     
+    if len(dark_list) == 0:
+        raise('Dark list is empty.')
+
     ''' Output '''
-    output_path = '/mnt/96980F95980F72D3/glint/reduction/'+datafolder
+    output_path = '/mnt/96980F95980F72D3/glint/GLINTprocessed/'+datafolder
     if not os.path.exists(output_path):
         os.makedirs(output_path)
         
@@ -189,6 +187,7 @@ if __name__ == '__main__':
         if save:
             np.save(output_path+'superdark', superDark)
             np.save(output_path+'superdarkchannel', superDarkChannel)
+            print('Dark and dark per channel saved')
     
     if monitor:
         bin_hist, step = np.linspace(edge_min-0.5, edge_max+0.5, edge_max-edge_min+1, retstep=True)
@@ -240,9 +239,9 @@ if __name__ == '__main__':
         hist_to_save[:,:,1] = bin_hist[:-1]
         
         if save:
-            saveFile(output_path+'hist_dk_params.hdf5', params, date)
-            saveFile(output_path+'hist_dk_slices.hdf5', hist_to_save, date)
-            saveFile(output_path+'hist_dk.hdf5', np.array([list_hist, bin_hist[:-1]]), date, 'global')
+            saveFile(output_path+'hist_dk_params.hdf5', params)
+            saveFile(output_path+'hist_dk_slices.hdf5', hist_to_save)
+            saveFile(output_path+'hist_dk.hdf5', np.array([list_hist, bin_hist[:-1]]), 'global')
         
         popt, pcov = curve_fit(gaus, bin_hist_cent, list_hist, p0=[max(list_hist), 0, 50])
         f = plt.figure(figsize=(19.20, 10.80))
@@ -255,6 +254,7 @@ if __name__ == '__main__':
         plt.xticks(size=35);plt.yticks(size=35);
         txt = r'$\mu = %.3f$'%(popt[1]) + '\n' + r'$\sigma = %.3f$'%(popt[2])
         plt.text(0.05,0.6, txt, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
+        plt.savefig(output_path+'histogram_dark_fullframe.png')
         
         plt.figure(figsize=(19.20, 10.80))
         for i in range(16):
@@ -267,6 +267,7 @@ if __name__ == '__main__':
             plt.legend(loc='upper left')
         #    plt.xticks(size=36);plt.yticks(size=36)
         plt.suptitle('Histogram of the background noise')
+        plt.savefig(output_path+'histogram_dark.png')
         
         plt.figure(figsize=(19.20, 10.80))
         for i in range(16):
@@ -281,6 +282,8 @@ if __name__ == '__main__':
         #    plt.xlim(-1000,1000)
         #    plt.xticks(size=36);plt.yticks(size=36)
         plt.suptitle('Histogram of the background noise')
+        plt.savefig(output_path+'histogram_dark_logscale.png')
+        
         
         
         ''' Inspecting non-uniformities '''
@@ -343,7 +346,8 @@ if __name__ == '__main__':
                 plt.ylabel('Avg dark current')
                 if i ==0: plt.legend(loc='best')
             plt.tight_layout()
-         
+            plt.savefig(output_path+'avg_time_lapse.png')
+            
             plt.figure(figsize=(19.20, 10.80))
             plt.plot(np.arange(dk56.size)[::1], dk56[::1])
             plt.grid()
@@ -381,3 +385,4 @@ if __name__ == '__main__':
             plt.xticks(size=30);plt.yticks(size=30)
             plt.title('Average dark current on whole frame (Drift = %.3E/frame)'%popt[0], size=35)       
             plt.legend(loc='best')
+            plt.savefig(output_path+'avg_dark_fullframe.png')

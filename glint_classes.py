@@ -317,14 +317,16 @@ class Null(File):
         self.slices = np.array([self.data[:,np.int(np.around(pos-sep/2)):np.int(np.around(pos+sep/2)),:] for pos in channel_pos])
         self.slices = np.transpose(self.slices, (1,3,0,2))
         self.slices_axes = np.array([spatial_axis[np.int(np.around(pos-sep/2)):np.int(np.around(pos+sep/2))] for pos in channel_pos])
-        
+        # self.slices = self.slices[:,:,:,10-4:10+5]
+        # self.slices_axes  = self.slices_axes[:,10-4:10+5]
         self.slices0 = self.slices.copy()
-        
+
         if 'dark' in kwargs:
-            self.slices = self.slices - kwargs['dark'][None,:]
+            dk = kwargs['dark'][None,:]
+            self.slices = self.slices - dk#[:,:,:,10-4:10+5]
             self.med_slices = np.mean(self.slices[:,:10], axis=(1,3))
             self.slices = self.slices - self.med_slices[:,None,:,None]
-
+            
         
     def getSpectralFlux(self, which_tracks, spectral_axis, positions, widths, mode_flux, debug=False):
         """
@@ -390,7 +392,7 @@ class Null(File):
         # widths = np.array([p(spectral_axis) for p in width_poly])
         # positions = position
         # widths = width
-        self.raw = self.slices.mean(axis=-1)
+        self.raw = self.slices[:,:,:,10-4:10+5].mean(axis=-1)
         self.raw = np.transpose(self.raw, axes=(0,2,1))
         self.raw_err = self.bg_std * slices_axes.shape[-1]**0.5
         

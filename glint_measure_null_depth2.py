@@ -103,29 +103,26 @@ if __name__ == '__main__':
     bandwidth_binning = 50 # In nm
     mode_flux = 'raw'
     nb_files_spectrum = (0,1000)
-    activate_estimate_spectrum = True
+    activate_estimate_spectrum = False
     wavelength_bounds = (1400, 1700)
 #    ron = 0
     
     ''' Inputs '''
-    datafolder = '20191212/'
+    datafolder = 'simu_ron_regime/'
     # root = "C:/Users/marc-antoine/glint/"
     root = "/mnt/96980F95980F72D3/glint/"
 #    root = "//silo.physics.usyd.edu.au/silo4/snert/"
-    spectral_calibration_path = root+'GLINTprocessed/'+'calibration_params/'
-    geometric_calibration_path = root+'GLINTprocessed/'+datafolder
+    output_path = root+'GLINTprocessed/'+datafolder
+    spectral_calibration_path = output_path
+    geometric_calibration_path = output_path
     # data_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'+datafolder
 #    data_path = 'C:/Users/marc-antoine/glint//GLINTData/'+datafolder
     data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'lab_turb_01' in f])
+    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'pure' in f])
+    plot_name = datafolder.split('/')[-2]
     if len(data_list) == 0:
         raise IndexError('Data list is empty')
-    
-    ''' Output '''
-    output_path = root+'GLINTprocessed/'+datafolder
-    if not os.path.exists(output_path):
-        os.makedirs(output_path)
-    
+
     if no_noise:
         dark = np.zeros((344,96))
         dark_per_channel = np.zeros((96,16,20))
@@ -256,7 +253,7 @@ if __name__ == '__main__':
         
         ''' Measurement of flux per frame, per spectral channel, per track '''
         list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
-        positions_tracks, width_tracks = img.getSpectralFlux(list_channels, spectral_axis, position_outputs, width_outputs, mode_flux, debug=debug)
+        img.getSpectralFlux(list_channels, spectral_axis, position_outputs, width_outputs, mode_flux, debug=debug)
         
         ''' Reconstruct flux in photometric channels '''
         img.getIntensities(mode=mode_flux, wl_bounds=wavelength_bounds)
@@ -392,7 +389,7 @@ if __name__ == '__main__':
         plt.ylabel('Counts (normalised)', size=40)
         txt = r'$\mu_{p%s} = %.3f$'%(k+1, popt[1]) + '\n' + r'$\sigma_{p%s} = %.3f$'%(k+1,popt[2])
         plt.text(0.05,0.3, txt, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
-        if save: plt.savefig(output_path+'plot_histo_p%s.png'%(k+1))
+        if save: plt.savefig(output_path+plot_name+'_plot_histo_p%s.png'%(k+1))
     
     for k in range(len(photometries)):
         plt.figure(figsize=(19.20, 10.80))

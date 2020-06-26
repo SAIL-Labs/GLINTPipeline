@@ -19,10 +19,10 @@ nonoise_switch = False
 nb_files = (0,10) # Number of data files to read. None = all files
 root = "/mnt/96980F95980F72D3/glint/" # Root path containing the reduced data
 path_to_data = '/mnt/96980F95980F72D3/glint_data/'
-datafolder = '20200201/AlfBoo/' # Folder of the data to explore
-darkfolder = '20200201/dark3/'
-#datafolder = '20191128/turbulence/' # Folder of the data to explore
-#darkfolder = '20191128/turbulence/'
+# datafolder = '20191014/p1_nowiggle/' # Folder of the data to explore
+# darkfolder = '20191014/dark/'
+datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence1/' # Folder of the data to explore
+darkfolder = 'NullerData_SubaruJuly2019/20190718/20190718_dark_turbulence/'
 wl_path = root+'GLINTprocessed/calibration_params/px_to_wl.npy'
 #wl_path = root+'GLINTprocessed/201806_wavecal/px_to_wl.npy'
 output_path = root+'GLINTprocessed/'+datafolder # Path to reduced data
@@ -32,7 +32,7 @@ fps = 10
 
 ''' Running script '''
 data_path = path_to_data+datafolder # Full path to the data
-data_list = sorted([data_path+f for f in os.listdir(data_path)])
+data_list = sorted([data_path+f for f in os.listdir(data_path) if 'n1n4' in f])
 data_list = data_list[nb_files[0]:nb_files[1]]
 if not nonoise_switch:
     switch_dark = False
@@ -341,3 +341,30 @@ for i in range(16):
     plt.grid()
     plt.title(titles_photo[i])
 plt.tight_layout()
+
+fig = plt.figure()
+ax = fig.add_subplot(111)
+plt.imshow(stack[0], interpolation='none', aspect=2, vmax = 3000, vmin=0, extent=[wl_scale[0,0]-5/2, wl_scale[0,-1]+5/2, stack[0].shape[0], 0])
+cb = plt.colorbar()
+cb.set_label(label='Intensity (AU)', size=20)
+cb.ax.tick_params(labelsize=15)
+plt.xticks(size=15)
+plt.yticks(size=15)
+plt.xlabel('Wavelength (nm)', size=20)
+plt.ylabel('Spatial axis (px)', size=20)
+plt.text(0.05, 0.04, 'P1', transform=ax.transAxes, color='w', fontsize=14)
+plt.text(0.05, 0.15, 'P2', transform=ax.transAxes, color='w', fontsize=14)
+plt.text(0.05, 0.789, 'P3', transform=ax.transAxes, color='w', fontsize=14)
+plt.text(0.05, 0.9, 'P4', transform=ax.transAxes, color='w', fontsize=14)
+plt.text(0.05, 0.265, 'N1', transform=ax.transAxes, color='w', fontsize=14)
+plt.text(0.05, 0.725, 'N2', transform=ax.transAxes, color='w', fontsize=14)
+plt.text(0.05, 0.84, 'N3', transform=ax.transAxes, color='w', fontsize=14)
+plt.text(0.05, 0.5525, 'N4', transform=ax.transAxes, color='w', fontsize=14)
+plt.text(0.05, 0.61, 'N5', transform=ax.transAxes, color='w', fontsize=14)
+plt.text(0.05, 0.4375, 'N6', transform=ax.transAxes, color='w', fontsize=14)
+plt.text(0.05, 0.38, 'AN1', transform=ax.transAxes, color='w', fontsize=14)
+plt.text(0.05, 0.2075, 'AN2', transform=ax.transAxes, color='w', fontsize=14)
+plt.text(0.05, 0.0975, 'AN3', transform=ax.transAxes, color='w', fontsize=14)
+plt.text(0.05, 0.6675, 'AN4', transform=ax.transAxes, color='w', fontsize=14)
+plt.text(0.05, 0.495, 'AN5', transform=ax.transAxes, color='w', fontsize=14)
+plt.text(0.05, 0.3225, 'AN6', transform=ax.transAxes, color='w', fontsize=14)
