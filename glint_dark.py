@@ -123,20 +123,17 @@ def getHistogram(data, bins):
 if __name__ == '__main__':         
     ''' Settings '''
     save = True
-    monitor = False # Set True to map the average, variance of relative difference of set of dark current datacubes
+    monitor = True # Set True to map the average, variance of relative difference of set of dark current datacubes
     nb_files = (None, None)
-    edge_min, edge_max = -300, 300
+    edge_min, edge_max = -500, 500
     
     ''' Inputs '''
-    datafolder = 'data202006/20200602/scans/'
-    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
+    datafolder = 'data202006/20200602/turbulence/'
+    data_path = '//tintagel.physics.usyd.edu.au/snert/'+'/GLINTData/'+datafolder
     dark_list = [data_path+f for f in os.listdir(data_path) if 'dark' in f][nb_files[0]:nb_files[1]]
-    
-    if len(dark_list) == 0:
-        raise('Dark list is empty.')
 
     ''' Output '''
-    output_path = '/mnt/96980F95980F72D3/glint/GLINTprocessed/'+datafolder
+    output_path = '//tintagel.physics.usyd.edu.au/snert/GLINTprocessed/'+datafolder
     if not os.path.exists(output_path):
         os.makedirs(output_path)
         
@@ -187,7 +184,6 @@ if __name__ == '__main__':
         if save:
             np.save(output_path+'superdark', superDark)
             np.save(output_path+'superdarkchannel', superDarkChannel)
-            print('Dark and dark per channel saved')
     
     if monitor:
         bin_hist, step = np.linspace(edge_min-0.5, edge_max+0.5, edge_max-edge_min+1, retstep=True)
