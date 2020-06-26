@@ -14,17 +14,55 @@ import os
 from skimage.measure import moments
 from scipy.optimize import curve_fit
 
+def binning(arr, binning, axis=0, avg=False):
+    """
+    Bin frames together
+    
+    :Parameters:
+        **arr**: nd-array
+            Array containing data to bin
+        **binning**: int
+            Number of frames to bin
+        **axis**: int
+            axis along which the frames are
+        **avg**: bol
+            If ``True``, the method returns the average of the binned frame.
+            Otherwise, return its sum.
+            
+    :Attributes:
+        Change the attributes
+        
+        **data**: ndarray 
+            datacube
+    """
+    if binning is None:
+        binning = arr.shape[axis]
+        
+    shape = arr.shape
+    crop = shape[axis]//binning*binning # Number of frames which can be binned respect to the input value
+    arr = np.take(arr, np.arange(crop), axis=axis)
+    shape = arr.shape
+    if axis < 0:
+        axis += arr.ndim
+    shape = shape[:axis] + (-1, binning) + shape[axis+1:]
+    arr = arr.reshape(shape)
+    if not avg:
+        arr = arr.sum(axis=axis+1)
+    else:
+        arr = arr.mean(axis=axis+1)
+    
+    return arr
+    
 nonoise_switch = False
 ''' Settings '''
-nb_files = (0,10) # Number of data files to read. None = all files
-root = "/mnt/96980F95980F72D3/glint/" # Root path containing the reduced data
-path_to_data = '/mnt/96980F95980F72D3/glint_data/'
-# datafolder = '20191014/p1_nowiggle/' # Folder of the data to explore
-# darkfolder = '20191014/dark/'
-datafolder = 'NullerData_SubaruJuly2019/20190718/20190718_turbulence1/' # Folder of the data to explore
-darkfolder = 'NullerData_SubaruJuly2019/20190718/20190718_dark_turbulence/'
-wl_path = root+'GLINTprocessed/calibration_params/px_to_wl.npy'
-#wl_path = root+'GLINTprocessed/201806_wavecal/px_to_wl.npy'
+nb_files = (0,10,1) # Number of data files to read. None = all files
+#root = "C:/Users/marc-antoine/glint/" # Root path containing the reduced data
+root = "//tintagel.physics.usyd.edu.au/snert/" # Root path containing the reduced data
+#path_to_data = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'
+path_to_data = '//tintagel.physics.usyd.edu.au/snert/GLINTData/'
+datafolder = 'data202006/AlfBoo/' # Folder of the data to explore
+darkfolder = 'data202006/AlfBoo/'
+wl_path = root+'GLINTprocessed/'+datafolder+'20200601_px_to_wl.npy'
 output_path = root+'GLINTprocessed/'+datafolder # Path to reduced data
 dark_path = output_path+'superdark.npy'
 wl_min, wl_max = 1400,1650
@@ -33,7 +71,7 @@ fps = 10
 ''' Running script '''
 data_path = path_to_data+datafolder # Full path to the data
 data_list = sorted([data_path+f for f in os.listdir(data_path) if 'n1n4' in f])
-data_list = data_list[nb_files[0]:nb_files[1]]
+data_list = data_list[nb_files[0]:nb_files[1]:nb_files[2]]
 if not nonoise_switch:
     switch_dark = False
     try:
@@ -52,7 +90,7 @@ if not nonoise_switch:
 else:
     print('No-noise data')
     dark = np.zeros((344,96))
-    
+
 print('Load data.')
 for f in data_list:
     with h5py.File(f) as dataFile:
@@ -107,11 +145,9 @@ data = np.transpose(data, axes=(1,0,2))
 #data /= spectrum[:,None,:]
 #data = np.array([np.mean(data, axis=0)])
 
-wl_px = np.tile(np.arange(96), (16, 1))
+data = binning(data, binning=10, axis=0, avg=True)
 
-center_of_mass = np.array([[moments(data[k,i][(wl_scale[i]>wl_min)&(wl_scale[i]<wl_max)], 1)[1] / moments(data[k,i][(wl_scale[i]>wl_min)&(wl_scale[i]<wl_max)], 1)[0] for i in range(16)] for k in range(data.shape[0])])
-com_wl = np.array([[poly[i](center_of_mass[j,i] + wl_px[i][wl_scale[i]<wl_max][0]) for i in range(16)] for j in range(center_of_mass.shape[0])])
-com_wl = np.array([[np.sum(wl_scale[i]*data[k,i])/np.sum(data[k,i]) for i in range(16)] for k in range(data.shape[0])])
+wl_px = np.tile(np.arange(96), (16, 1))
     
 #titles_photo = ['P1', 'N1 (12)' ,'N2 (23)', 'N3 (14)',\
 #                'P2', 'AN1 (12)', 'AN2 (23)', 'AN3 (14)',\
@@ -133,7 +169,7 @@ for i in range(4):
         axs.append(fig.add_subplot(grid[i, j]))
 
 lines = [elt.plot([], [], lw=2)[0] for elt in axs[1:]] + \
-    [axs[0].imshow(np.zeros(stack[0].shape), interpolation='none', vmin=stack.min(), vmax=1000)]#, extent=[abs(wl_scale.max()), abs(wl_scale.min()), 344, 0], aspect='auto')]
+    [axs[0].imshow(np.zeros(stack[0].shape), interpolation='none', vmin=0, vmax=50)]#, extent=[abs(wl_scale.max()), abs(wl_scale.min()), 344, 0], aspect='auto')]
 lines2 = [elt.plot([], [], 'o')[0] for elt in axs[1:]]
 lines3 = [elt.plot([], [])[0] for elt in axs[1:]]
 
@@ -176,10 +212,9 @@ def init3():
     lines[-1].set_data(np.zeros(stack[0].shape))
     time_text.set_text('')
     for i in range(16):
-            lines[i].set_data(wl_scale[i], np.zeros(wl_scale[i].size))
-            lines2[i].set_data(0, 0)
+            lines[i].set_data(wl_scale[i], data[0,i,:])
 #            lines3[i].set_data(wl_scale[i], np.zeros(wl_scale[i].size))
-    return lines + lines2 + [time_text, text_p1, text_p2, text_p3, text_p4,\
+    return lines + [time_text, text_p1, text_p2, text_p3, text_p4,\
             text_null1, text_null2, text_null3, text_null4, text_null5, text_null6,\
             text_antinull1, text_antinull2, text_antinull3, text_antinull4, text_antinull5, text_antinull6]
         
@@ -189,17 +224,16 @@ def run2(k):
     time_text.set_text('Frame %s/%s (%.5f s)'%(k+1, stack.shape[0], (k+1)/fps))
     for i in range(16):
         lines[i].set_data(wl_scale[i], data[k,i,:])
-        lines2[i].set_data(com_wl[k,i], 0)
 #        if i == 1:
 #            lines3[i].set_data(wl_scale[i], func(wl_scale[i], *params[k]))
 #        if i == 5:
 #            lines3[i].set_data(wl_scale[i], func2(wl_scale[i], *params2[k]))
             
-    return lines + lines2 + [time_text, text_p1, text_p2, text_p3, text_p4,\
+    return lines + [time_text, text_p1, text_p2, text_p3, text_p4,\
             text_null1, text_null2, text_null3, text_null4, text_null5, text_null6,\
             text_antinull1, text_antinull2, text_antinull3, text_antinull4, text_antinull5, text_antinull6]
 
-anim = animation.FuncAnimation(fig, run2, init_func=init3, frames=data.shape[0], interval=100)#, blit=True)
+anim = animation.FuncAnimation(fig, run2, init_func=init3, frames=data.shape[0], interval=10)#, blit=True)
 
 plt.figure(figsize=(19.20,10.80))
 for i in range(16):
@@ -235,25 +269,25 @@ for i in range(16):
         plt.xlabel('Frame')
 plt.tight_layout()  
 
-plt.figure(figsize=(19.20,10.80))
-for i in range(16):
-    if i<4: 
-        histo = np.histogram(data[:,i,45:57].mean(axis=-1), bins=int(np.size(data[:,i,45:57].mean(axis=-1))**0.5), density=True)
-        plt.subplot(4,4,i+1)
-        plt.plot(histo[1][:-1], histo[0], '.')
-        plt.grid()
-        plt.title('Histogram of flux in '+titles_photo[i])
-    elif i%2==0:
-        null = data[:,i,45:57].mean(axis=-1)/data[:,i+1,45:57].mean(axis=-1)
-        axis = np.linspace(-1, 3, int(np.size(null)**0.5)+1)
-        histo = np.histogram(null, bins=axis, density=True)
-        plt.subplot(4,4,i+1)
-        plt.plot(histo[1][:-1], histo[0], '.')
-        plt.grid()
-        plt.title('Histogram of null '+titles_photo[i])
-    if i == 1 or i == 3 or i == 12 or i == 14:
-        plt.xlabel('Frame')
-plt.tight_layout() 
+#plt.figure(figsize=(19.20,10.80))
+#for i in range(16):
+#    if i<4: 
+#        histo = np.histogram(data[:,i,45:57].mean(axis=-1), bins=int(np.size(data[:,i,45:57].mean(axis=-1))**0.5), density=True)
+#        plt.subplot(4,4,i+1)
+#        plt.plot(histo[1][:-1], histo[0], '.')
+#        plt.grid()
+#        plt.title('Histogram of flux in '+titles_photo[i])
+#    elif i%2==0:
+#        null = data[:,i,45:57].mean(axis=-1)/data[:,i+1,45:57].mean(axis=-1)
+#        axis = np.linspace(-1, 3, int(np.size(null)**0.5)+1)
+#        histo = np.histogram(null, bins=axis, density=True)
+#        plt.subplot(4,4,i+1)
+#        plt.plot(histo[1][:-1], histo[0], '.')
+#        plt.grid()
+#        plt.title('Histogram of null '+titles_photo[i])
+#    if i == 1 or i == 3 or i == 12 or i == 14:
+#        plt.xlabel('Frame')
+#plt.tight_layout() 
 #plt.figure(figsize=(19.20,10.80))
 #for i in range(16):
 #    plt.subplot(4,4,i+1)
@@ -284,19 +318,6 @@ plt.tight_layout()
 #plt.xlim(1400, 1700)
 #plt.tight_layout()
 
-plt.figure(figsize=(19.20,10.80))
-plt.plot(wl_scale[0], data[300,0], lw=3, label='P1')
-plt.plot(wl_scale[1], data[300,1], lw=3, label='P2')
-plt.plot(wl_scale[4], data[300,4], lw=3, label='N1')
-plt.plot(wl_scale[5], data[300,5], lw=3, label='AN1')
-plt.grid()
-plt.xticks(size=35);plt.yticks(size=35)
-plt.legend(loc='best', fontsize=35)
-plt.xlabel('Wavelength (nm)', size=40)
-plt.ylabel('Intensity (AU)', size=40)
-plt.xlim(1400, 1700)
-plt.tight_layout()
-
 #plt.figure(figsize=(19.20,10.80))
 #plt.plot(wl_scale[0], data[300,0], lw=3, label='P1')
 #plt.plot(wl_scale[1], data[300,1], lw=3, label='P2')
@@ -314,6 +335,20 @@ photo1 = data[:,0].copy()
 photo2 = data[:,1].copy()
 photo3 = data[:,2].copy()
 photo4 = data[:,3].copy()
+plt.figure(figsize=(19.20,10.80))
+plt.plot(wl_scale[0], photo1.mean(axis=0), lw=3, label='P1')
+plt.plot(wl_scale[1], photo2.mean(axis=0), lw=3, label='P2')
+plt.plot(wl_scale[4], photo3.mean(axis=0), lw=3, label='P3')
+plt.plot(wl_scale[5], photo4.mean(axis=0), lw=3, label='P4')
+plt.grid()
+plt.xticks(size=30);plt.yticks(size=30)
+plt.legend(loc='best', fontsize=35)
+plt.xlabel('Wavelength (nm)', size=35)
+plt.ylabel('Intensity (AU)', size=35)
+plt.title('Average photometries', size=40)
+plt.xlim(1400, 1700)
+plt.tight_layout()
+
 photo1 /= photo1.max(axis=1)[:,None]
 photo2 /= photo2.max(axis=1)[:,None]
 photo3 /= photo3.max(axis=1)[:,None]
@@ -342,29 +377,33 @@ for i in range(16):
     plt.title(titles_photo[i])
 plt.tight_layout()
 
-fig = plt.figure()
-ax = fig.add_subplot(111)
-plt.imshow(stack[0], interpolation='none', aspect=2, vmax = 3000, vmin=0, extent=[wl_scale[0,0]-5/2, wl_scale[0,-1]+5/2, stack[0].shape[0], 0])
-cb = plt.colorbar()
-cb.set_label(label='Intensity (AU)', size=20)
-cb.ax.tick_params(labelsize=15)
-plt.xticks(size=15)
-plt.yticks(size=15)
-plt.xlabel('Wavelength (nm)', size=20)
-plt.ylabel('Spatial axis (px)', size=20)
-plt.text(0.05, 0.04, 'P1', transform=ax.transAxes, color='w', fontsize=14)
-plt.text(0.05, 0.15, 'P2', transform=ax.transAxes, color='w', fontsize=14)
-plt.text(0.05, 0.789, 'P3', transform=ax.transAxes, color='w', fontsize=14)
-plt.text(0.05, 0.9, 'P4', transform=ax.transAxes, color='w', fontsize=14)
-plt.text(0.05, 0.265, 'N1', transform=ax.transAxes, color='w', fontsize=14)
-plt.text(0.05, 0.725, 'N2', transform=ax.transAxes, color='w', fontsize=14)
-plt.text(0.05, 0.84, 'N3', transform=ax.transAxes, color='w', fontsize=14)
-plt.text(0.05, 0.5525, 'N4', transform=ax.transAxes, color='w', fontsize=14)
-plt.text(0.05, 0.61, 'N5', transform=ax.transAxes, color='w', fontsize=14)
-plt.text(0.05, 0.4375, 'N6', transform=ax.transAxes, color='w', fontsize=14)
-plt.text(0.05, 0.38, 'AN1', transform=ax.transAxes, color='w', fontsize=14)
-plt.text(0.05, 0.2075, 'AN2', transform=ax.transAxes, color='w', fontsize=14)
-plt.text(0.05, 0.0975, 'AN3', transform=ax.transAxes, color='w', fontsize=14)
-plt.text(0.05, 0.6675, 'AN4', transform=ax.transAxes, color='w', fontsize=14)
-plt.text(0.05, 0.495, 'AN5', transform=ax.transAxes, color='w', fontsize=14)
-plt.text(0.05, 0.3225, 'AN6', transform=ax.transAxes, color='w', fontsize=14)
+for k in range(100):
+    fig = plt.figure(figsize=(8, 8))
+    ax = fig.add_subplot(111)
+    plt.imshow(stack[k], interpolation='none', aspect=2, vmax = 200, vmin=0, extent=[wl_scale[0,0]-5/2, wl_scale[0,-1]+5/2, stack[0].shape[0], 0])
+    cb = plt.colorbar()
+    cb.set_label(label='Intensity (AU)', size=20)
+    cb.ax.tick_params(labelsize=15)
+    plt.xticks(size=15)
+    plt.yticks(size=15)
+    plt.xlabel('Wavelength (nm)', size=20)
+    plt.ylabel('Spatial axis (px)', size=20)
+    plt.text(0.05, 0.04, 'P1', transform=ax.transAxes, color='w', fontsize=14)
+    plt.text(0.05, 0.15, 'P2', transform=ax.transAxes, color='w', fontsize=14)
+    plt.text(0.05, 0.789, 'P3', transform=ax.transAxes, color='w', fontsize=14)
+    plt.text(0.05, 0.9, 'P4', transform=ax.transAxes, color='w', fontsize=14)
+    plt.text(0.05, 0.265, 'N1', transform=ax.transAxes, color='w', fontsize=14)
+    plt.text(0.05, 0.725, 'N2', transform=ax.transAxes, color='w', fontsize=14)
+    plt.text(0.05, 0.84, 'N3', transform=ax.transAxes, color='w', fontsize=14)
+    plt.text(0.05, 0.5525, 'N4', transform=ax.transAxes, color='w', fontsize=14)
+    plt.text(0.05, 0.61, 'N5', transform=ax.transAxes, color='w', fontsize=14)
+    plt.text(0.05, 0.4375, 'N6', transform=ax.transAxes, color='w', fontsize=14)
+    plt.text(0.05, 0.38, 'AN1', transform=ax.transAxes, color='w', fontsize=14)
+    plt.text(0.05, 0.2075, 'AN2', transform=ax.transAxes, color='w', fontsize=14)
+    plt.text(0.05, 0.0975, 'AN3', transform=ax.transAxes, color='w', fontsize=14)
+    plt.text(0.05, 0.6675, 'AN4', transform=ax.transAxes, color='w', fontsize=14)
+    plt.text(0.05, 0.495, 'AN5', transform=ax.transAxes, color='w', fontsize=14)
+    plt.text(0.05, 0.3225, 'AN6', transform=ax.transAxes, color='w', fontsize=14)
+    plt.tight_layout()
+    plt.savefig('figure/stack_%03d.png'%k)
+    plt.close('all')
