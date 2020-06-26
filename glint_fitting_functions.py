@@ -206,7 +206,6 @@ def load_data(data, wl_edges, null_key, *args, **kwargs):
         photo_err_data[i] = [selt for elt in photo_err_data[i] for selt in elt]
 
 
-        
     null_data = np.array(null_data)
     Iminus_data = np.array(Iminus_data)
     Iplus_data = np.array(Iplus_data)
@@ -278,9 +277,10 @@ def getHistogramOfIntensities(data, bins, split, target='cpu'):
     
     return  pdf_I_interf, bins_cent
 
-def computeNullDepth(IA, IB, wavelength, offset_opd, dopd, phase_bias, dphase_bias, visibility, dark_null, dark_antinull, 
+def computeNullDepth(IA, IB, wavelength, offset_opd, dopd, phase_bias, dphase_bias, na, dark_null, dark_antinull, 
                      zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B, spec_chan_width, oversampling_switch):
     
+    visibility = (1 - na) / (1 + na)
     wave_number = 1./wavelength
     sine = cp.sin(2*np.pi*wave_number*(offset_opd + dopd) + phase_bias + dphase_bias)
     if oversampling_switch:
@@ -297,6 +297,72 @@ def computeNullDepth(IA, IB, wavelength, offset_opd, dopd, phase_bias, dphase_bi
         dark_antinull
     null = Iminus / Iplus
     return null
+
+def computeNullDepthLinear(IA, IB, wavelength, offset_opd, dopd, phase_bias, dphase_bias, na, dark_null, dark_antinull, 
+                     zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B, spec_chan_width, oversampling_switch):
+    
+    astroNull = na
+    wave_number = 1./wavelength
+    sine = cp.sin(2*np.pi*wave_number*(offset_opd + dopd) + phase_bias + dphase_bias)
+    if oversampling_switch:
+        delta_wave_number = abs(1/(wavelength + spec_chan_width/2) - 1/(wavelength - spec_chan_width/2))
+        arg = np.pi*delta_wave_number * (offset_opd + dopd)
+        sinc = cp.sin(arg) / arg
+        sine = sine * sinc
+        
+    Iminus = IA*zeta_minus_A + IB*zeta_minus_B - 2 * np.sqrt(IA * IB) * np.sqrt(zeta_minus_A*zeta_minus_B) * sine + dark_null
+    Iplus = IA*zeta_plus_A + IB*zeta_plus_B + 2 * np.sqrt(IA * IB) * np.sqrt(zeta_plus_A*zeta_plus_B) * sine + dark_antinull
+    null = Iminus / Iplus
+    return null + astroNull
+
+def computeNullDepthCos(IA, IB, wavelength, offset_opd, dopd, phase_bias, dphase_bias, na, dark_null, dark_antinull, 
+                     zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B, spec_chan_width, oversampling_switch):
+    
+    visibility = (1 - na) / (1 + na)
+    wave_number = 1./wavelength
+    sine = cp.cos(2*np.pi*wave_number*(offset_opd + dopd) + phase_bias + dphase_bias)
+    if oversampling_switch:
+        delta_wave_number = abs(1/(wavelength + spec_chan_width/2) - 1/(wavelength - spec_chan_width/2))
+        arg = np.pi*delta_wave_number * (offset_opd + dopd)
+        sinc = cp.sin(arg) / arg
+        sine = sine * sinc
+        
+    Iminus = IA*zeta_minus_A + IB*zeta_minus_B - \
+        2 * np.sqrt(IA * IB) * np.sqrt(zeta_minus_A*zeta_minus_B) * visibility * sine + \
+        dark_null
+    Iplus = IA*zeta_plus_A + IB*zeta_plus_B + \
+        2 * np.sqrt(IA * IB) * np.sqrt(zeta_plus_A*zeta_plus_B) * visibility *sine + \
+        dark_antinull
+    null = Iminus / Iplus
+    return null
+
+def computeNullDepthLinearCos(IA, IB, wavelength, offset_opd, dopd, phase_bias, dphase_bias, na, dark_null, dark_antinull, 
+                     zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B, spec_chan_width, oversampling_switch):
+    
+    astroNull = na
+    wave_number = 1./wavelength
+    sine = cp.cos(2*np.pi*wave_number*(offset_opd + dopd) + phase_bias + dphase_bias)
+    if oversampling_switch:
+        delta_wave_number = abs(1/(wavelength + spec_chan_width/2) - 1/(wavelength - spec_chan_width/2))
+        arg = np.pi*delta_wave_number * (offset_opd + dopd)
+        sinc = cp.sin(arg) / arg
+        sine = sine * sinc
+        
+    Iminus = IA*zeta_minus_A + IB*zeta_minus_B - 2 * np.sqrt(IA * IB) * np.sqrt(zeta_minus_A*zeta_minus_B) * sine + dark_null
+    Iplus = IA*zeta_plus_A + IB*zeta_plus_B + 2 * np.sqrt(IA * IB) * np.sqrt(zeta_plus_A*zeta_plus_B) * sine + dark_antinull
+    null = Iminus / Iplus
+    return null + astroNull
+
+def computeNullDepthLinearCos2(IA, IB, DeltaPhi, na, dark_null, dark_antinull, 
+                     zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B):
+    
+    astroNull = na
+    cosine = cp.cos(DeltaPhi)
+        
+    Iminus = IA*zeta_minus_A + IB*zeta_minus_B - 2 * np.sqrt(IA * IB) * np.sqrt(zeta_minus_A*zeta_minus_B) * cosine + dark_null
+    Iplus = IA*zeta_plus_A + IB*zeta_plus_B + 2 * np.sqrt(IA * IB) * np.sqrt(zeta_plus_A*zeta_plus_B) * cosine + dark_antinull
+    null = Iminus / Iplus
+    return null + astroNull
 
 def get_zeta_coeff(path, wl_scale, plot=False):
     coeff_new = {}
@@ -539,32 +605,32 @@ if __name__ == '__main__':
 #    plt.plot(bin_edges[:-1], hist)
 #    plt.grid()    
 
-#    def model(x, a):
-#        global counter
-#        print(counter, a)
-#        counter += 1
-#        return a*x
-#
-#    counter = 1
-#    slope, offset = 2, 0
-#    x = np.arange(100)
-#    y = model(x, slope) + np.random.normal(0, 0.2, x.size)
-#    yerr = 0.2 * np.ones(y.shape)
-#    
-#    x0 = [2.001]
-#    
-#    counter = 1
-#    popt, pcov, res = curvefit(model, x, y, x0, yerr, bounds=([0],[10]))
-##    popt3, pcov3 = curve_fit(model, x, y, x0, sigma=yerr, absolute_sigma=True)
-#    
-#    chi2 = np.sum((y-model(x, *res.x))**2/yerr**2) * 1/(y.size-res.x.size)
-#    print('chi2', chi2)
-#    
-#    print('--------')
-#    counter = 1
-#    popt2, pcov2, res2 = curvefit2(model, x, y, x0, yerr)
-#    chi2 = np.sum((y-model(x, *popt2))**2/yerr**2) * 1/(y.size-popt2.size)
-#    print('chi2', chi2)
+    def model(x, a):
+        global counter
+        print(counter, a)
+        counter += 1
+        return a*x
+
+    counter = 1
+    slope, offset = 2, 0
+    x = np.arange(100)
+    y = model(x, slope) + np.random.normal(0, 0.2, x.size)
+    yerr = 0.2 * np.ones(y.shape)
+    
+    x0 = [2.001]
+    
+    counter = 1
+    popt, pcov, res = curvefit(model, x, y, x0, yerr, bounds=([0],[10]))
+#    popt3, pcov3 = curve_fit(model, x, y, x0, sigma=yerr, absolute_sigma=True)
+    
+    chi2 = np.sum((y-model(x, *res.x))**2/yerr**2) * 1/(y.size-res.x.size)
+    print('chi2', chi2)
+    
+    print('--------')
+    counter = 1
+    popt2, pcov2, res2 = curvefit2(model, x, y, x0, yerr)
+    chi2 = np.sum((y-model(x, *popt2))**2/yerr**2) * 1/(y.size-popt2.size)
+    print('chi2', chi2)
 #    
 #    chi2map = []
 #    slopes = np.linspace(1.995,2.005,1001)
@@ -579,10 +645,3 @@ if __name__ == '__main__':
 #    plt.grid()
 #    from scipy.interpolate import interp1d
 #    inter = interp1d(slopes, chi2map)
-    
-    data = np.ones(100)
-    data[0] = 0.5
-    axis = np.linspace(data.min(), data.max(), np.size(np.unique(data)))
-    axis = cp.asarray(axis, dtype=cp.float32)
-    cdf = computeCdf(axis, data, 'cdf', True)
-    rv = rv_generator(axis, cdf, 10)
