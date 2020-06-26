@@ -281,9 +281,10 @@ activate_dark_correction = False
 activate_save_basic_esti = False
 activate_frame_sorting = True
 activate_preview_only = False
-nb_frames_sorting_binning = 10
-activate_time_binning_photometry = False
-nb_frames_binning = 10
+nb_frames_sorting_binning = 100
+activate_time_binning_photometry = True
+nb_frames_binning_photometry = 100
+global_binning = 2
 wl_min = 1525 # lower bound of the bandwidth to process
 wl_max = 1575
 wl_mid = (wl_max + wl_min)/2 # Centre wavelength of the bandwidth
@@ -295,15 +296,15 @@ phase_bias_switch = True # Implement a non-null achromatic phase in the null mod
 opd_bias_switch = True # Implement an offset OPD in the null model
 zeta_switch = True # Use the measured zeta coeff. If False, value are set to 0.5
 oversampling_switch = True # Include the loss of coherence when OPD is too far from 0, according to a sinc envelop
-skip_fit = False # Do not fit, plot the histograms of data and model given the initial guesses
+skip_fit = True # Do not fit, plot the histograms of data and model given the initial guesses
 chi2_map_switch = True
  # Map the parameters space over astronull, DeltaPhi mu and sigma
 nb_files_data = (0, None) #(20782, None) # Which data files to load
 nb_files_dark = (0, None) # Which dark files to load
-basin_hopping_nloop = (0, 1) # lower and upper bound of the iteration loop for basin hopping method
-which_nulls = ['null1', 'null4', 'null5', 'null6'][1:2]
+basin_hopping_nloop = (100, 101) # lower and upper bound of the iteration loop for basin hopping method
+which_nulls = ['null1', 'null4', 'null5', 'null6'][:1]
 map_na_sz = 10
-map_mu_sz = 100
+map_mu_sz = 200
 map_sig_sz = 10
 nb_rows_plot = 3
 
@@ -395,8 +396,8 @@ for key in which_nulls: # Iterate over the null to fit
     key_antinull = null_table[key][2] # Select the index of the antinull output to process
    
     ''' Load data about the null to fit '''
-    dark = gff.load_data(dark_list, (wl_min, wl_max), key, nulls_to_invert)
-    data = gff.load_data(data_list, (wl_min, wl_max), key, nulls_to_invert, dark)
+    dark = gff.load_data(dark_list, (wl_min, wl_max), key, nulls_to_invert, frame_binning=global_binning)
+    data = gff.load_data(data_list, (wl_min, wl_max), key, nulls_to_invert, dark, frame_binning=global_binning)
 #    data0 = gff.load_data(data_list, (wl_min, wl_max), key, nulls_to_invert, dark)
     stop_loading = time()        
 
@@ -466,10 +467,14 @@ for key in which_nulls: # Iterate over the null to fit
         Iminus, dummy = gff.binning(data['Iminus'], data['Iminus'].shape[0], 0)
         Iplus, dummy = gff.binning(data['Iplus'], data['Iplus'].shape[0], 0)
         wl_scale, dummy = gff.binning(wl_scale0, wl_scale0.size, 0, True)
+        Iminus_dk, dummy = gff.binning(dark['Iminus'], dark['Iminus'].shape[0], 0)
+        Iplus_dk, dummy = gff.binning(dark['Iplus'], dark['Iplus'].shape[0], 0)
     else:
         Iminus = data['Iminus']
         Iplus = data['Iplus']
         wl_scale = wl_scale0
+        Iminus_dk = dark['Iminus']
+        Iplus_dk = dark['Iplus']
 
     if activate_use_antinull:
         if key in nulls_to_invert:
@@ -489,7 +494,8 @@ for key in which_nulls: # Iterate over the null to fit
         else:
             Iplus = IA*zeta_minus_A[:,None] + IB*zeta_minus_B[:,None] + 2 * np.sqrt(IA * IB) * np.sqrt(zeta_minus_A[:,None]*zeta_minus_B[:,None])
             data_null = Iminus / Iplus           
-    
+
+
     # =============================================================================
     # Compute the histogram        
     # =============================================================================
@@ -505,12 +511,12 @@ for key in which_nulls: # Iterate over the null to fit
         mask_null = np.ones_like(data_null, dtype=np.bool)
     sz_list = np.array([np.size(d[(d>=bin_bounds[0])&(d<=bin_bounds[1])]) for d in data_null]) # size of the sample of measured null depth.
     sz = np.max(sz_list) # size of the sample of measured null depth.
-    sz = 100**2
+    sz = 1000**2
     ''' Creation of the x-axis of the histogram (one per wavelength)'''
     data_null = np.array([data_null[k][mask_null[k]] for k in range(data_null.shape[0])])
-    sz = data_null.shape[1]
+#    sz = data_null.shape[1]
     null_axis = np.array([np.linspace(bin_bounds[0], bin_bounds[1], int(sz**0.5+1), retstep=False, dtype=np.float32) for i in range(data_null.shape[0])])
-    
+
     null_pdf = []
     null_pdf_err = []
     for wl in range(len(wl_scale)): # Compute the histogram per spectral channel
@@ -565,11 +571,11 @@ for key in which_nulls: # Iterate over the null to fit
     # =============================================================================
     ''' Handling photometry: either get the CDF for rv generation or just keep the temporal sequence '''        
     if activate_time_binning_photometry:
-        if nb_frames_binning < 0:
+        if nb_frames_binning_photometry < 0:
             injection = injectionbefore.mean(axis=-1).reshape(2,-1)
         else:
-            injection, dummy = gff.binning(injection, nb_frames_binning, axis=1, avg=True)
-            injection_dark, dummy = gff.binning(injection_dark, nb_frames_binning, axis=1, avg=True)
+            injection, dummy = gff.binning(injection, nb_frames_binning_photometry, axis=1, avg=True)
+            injection_dark, dummy = gff.binning(injection_dark, nb_frames_binning_photometry, axis=1, avg=True)
     
     if activate_dark_correction and not activate_use_photometry:
         injection_saved = injection.copy()
@@ -647,7 +653,7 @@ for key in which_nulls: # Iterate over the null to fit
         print('%s-%02d-%02d %02dh%02d'%(datetime.now().year, datetime.now().month, datetime.now().day, datetime.now().hour, datetime.now().minute))
         print('Spectral bandwidth (in nm):%s,%s'%(wl_min, wl_max))
         print('Spectral binning %s'%activate_spectral_binning)
-        print('Time binning of photometry %s (%s)'%(activate_time_binning_photometry, nb_frames_binning))
+        print('Time binning of photometry %s (%s)'%(activate_time_binning_photometry, nb_frames_binning_photometry))
         print('Bin bounds and number of bins %s %s'%(bin_bounds, int(sz**0.5)))
         print('Boundaries (na, mu, sig):')
         print(str(bounds_na)+str(bounds_mu)+str(bounds_sig))
@@ -764,13 +770,15 @@ for key in which_nulls: # Iterate over the null to fit
                     axs.append(ax)
                     plt.title('%s nm'%wl_scale[wl], size=20)
                     plt.errorbar(null_axis[wl][:-1], null_pdf[wl], yerr=null_pdf_err[wl], fmt='.', markersize=5, label='Data')
-                    plt.errorbar(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], markersize=5, lw=3, alpha=0.8, label='Fit')                    
+                    if not skip_fit: plt.errorbar(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], markersize=5, lw=3, alpha=0.8, label='Fit') 
                     plt.grid()
 #                    plt.legend(loc='best', fontsize=25)
                     if list(wl_idx).index(wl) <= 1 or len(wl_idx) == 1: plt.xlabel('Null depth', size=20)
                     if count %2 == 0: plt.ylabel('Frequency', size=20)
                     plt.xticks(size=15);plt.yticks(size=15)
-#                    plt.ylim(0, 0.003)
+                    exponent = np.floor(np.log10(null_pdf.max()))
+                    ylim = null_pdf.max() * 10**(-exponent)
+                    plt.ylim(-10**(exponent)/10, null_pdf.max()*1.05)
                     # plt.xlim(-0.01, 0.5)
                     count += 1
                 plt.tight_layout(rect=[0., 0.05, 1, 1])
@@ -812,14 +820,19 @@ for key in which_nulls: # Iterate over the null to fit
                     plt.title('%s nm'%wl_scale[wl], size=20)
                     plt.plot(histom[wl][1][:-1], histom[wl][0], '.', label='Iminus')
                     plt.plot(histop[wl][1][:-1], histop[wl][0], '.', label='Iplus')
-                    plt.plot(histom2[wl][1][:-1], histom2[wl][0], label='rv minus')
-                    plt.plot(histop2[wl][1][:-1], histop2[wl][0], label='rv plus')
+                    if not skip_fit:
+                        plt.plot(histom2[wl][1][:-1], histom2[wl][0], label='rv minus')
+                        plt.plot(histop2[wl][1][:-1], histop2[wl][0], label='rv plus')
                     plt.plot(histodkm[wl][1][:-1], histodkm[wl][0], label='Dark minus')
                     plt.plot(histodkp[wl][1][:-1], histodkp[wl][0], label='Dark plus')
                     plt.grid()
                     plt.xticks(size=15);plt.yticks(size=15)
-#                    plt.ylim(-1e-3, max([max(histom[wl][0]), max(histop[wl][0]),
-#                                        max(histom2[wl][0]), max(histop2[wl][0])])*1.1)
+                    maxi = max([max([max(elt[0]) for elt in histom]), max([max(elt[0]) for elt in histom2]), \
+                                max([max(elt[0]) for elt in histop]), max([max(elt[0]) for elt in histop2]),\
+                                max([max(elt[0]) for elt in histodkm]), max([max(elt[0]) for elt in histodkp])])
+                    exponent = np.floor(np.log10(maxi))
+                    ylim = maxi * 10**(-exponent)
+                    plt.ylim(-10**(exponent)/10, maxi*1.05)
                     if count %2 == 0: plt.ylabel('Frequency', size=20)
                     if count == 0: plt.legend(loc='best', ncol=3, fontsize=15)
                     if list(wl_idx).index(wl) <= 1 or len(wl_idx) == 1: plt.xlabel('Flux (AU)', size=20)
@@ -1121,7 +1134,7 @@ for key in which_nulls: # Iterate over the null to fit
                 map_log.write('%s-%02d-%02d %02dh%02d\n'%(datetime.now().year, datetime.now().month, datetime.now().day, datetime.now().hour, datetime.now().minute))
                 map_log.write('Spectral bandwidth (in nm):\n%s,%s\n'%(wl_min, wl_max))
                 map_log.write('Spectral binning %s\n'%activate_spectral_binning)
-                map_log.write('Time binning of photometry %s (%s)\n'%(activate_time_binning_photometry, nb_frames_binning))
+                map_log.write('Time binning of photometry %s (%s)\n'%(activate_time_binning_photometry, nb_frames_binning_photometry))
                 map_log.write('Bin boundaries (%s, %s)\n'%(bin_bounds[0], bin_bounds[1]))
                 map_log.write('Number of bins %s\n'%(int(sz**0.5)))
                 map_log.write('Boundaries (na, mu, sig):\n')
@@ -1250,182 +1263,67 @@ plt.show()
 
 print('-- End --')
 
-# interfminus_binned = cp.asnumpy(interfminus_binned)
-# interfminus_binned = interfminus_binned[~np.isnan(interfminus_binned)]
-# interfplus_binned = cp.asnumpy(interfplus_binned)
-# interfplus_binned = interfplus_binned[~np.isnan(interfplus_binned)]
-
-# histom = np.histogram(Iminus[0], bins=int(Iminus.size**0.5), density=True)
-# histom2 = np.histogram(interfminus_binned, bins=int(interfminus_binned.size**0.5), density=True)
-# histop = np.histogram(Iplus[0], bins=int(Iplus.size**0.5), density=True)
-# histop2 = np.histogram(interfplus_binned, bins=int(interfplus_binned.size**0.5), density=True)
-
-# histodkA = np.histogram(dark_IA.sum(axis=0), bins=int(np.size(dark_IA.sum(axis=0))**0.5), density=True)
-# histodkB = np.histogram(dark_IB.sum(axis=0), bins=int(np.size(dark_IB.sum(axis=0))**0.5), density=True)
-# histoA = np.histogram(data_IA.sum(axis=0), bins=int(np.size(data_IA.sum(axis=0))**0.5), density=True)
-# histoB = np.histogram(data_IB.sum(axis=0), bins=int(np.size(data_IB.sum(axis=0))**0.5), density=True)
-
-# opd_rv = np.random.normal(387, 20, data_IA.shape[1])
-# # darkm_rv = np.random.normal(dark['Iminus'].mean(), dark['Iminus'].std(), data_IA.shape)
-# # darkp_rv = np.random.normal(dark['Iplus'].mean(), dark['Iplus'].std(), data_IA.shape)
-# darkm_rv = np.array([np.random.normal(dark['Iminus'][k].mean(), dark['Iminus'][k].std(), data_IA[k].size) for k in range(wl_scale.size)])
-# darkp_rv = np.array([np.random.normal(dark['Iplus'][k].mean(), dark['Iplus'][k].std(), data_IA[k].size) for k in range(wl_scale.size)])
-
-# data_IA0, data_IB0 = data_IA.copy(), data_IB.copy()
-# mean_dataA, var_dataA = np.mean(data_IA, axis=-1), np.var(data_IA, axis=-1)
-# mean_darkA, var_darkA = np.mean(dark['photo'][0], axis=-1), np.var(dark['photo'][0], axis=-1)
-
-# data_IA = (data_IA - mean_dataA[:,None]) * \
-#     ((var_dataA[:,None]-var_darkA[:,None])/var_darkA[:,None])**0.5 + mean_dataA[:,None] - mean_darkA[:,None]
-
-# mean_dataB, var_dataB = np.mean(data_IB, axis=-1), np.var(data_IB, axis=-1)
-# mean_darkB, var_darkB = np.mean(dark['photo'][1], axis=-1), np.var(dark['photo'][1], axis=-1)
-
-# data_IB = (data_IB - mean_dataB[:,None]) * \
-#     ((var_dataB[:,None]-var_darkB[:,None])/var_darkB[:,None])**0.5 + mean_dataB[:,None] - mean_darkB[:,None]
-
-
-
-# reconstruct_minus = (data_IA) * zeta_minus_A[:,None] + (data_IB) * zeta_minus_B[:,None] - \
-#                 2 * ((data_IA) * zeta_minus_A[:,None] * (data_IB) * zeta_minus_B[:,None])**0.5 * np.sin(2*np.pi/(wl_scale0[:,None])*opd_rv) + darkm_rv
-
-# reconstruct_plus = (data_IA) * zeta_plus_A[:,None] + (data_IB) * zeta_plus_B[:,None] +\
-#                 2 * ((data_IA) * zeta_plus_A[:,None] * (data_IB) * zeta_plus_B[:,None])**0.5 * np.sin(2*np.pi/(wl_scale0[:,None])*opd_rv) + darkp_rv
-
-# reconstruct_minus = reconstruct_minus.sum(axis=0)             
-# reconstruct_minus = reconstruct_minus[~np.isnan(reconstruct_minus)]
-
-# reconstruct_plus = reconstruct_plus.sum(axis=0)
-# reconstruct_plus = reconstruct_plus[~np.isnan(reconstruct_plus)]
-
-# histo_reconm = np.histogram(reconstruct_minus, histom[1], density=True)
-# histo_reconp = np.histogram(reconstruct_plus, histop[1], density=True)
-
-# plt.figure(figsize=(19.20,10.80))
-# plt.plot(histom[1][:-1], histom[0], '.', label='Iminus')
-# plt.plot(histom2[1][:-1], histom2[0], label='rv minus')
-# plt.plot(histop[1][:-1], histop[0], '.', label='Iplus')
-# plt.plot(histop2[1][:-1], histop2[0], label='rv plus')
-# plt.plot(histo_reconm[1][:-1], histo_reconm[0], '--', label='recons -')
-# plt.plot(histo_reconp[1][:-1], histo_reconp[0], '--', label='recons +')
-# plt.plot(histodkA[1][:-1], histodkA[0], label='Dark A')
-# plt.plot(histodkB[1][:-1], histodkB[0], label='Dark B')
-# plt.plot(histoA[1][:-1], histoA[0], label='P A')
-# plt.plot(histoB[1][:-1], histoB[0], label='P B')
-# plt.legend(loc='best')
-# plt.grid()
-# plt.xlim(-300, 4000)
-# plt.ylim(-1e-3, 0.033)
-# #plt.ylim(5e-5, 1.4e-3)
-# plt.tight_layout()
-
-# plt.figure()
-# plt.plot(histodkA[1][:-1]-np.mean(dark_IA.sum(axis=0)), histodkA[0], label='Dark A')
-# plt.plot(histodkB[1][:-1]-np.mean(dark_IB.sum(axis=0)), histodkB[0], label='Dark B')
-# plt.plot(histoA[1][:-1]-np.mean(data_IA.sum(axis=0)), histoA[0], label='P A')
-# plt.plot(histoB[1][:-1]-np.mean(data_IB.sum(axis=0)), histoB[0], label='P B')
-# plt.legend(loc='best')
-
-
-
-
-
-#liste_rv_interfminus = cp.asnumpy(liste_rv_interfminus)
-#liste_rv_interfplus = cp.asnumpy(liste_rv_interfplus)
-#
-#if activate_spectral_binning:
-#    liste_rv_interfminus = np.sum(liste_rv_interfminus, axis=0).reshape(1,-1)
-#    liste_rv_interfplus = np.sum(liste_rv_interfplus, axis=0).reshape(1,-1)
-#
-#liste_rv_interfminus = [liste_rv_interfminus[k][~np.isnan(liste_rv_interfminus[k])] for k in range(wl_scale.size)]
-#liste_rv_interfplus = [liste_rv_interfplus[k][~np.isnan(liste_rv_interfplus[k])] for k in range(wl_scale.size)]
-#
-#histom = [np.histogram(Iminus[k], bins=int(Iminus[k].size**0.5), density=True) for k in range(wl_scale.size)]
-#histom2 = [np.histogram(liste_rv_interfminus[k], bins=int(liste_rv_interfminus[k].size**0.5), density=True) for k in range(wl_scale.size)]
-#histop = [np.histogram(Iplus[k], bins=int(Iplus[k].size**0.5), density=True) for k in range(wl_scale.size)]
-#histop2 = [np.histogram(liste_rv_interfplus[k], bins=int(liste_rv_interfplus[k].size**0.5), density=True) for k in range(wl_scale.size)]
-#
-#histodkA = [np.histogram(dark_IA[k], bins=int(np.size(dark_IA[k])**0.5), density=True) for k in range(wl_scale.size)]
-#histodkB = [np.histogram(dark_IB[k], bins=int(np.size(dark_IB[k])**0.5), density=True) for k in range(wl_scale.size)]
-#histoA = [np.histogram(data_IA[k], bins=int(np.size(data_IA[k])**0.5), density=True) for k in range(wl_scale.size)]
-#histoB = [np.histogram(data_IB[k], bins=int(np.size(data_IB[k])**0.5), density=True) for k in range(wl_scale.size)]
-#
-#darkm_rv = np.array([np.random.normal(dark['Iminus'][k].mean(), dark['Iminus'][k].std(), data_IA[k].size) for k in range(wl_scale.size)])
-#darkp_rv = np.array([np.random.normal(dark['Iplus'][k].mean(), dark['Iplus'][k].std(), data_IA[k].size) for k in range(wl_scale.size)])
-#darkm_rv = np.random.normal(dark['Iminus'].mean(), dark['Iminus'].std(), data_IA.shape)
-#darkp_rv = np.random.normal(dark['Iplus'].mean(), dark['Iplus'].std(), data_IA.shape)
-#darkm_rv = cp.asnumpy(liste_rv_dark_Iminus[:,:data_IA.shape[1]])
-#darkp_rv = cp.asnumpy(liste_rv_dark_Iplus[:,:data_IA.shape[1]])
-#
-#if activate_dark_correction:
-#    data_IA0, data_IB0 = data_IA.copy(), data_IB.copy()
-#    mean_dataA, var_dataA = np.mean(data_IA, axis=-1), np.var(data_IA, axis=-1)
-#    mean_darkA, var_darkA = np.mean(dark['photo'][0], axis=-1), np.var(dark['photo'][0], axis=-1)
+#a1 = np.load('histonull_nosorting.npy')
+#a2 = np.load('histonull_sorting.npy')
+#with open('histom_sorting.pkl', 'rb') as fichier:
+#    mon_depickler = pickle.Unpickler(fichier)
+#    b2 = mon_depickler.load()
+#with open('histom_nosorting.pkl', 'rb') as fichier:
+#    mon_depickler = pickle.Unpickler(fichier)
+#    b1 = mon_depickler.load()
 #    
-#    data_IA = (data_IA - mean_dataA[:,None]) * \
-#        ((var_dataA[:,None]-var_darkA[:,None])/var_darkA[:,None])**0.5 + mean_dataA[:,None] - mean_darkA[:,None]
-#    
-#    mean_dataB, var_dataB = np.mean(data_IB, axis=-1), np.var(data_IB, axis=-1)
-#    mean_darkB, var_darkB = np.mean(dark['photo'][1], axis=-1), np.var(dark['photo'][1], axis=-1)
-#    
-#    data_IB = (data_IB - mean_dataB[:,None]) * \
-#        ((var_dataB[:,None]-var_darkB[:,None])/var_darkB[:,None])**0.5 + mean_dataB[:,None] - mean_darkB[:,None]
+#for wl_idx in wl_idx0[:1]:
+#    f = plt.figure(figsize=(19.20,10.80))
+#    txt3 = '%s '%key+'Fitted values: ' + 'Na$ = %.2E \pm %.2E$, '%(na_opt, uncertainties[0]) + \
+#    r'$\mu_{OPD} = %.2E \pm %.2E$ nm, '%(popt[0][1], uncertainties[1]) + \
+#    r'$\sigma_{OPD} = %.2E \pm %.2E$ nm,'%(popt[0][2], uncertainties[2])+' Chi2 = %.2E '%(chi2)+'(Last = %.3f s)'%(stop-start)
+##                txt3 = '%s '%key+'Fitted values: ' + 'Na$ = %.2E \pm %.2E$, '%(na_opt, uncertainties[0]) +' Chi2 = %.2E '%(chi2)+'(Last = %.3f s)'%(stop-start)
+#    count = 0
+#    axs = []
+#    for wl in wl_idx[::-1][:1]:
+#        ax = f.add_subplot(1,1,count+1)
+#        axs.append(ax)
+#        plt.title('%s nm'%wl_scale[wl], size=20)
+#        plt.errorbar(a1[0][wl], a1[1][wl], yerr=a1[2][wl], fmt='.', markersize=5, label='No sigma-clipping')
+##        plt.errorbar(a2[0][wl], a2[1][wl], yerr=a2[2][wl], fmt='.', markersize=5, label='Sigma-clipping')
 #
-#opd_rv = np.random.normal(popt[0][1], popt[0][2], data_IA.shape[1])
-#reconstruct_minus = (data_IA) * zeta_minus_A[:,None] + (data_IB) * zeta_minus_B[:,None] - \
-#                2 * ((data_IA) * zeta_minus_A[:,None] * (data_IB) * zeta_minus_B[:,None])**0.5 * np.sin(2*np.pi/(wl_scale0[:,None])*opd_rv) + darkm_rv
+#        plt.grid()
+#        plt.legend(loc='best', fontsize=25)
+#        plt.xlabel('Null depth', size=30)
+#        plt.ylabel('Frequency', size=30)
+#        plt.xticks(size=25);plt.yticks(size=25)
+#        exponent = np.floor(np.log10(null_pdf.max()))
+#        ylim = null_pdf.max() * 10**(-exponent)
+#        plt.ylim(-10**(exponent)/10, null_pdf.max()*1.05)
+#        # plt.xlim(-0.01, 0.5)
+#        count += 1
+#    plt.tight_layout()
 #
-#reconstruct_plus = (data_IA) * zeta_plus_A[:,None] + (data_IB) * zeta_plus_B[:,None] +\
-#                2 * ((data_IA) * zeta_plus_A[:,None] * (data_IB) * zeta_plus_B[:,None])**0.5 * np.sin(2*np.pi/(wl_scale0[:,None])*opd_rv) + darkp_rv
-#
-#if activate_spectral_binning:
-#    reconstruct_minus = reconstruct_minus.sum(axis=0).reshape(1,-1)           
-#    reconstruct_plus = reconstruct_plus.sum(axis=0).reshape(1,-1)
-#
-#reconstruct_minus = [reconstruct_minus[k][~np.isnan(reconstruct_minus[k])] for k in range(wl_scale.size)]
-#reconstruct_plus = [reconstruct_plus[k][~np.isnan(reconstruct_plus[k])] for k in range(wl_scale.size)]
-#
-#histo_reconm = [np.histogram(reconstruct_minus[k], histom[k][1], density=True) for k in range(wl_scale.size)]
-#histo_reconp = [np.histogram(reconstruct_plus[k], histop[k][1], density=True) for k in range(wl_scale.size)]
-#
-#
-#for wl_idx in wl_idx0:
+#for wl_idx in wl_idx0[:1]:
 #    f = plt.figure(figsize=(19.20,10.80))
 #    count = 0
 #    axs = []
-#    for wl in wl_idx[::-1]:
-#        if len(wl_idx) > 1:
-#            ax = f.add_subplot(nb_rows_plot,2,count+1)
-#        else:
-#            ax = f.add_subplot(1,1,count+1)
+#    for wl in wl_idx[::-1][:1]:
+#        ax = f.add_subplot(1,1,count+1)
 #        axs.append(ax)
-#        plt.title('%s nm'%wl_scale[wl], size=15)
-#        plt.plot(histom[wl][1][:-1], histom[wl][0], '.', label='Iminus')
-#        plt.plot(histom2[wl][1][:-1], histom2[wl][0], label='rv minus')
-#        plt.plot(histop[wl][1][:-1], histop[wl][0], '.', label='Iplus')
-#        plt.plot(histop2[wl][1][:-1], histop2[wl][0], label='rv plus')
-#        plt.plot(histo_reconm[wl][1][:-1], histo_reconm[wl][0], '--', label='recons -')
-#        plt.plot(histo_reconp[wl][1][:-1], histo_reconp[wl][0], '--', label='recons +')
-#        plt.plot(histodkA[wl][1][:-1], histodkA[wl][0], label='Dark A')
-#        plt.plot(histodkB[wl][1][:-1], histodkB[wl][0], label='Dark B')
-#        plt.plot(histoA[wl][1][:-1], histoA[wl][0], label='P A')
-#        plt.plot(histoB[wl][1][:-1], histoB[wl][0], label='P B')
+#        plt.title('%s nm'%wl_scale[wl], size=20)
+#        plt.plot(b1['histom'][wl][1][:-1], b1['histom'][wl][0], '.', label='Iminus (no sigma-clipping)')
+#        plt.plot(b1['histop'][wl][1][:-1], b1['histop'][wl][0], '.', label='Iplus (no sigma-clipping)')
+#        plt.plot(histodkm[wl][1][:-1], histodkm[wl][0], label='Dark minus')
+#        plt.plot(histodkp[wl][1][:-1], histodkp[wl][0], label='Dark plus')
+##        plt.plot(b2['histom'][wl][1][:-1], b2['histom'][wl][0], '.', label='Iminus (with sigma-clipping)')
+##        plt.plot(b2['histop'][wl][1][:-1], b2['histop'][wl][0], '.', label='Iplus (with sigma-clipping)')
+#
 #        plt.grid()
-#        if count == 0: plt.legend(loc='best', ncol=3)
+#        plt.xticks(size=25);plt.yticks(size=25)
+#        maxi = max([max([max(elt[0]) for elt in b1['histom']]), max([max(elt[0]) for elt in b1['histop']]), \
+#                    max([max(elt[0]) for elt in b2['histom']]), max([max(elt[0]) for elt in b2['histop']]),\
+#                    max([max(elt[0]) for elt in histodkm]), max([max(elt[0]) for elt in histodkp])])
+#        exponent = np.floor(np.log10(maxi))
+#        ylim = maxi * 10**(-exponent)
+#        plt.ylim(-10**(exponent)/10, maxi*1.05)
+#        plt.ylabel('Frequency', size=30)
+#        plt.legend(loc='best', ncol=3, fontsize=20)
+#        plt.xlabel('Flux (AU)', size=30)
 #        count += 1
 #    plt.tight_layout()
-
-#print('')
-#print(idx_photo)
-#print(Iminus.mean(), Iminus.std(), np.median(Iminus), np.min(Iminus), np.max(Iminus))
-#print(Iplus.mean(), Iplus.std(), np.median(Iplus), np.min(Iplus), np.max(Iplus))
-#print(dark['Iminus'].mean(), dark['Iminus'].std(), np.median(dark['Iminus']), np.min(dark['Iminus']), np.max(dark['Iminus']))
-#print(dark['Iplus'].mean(), dark['Iplus'].std(), np.median(dark['Iplus']), np.min(dark['Iplus']), np.max(dark['Iplus']))
-#print(data_IA.mean(), data_IA.std(), np.median(data_IA), np.min(data_IA), np.max(data_IA))
-#print(data_IB.mean(), data_IB.std(), np.median(data_IB), np.min(data_IB), np.max(data_IB))
-#print(dark_IA.mean(), dark_IA.std(), np.median(dark_IA), np.min(dark_IA), np.max(dark_IA))
-#print(dark_IB.mean(), dark_IB.std(), np.median(dark_IB), np.min(dark_IB), np.max(dark_IB))
-#print(injection[0].mean(), injection[0].std(), np.median(injection[0]), np.min(injection[0]), np.max(injection[0]))
-#print(injection[1].mean(), injection[1].std(), np.median(injection[1]), np.min(injection[1]), np.max(injection[1]))
-#print(injection_dark[0].mean(), injection_dark[0].std(), np.median(injection_dark[0]), np.min(injection_dark[0]), np.max(injection_dark[0]))
-#print(injection_dark[1].mean(), injection_dark[1].std(), np.median(injection_dark[1]), np.min(injection_dark[1]), np.max(injection_dark[1]))

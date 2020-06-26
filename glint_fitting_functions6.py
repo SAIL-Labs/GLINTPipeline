@@ -238,6 +238,15 @@ def load_data(data, wl_edges, null_key, nulls_to_invert, *args, **kwargs):
     Iminus_data = np.transpose(Iminus_data)
     Iplus_data = np.transpose(Iplus_data)
     
+    if 'frame_binning' in kwargs:
+        if not kwargs['frame_binning'] is None:
+            if kwargs['frame_binning'] > 0:
+                nb_frames_to_bin = int(kwargs['frame_binning'])
+                null_data, dummy = binning(null_data, nb_frames_to_bin, axis=1, avg=True)
+                photo_data, dummy = binning(photo_data, nb_frames_to_bin, axis=2, avg=True)
+                Iminus_data, dummy = binning(Iminus_data, nb_frames_to_bin, axis=1, avg=True)
+                Iplus_data, dummy = binning(Iplus_data, nb_frames_to_bin, axis=1, avg=True)
+    
     out = {'null':null_data, 'photo':photo_data, 'wl_scale':wl_scale,\
             'photo_err':photo_err_data, 'wl_idx':mask, 'Iminus':Iminus_data, 'Iplus':Iplus_data}
     
