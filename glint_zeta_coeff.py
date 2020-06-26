@@ -64,15 +64,15 @@ if __name__ == '__main__':
     nb_img = (None, None)
     debug = False
     save = True
-    mode_flux = 'windowed'
+    mode_flux = 'raw'
 
     ''' Inputs '''
-    datafolder = '20200106/all/'
+    datafolder = 'data202006/zeta/'
     root = "/mnt/96980F95980F72D3/glint/"
-    spectral_calibration_path = root+'GLINTprocessed/calibration_params/'
-    geometric_calibration_path = root+'GLINTprocessed/'+datafolder
-    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
     output_path = root+'GLINTprocessed/'+datafolder
+    spectral_calibration_path = output_path
+    geometric_calibration_path = output_path
+    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
     dark = np.load(output_path+'superdark.npy')
     
     Iminus = []
@@ -103,8 +103,8 @@ if __name__ == '__main__':
         pattern_coeff = np.load(geometric_calibration_path+'pattern_coeff.npy')
         position_outputs = pattern_coeff[:,:,1].T
         width_outputs = pattern_coeff[:,:,2].T
-        wl_to_px_coeff = np.load(spectral_calibration_path+'wl_to_px.npy')
-        px_to_wl_coeff = np.load(spectral_calibration_path+'px_to_wl.npy')
+        wl_to_px_coeff = np.load(spectral_calibration_path+'20200601_wl_to_px.npy')
+        px_to_wl_coeff = np.load(spectral_calibration_path+'20200601_px_to_wl.npy')
         
         
         spatial_axis = np.arange(dark.shape[0])
@@ -133,7 +133,7 @@ if __name__ == '__main__':
         plt.colorbar()
         plt.title('P'+str(beam)+' on')
     
-        img2 = glint_classes.ChipProperties(nbimg=(0,superNbImg))
+        img2 = glint_classes.ChipProperties(nbimg=(0,1))
         img2.data = np.reshape(superData, (1,superData.shape[0], superData.shape[1]))
         
         img2.cosmeticsFrames(np.zeros(dark.shape), no_noise)
@@ -148,7 +148,7 @@ if __name__ == '__main__':
         
         ''' Measurement of flux per frame, per spectral channel, per track '''
         list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
-        img2.getSpectralFlux(list_channels, spectral_axis, position_outputs, width_outputs, debug=debug)
+        img2.getSpectralFlux(list_channels, spectral_axis, position_outputs, width_outputs, mode_flux, debug=debug)
         
         img2.getIntensities(mode_flux)
         
@@ -279,7 +279,6 @@ if __name__ == '__main__':
 #        if np.max(np.abs(img2.p1[0])) > 1500: plt.ylim(-1, 1500)
         plt.ylabel('Intensity (AU)')
         plt.xlabel('Wavelength (nm)')
-        plt.ylim(ymax=5000)
         plt.subplot(3,4,2)
         plt.title('P2')
         plt.plot(img2.wl_scale[0], img2.p2[0])
