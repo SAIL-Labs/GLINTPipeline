@@ -102,27 +102,28 @@ if __name__ == '__main__':
     wl_bin_min, wl_bin_max = 1525, 1575# In nm
     bandwidth_binning = 50 # In nm
     mode_flux = 'raw'
-    nb_files_spectrum = (0,1000)
+    nb_files_spectrum = (5000,10000)
     activate_estimate_spectrum = False
     wavelength_bounds = (1400, 1700)
 #    ron = 0
     
     ''' Inputs '''
-    datafolder = 'simu_ron_regime/'
-    # root = "C:/Users/marc-antoine/glint/"
-    root = "/mnt/96980F95980F72D3/glint/"
-#    root = "//silo.physics.usyd.edu.au/silo4/snert/"
+    datafolder = 'data202006/20200602/turbulence/'
+#    root = "C:/Users/marc-antoine/glint/"
+#    root = "/mnt/96980F95980F72D3/glint/"
+    root = "//tintagel.physics.usyd.edu.au/snert/"
     output_path = root+'GLINTprocessed/'+datafolder
     spectral_calibration_path = output_path
     geometric_calibration_path = output_path
-    # data_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'+datafolder
+    data_path = '//tintagel.physics.usyd.edu.au/snert/GLINTData/'+datafolder
 #    data_path = 'C:/Users/marc-antoine/glint//GLINTData/'+datafolder
-    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'pure' in f])
+#    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
+    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'n1n4' in f or 'n5n6' in f])
     plot_name = datafolder.split('/')[-2]
     if len(data_list) == 0:
         raise IndexError('Data list is empty')
 
+    
     if no_noise:
         dark = np.zeros((344,96))
         dark_per_channel = np.zeros((96,16,20))
@@ -139,8 +140,8 @@ if __name__ == '__main__':
     pattern_coeff = np.load(geometric_calibration_path+'pattern_coeff.npy')
     position_outputs = pattern_coeff[:,:,1].T
     width_outputs = pattern_coeff[:,:,2].T
-    wl_to_px_coeff = np.load(spectral_calibration_path+'wl_to_px.npy')
-    px_to_wl_coeff = np.load(spectral_calibration_path+'px_to_wl.npy')
+    wl_to_px_coeff = np.load(spectral_calibration_path+'20200601_wl_to_px.npy')
+    px_to_wl_coeff = np.load(spectral_calibration_path+'20200601_px_to_wl.npy')
     
     
     spatial_axis = np.arange(dark.shape[0])
@@ -358,10 +359,11 @@ if __name__ == '__main__':
     # =============================================================================
     # Miscellaneous
     # =============================================================================
-    try:
-        photometries = [p1[:,56], p2[:,56], p3[:,56], p4[:,56]]
-    except IndexError:
-        photometries = [p1[:,0], p2[:,0], p3[:,0], p4[:,0]]
+#    try:
+#        photometries = [p1[:,56], p2[:,56], p3[:,56], p4[:,56]]
+#    except IndexError:
+#        photometries = [p1[:,0], p2[:,0], p3[:,0], p4[:,0]]
+    photometries = [p1.mean(axis=1), p2.mean(axis=1), p3.mean(axis=1), p4.mean(axis=1)]
         
     photometries_label = ['p1' ,'p2', 'p3', 'p4']
     for k in range(len(photometries)):
