@@ -63,25 +63,21 @@ if __name__ == '__main__':
     # Get the shape (position and width) of all tracks
     # =============================================================================
     ''' Settings '''
-    save = False
+    save = True
     
     print("Getting the shape (position and width) of all tracks")
     ''' Inputs '''
-    datafolder = '20191212/'
+    datafolder = 'data202006/20200605/scans_beforenight/'
     root = "/mnt/96980F95980F72D3/glint/"
     data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    data_list = [data_path+f for f in os.listdir(data_path) if 'lab_turb' in f in f]
-    spectral_calibration_path = root+'GLINTprocessed/'+'calibration_params/'
-    wl_to_px_coeff = np.load(spectral_calibration_path+'wl_to_px.npy')
-    px_to_wl_coeff = np.load(spectral_calibration_path+'px_to_wl.npy')    
+    output_path = root+'GLINTprocessed/'+datafolder
+    data_list = [data_path+f for f in os.listdir(data_path) if not 'dark' in f]
+    spectral_calibration_path = output_path
+    wl_to_px_coeff = np.load(spectral_calibration_path+'20200601_wl_to_px.npy')
+    px_to_wl_coeff = np.load(spectral_calibration_path+'20200601_px_to_wl.npy')    
     
     if len(data_list) == 0:
         raise IndexError('Data list is empty')
-        
-    ''' Output '''
-    output_path = root+'GLINTprocessed/'+datafolder
-    if not os.path.exists(output_path):
-        os.makedirs(output_path)
     
     ''' Remove dark from the frames and average them to increase SNR '''
     dark = np.load(output_path+'superdark.npy')
@@ -107,17 +103,19 @@ if __name__ == '__main__':
         super_img = super_img + img.data.sum(axis=0)
         slices = slices + np.sum(img.slices, axis=0)
         superNbImg = superNbImg + img.nbimg
-    
+        if data_list.index(f) % 1000 == 0:
+            print(data_list.index(f))
+            
     slices = slices / superNbImg
     super_img = super_img / superNbImg
    
     plt.figure(0, figsize=(19.2,10.8))
     plt.clf()
-    plt.imshow(super_img-dark, interpolation='none', vmin=super_img.min(), vmax=5000)
+    plt.imshow(super_img-dark, interpolation='none')
     plt.colorbar()
-    plt.savefig(output_path+'geo_calib_avg_frame.png')
+    if save: plt.savefig(output_path+'geo_calib_avg_frame.png')
     
-    labels = ['P4', 'N3', 'P3', 'N2', 'AN4', 'N5', 'N4', 'N6', 'AN1', 'AN6', 'N1', 'AN2', 'P2', 'AN3', 'AN5', 'P1']
+    labels = ['P4', 'N3', 'P3', 'N2', 'AN4', 'N5', 'N4', 'AN5', 'N6', 'AN1', 'AN6', 'N1', 'AN2', 'P2', 'AN3', 'P1']
 
     ''' Fit a gaussian on every track and spectral channel
         to get their positions, widths and amplitude '''
@@ -158,7 +156,7 @@ if __name__ == '__main__':
                 plt.grid()
                 plt.title(labels[j])
     plt.tight_layout()        
-    plt.savefig(output_path+'geo_calib_fitting_output.png')
+    if save: plt.savefig(output_path+'geo_calib_fitting_output.png')
     
     params = np.array(params).reshape((dark.shape[1],nb_tracks,-1))
     cov = np.array(cov).reshape((dark.shape[1],nb_tracks,-1))
@@ -174,15 +172,15 @@ if __name__ == '__main__':
         spectral_axis_in_nm = np.poly1d(px_to_wl_coeff[k])(spectral_axis)
         step = np.mean(np.diff(spectral_axis_in_nm))
         plt.subplot(4,4,k+1)
+        plt.plot(spectral_axis_in_nm[20:], params[20:,k,1])
         plt.imshow(np.log10(slices[:,k,:].T), interpolation='none', extent=[spectral_axis_in_nm[0]-step/2, spectral_axis_in_nm[-1]+step/2, img.slices_axes[k,-1]-0.5, img.slices_axes[k,0]+0.5], aspect='auto')
         plt.colorbar()
-        plt.plot(spectral_axis_in_nm[20:], params[20:,k,1])
         plt.title(labels[k])
         plt.xlabel('Wavelength (nm)')
         plt.ylabel('Vertical position')
     plt.tight_layout()
-    ppp
-    plt.savefig(output_path+'geo_calib_avg_slices.png')
+    if save: plt.savefig(output_path+'geo_calib_avg_slices.png')
+
     plt.figure(3, figsize=(19.2,10.8))
     plt.clf()
     for k in range(16):
@@ -195,7 +193,8 @@ if __name__ == '__main__':
         plt.xlabel('Wavelength (px)')
         plt.ylabel('Vertical position (px)')
     plt.tight_layout()
-    plt.savefig(output_path+'geo_calib_avg_slices_no_unit.png')
+    if save: plt.savefig(output_path+'geo_calib_avg_slices_no_unit.png')
+    
     plt.figure(4, figsize=(19.2,10.8))
     plt.clf()
     for k in range(16):
@@ -205,10 +204,10 @@ if __name__ == '__main__':
         plt.imshow(residuals[:,k].T, interpolation='none', aspect='auto')
         plt.colorbar()
         plt.title(labels[k])
-        plt.xlabel('Wavelength (nm)')
+        plt.xlabel('Wavelength (px)')
         plt.ylabel('Vertical position')
     plt.tight_layout()
-    plt.savefig(output_path+'geo_calib_residuals.png')
+    if save: plt.savefig(output_path+'geo_calib_residuals.png')
 
     if save:
         np.save(output_path+'pattern_coeff', params)
