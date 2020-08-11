@@ -542,12 +542,15 @@ class Null(File):
         shape = self.data.shape
         
         start_wl = [px_to_wl_poly[i](0) for i in which_tracks]
-        end_wl = [px_to_wl_poly[i](shape[-1]) for i in which_tracks]
+        end_wl = [px_to_wl_poly[i](shape[-1]-1) for i in which_tracks]
         
         start = np.around(min(start_wl))
         end = np.around(max(end_wl))
 
-        self.wl_scale = np.array([np.arange(start, end, np.around(px_to_wl_coeff[i,0])) for i in which_tracks])
+        # self.wl_scale = np.array([np.arange(start, end, np.around(px_to_wl_coeff[i,0])) for i in which_tracks])
+        # self.px_scale = np.array([np.around(wl_to_px_poly[i](self.wl_scale[i])) for i in which_tracks], dtype=np.int)
+        step_wl = np.mean(px_to_wl_coeff[:,0])
+        self.wl_scale = np.array([np.arange(start, end, step_wl) for i in which_tracks])
         self.px_scale = np.array([np.around(wl_to_px_poly[i](self.wl_scale[i])) for i in which_tracks], dtype=np.int)
         
     def error_null(self, null, Iminus, Iplus, Iminus_err, Iplus_err):
