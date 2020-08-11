@@ -58,6 +58,7 @@ First step: simply change the value of the variables in the **Settings** section
     * **activate_estimate_spectrum**, boolean, if ``True``, the spectrum of the source in the photometric output is created.
     * **nb_files_spectrum**: tuple, range of files to read to get the spectra.
     * **wavelength_bounds**: tuple, bounds of the bandwidth one wants to keep after the extraction. Used in the method ``getIntensities``. It works independantly of **wl_bin_min** and **wl_bin_max**.
+    * **suffix**: str, suffix to distinguish plots respect to data present in the datafolder (e.g. dark, baselines, stars...)
 
 Second step: change the value of the variables in the **Inputs** and **Outputs** sections:
     * **datafolder**: folder containing the datacube to use.
@@ -115,6 +116,7 @@ if __name__ == '__main__':
     activate_estimate_spectrum = False
     nb_files_spectrum = (5000,10000)
     wavelength_bounds = (1400, 1700)
+    suffix = 'dark'
 #    ron = 0
     
     ''' Inputs '''
@@ -128,7 +130,7 @@ if __name__ == '__main__':
     data_path = '//tintagel.physics.usyd.edu.au/snert/GLINTData/'+datafolder
 #    data_path = 'C:/Users/marc-antoine/glint//GLINTData/'+datafolder
 #    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    data_list = sorted([data_path+f for f in os.listdir(data_path) if 'n1n4' in f or 'n5n6' in f])
+    data_list = sorted([data_path+f for f in os.listdir(data_path) if suffix in f])
     plot_name = datafolder.split('/')[-2]
     if len(data_list) == 0:
         raise IndexError('Data list is empty')
@@ -398,7 +400,7 @@ if __name__ == '__main__':
         plt.ylabel('Counts (normalised)', size=40)
         txt = r'$\mu_{p%s} = %.3f$'%(k+1, popt[1]) + '\n' + r'$\sigma_{p%s} = %.3f$'%(k+1,popt[2])
         plt.text(0.05,0.3, txt, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
-        if save: plt.savefig(output_path+plot_name+'_plot_histo_p%s.png'%(k+1))
+        if save: plt.savefig(output_path+plot_name+'_'+suffix+'_plot_histo_p%s.png'%(k+1))
     
     for k in range(len(photometries)):
         plt.figure(figsize=(19.20, 10.80))
