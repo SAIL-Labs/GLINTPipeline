@@ -77,11 +77,11 @@ def modelsinminus2(x, opd0, bw, *args):
     
     return fringes.ravel()
 
-def processFullFrame(data_list, pos_seg2, which_null=None):
-    global img, dark, dark_per_channel, wl, fichier, rtscan, wl_offset
+def processFullFrame(data_list, pos_seg2, maskbounds, swap_ref, which_null=None):
+    global img, dark, dark_per_channel, wl, fichier, rtscan
     global data, spectral_axis, position_outputs, width_outputs, debug
     global spectral_binning, wl_bin_min, wl_bin_max,bandwidth_binning, mode_flux
-    global scanrange, wl0, selected_Iminus, mask
+    global scanrange, scanrange0, wl0, selected_Iminus, mask, data0, scans0
     
     scans = []
     opds = []
@@ -109,12 +109,17 @@ def processFullFrame(data_list, pos_seg2, which_null=None):
         rtscan /= rtscan.mean()
         rtscans.append(rtscan)
         scanrange = fichier['memsScanRange'][0]
+        scanrange0 = fichier['memsScanRange'][0]
         opd = (scanrange - pos_seg2)*1000*2
+        if swap_ref:
+            opd = -opd
+
+            
         opds.append(opd)
         
         for k in range(nloop)[:]:
             if nloop == 1:
-                data = np.transpose(data0, axes=(2, 0, 1))
+                data = np.transpose(data0, axes=(2, 0, 1)) # New order: frame (or OPD), spatial, spectral
             else:
                 data = np.transpose(data0[:,:,:,k], axes=(2, 0, 1))
                 
@@ -136,8 +141,7 @@ def processFullFrame(data_list, pos_seg2, which_null=None):
             img.matchSpectralChannels(wl_to_px_coeff, px_to_wl_coeff)
             
             ''' Measurement of flux per frame, per spectral channel, per track '''
-            list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
-            img.getSpectralFlux(list_channels, spectral_axis, position_outputs, width_outputs, mode_flux, debug=debug)
+            img.getSpectralFlux(spectral_axis, position_outputs, width_outputs, mode_flux, debug=debug)
             
             ''' Measure flux in photometric channels '''
             img.getIntensities(mode=mode_flux)
@@ -148,17 +152,21 @@ def processFullFrame(data_list, pos_seg2, which_null=None):
             Iminus = Iminus / Iminus.mean(axis=1)[:,None,:]
             print('Null', which_null)
             selected_Iminus = Iminus[which_null-1].T
-            wl = img.wl_scale[0] + wl_offset
+            wl = img.wl_scale[0]
             wl0 = wl.copy()
             scans.append(selected_Iminus)
            
     mask = np.ones_like(scanrange, dtype=np.bool)
-    mask[(scanrange<-2.45)|(scanrange>2)] = False
+    mask[(scanrange<maskbounds[0])|(scanrange>maskbounds[1])] = False
     scanrange = scanrange[mask]
     scans = np.array(scans)
     rtscans = np.array(rtscans)
     opds = np.array(opds)
-    return scans[:,:,mask], rtscans[:,mask], opds[:,mask]
+    scans0 = scans.copy()
+    scans = np.mean(scans, axis=0)
+    rtscans = np.mean(rtscans, axis=0)
+    opds = np.mean(opds, axis=0)
+    return scans[:,mask], rtscans[mask], opds[mask]
 
     
 ''' How to run '''
@@ -177,29 +185,31 @@ if run_mode ==  'fullframe':
     bin_frames = False
     nb_frames_to_bin = 1
     spectral_binning = True
-    wl_bin_min, wl_bin_max = 1400, 1600# In nm
+    wl_bin_min, wl_bin_max = 1450, 1600# In nm
     mode_flux = 'raw'
     bandwidth_binning = 5 # In nm    
     #kind_data = 'fullframe'
     kind_data = 'scan'
     concatenate = False
     wl_offset = 0.
+    maskbounds = (-2.44, 2)
     find_null = False
     
-    fit_wavelength = 1
-    delta_bounds = (-22000, -18000)
-    delta0 = -20000
+    fit_wavelength = True
+    delta_bounds = (-20000, -18000)
+    delta0 = np.mean(delta_bounds)
     
     ''' Inputs '''
-    datafolder = 'data202006/20200605/scans_beforenight/'
+    datafolder = 'data202007/20200705/scans_onsky/'
     #root = "C:/Users/marc-antoine/glint/"
     root = "/mnt/96980F95980F72D3/glint/"
     output_path = root+'GLINTprocessed/'+datafolder
     spectral_calibration_path = output_path
     geometric_calibration_path = output_path
     data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    data_list = [data_path+'null1_35at1.78_fullIms_20200605T194622.mat']
+    data_list = [data_path+'null6_35at1.78_zoom_fullIms_20200705T202543.mat']
     pos_seg_ref = 1.78 # Piston value of the refererence segment in micron
+    swap_ref = False
             
     if no_noise:
         dark = np.zeros((344,96))
@@ -229,10 +239,10 @@ if run_mode ==  'fullframe':
     channel_pos = np.around(np.arange(y_ends[0], y_ends[1]+sep, sep))
     
     ''' Get the flux respect to OPD for multi/omono-wavelength '''
-    scans2, rtscans2, opds2 = processFullFrame(data_list, pos_seg_ref)
-    scans2 = np.mean(scans2, axis=0)
-    rtscans2 = np.mean(rtscans2, axis=0)
-    opds2 = np.mean(opds2, axis=0)
+    scans2, rtscans2, opds2 = processFullFrame(data_list, pos_seg_ref, maskbounds, swap_ref)
+    # scans2 = np.mean(scans2, axis=0)
+    # rtscans2 = np.mean(rtscans2, axis=0)
+    # opds2 = np.mean(opds2, axis=0)
     wl0 = wl.copy()
     
     concatenated_opds = opds2
@@ -272,10 +282,12 @@ if run_mode ==  'fullframe':
     plt.tight_layout()
 
     x = np.linspace(0, 100000, 1000)
-    y=np.sinc(x/(1560**2/100))+1
-    y2=-np.sinc(x/(1560**2/100))+1
+    y=np.sinc(x/(1560**2/165))+1
+    y2=-np.sinc(x/(1560**2/165))+1
+    y0 = np.sin(2*np.pi/1560*x) * (y-1) + 1
     plt.figure()
     plt.plot(x, y)
+    plt.plot(x, y0)
     plt.plot(x, y2)
     plt.grid()
     plt.xlabel('OPD (nm)')
@@ -292,18 +304,21 @@ if run_mode ==  'fullframe':
         bandwidth_binning = 5.4 # In nm
         if fit_wavelength:
             init_guess = [delta0, 0, *np.ones(wl.size), *np.ones(wl.size), *np.zeros(wl.size)]
-            bounds = [(delta_bounds[0], -2*np.pi, *np.zeros(wl.size), *np.zeros(wl.size), *np.ones(wl.size)*(-50)), \
-                      (delta_bounds[1], 2*np.pi, *np.ones(wl.size)*1.5, *np.ones(wl.size)*2, *np.ones(wl.size)*50)]
+            bounds = [(delta_bounds[0], -2*np.pi, *np.ones(wl.size)*0.9, *np.ones(wl.size)*0.8, *np.ones(wl.size)*(-50)), \
+                      (delta_bounds[1], 2*np.pi, *np.ones(wl.size)*1.1, *np.ones(wl.size)*1.2, *np.ones(wl.size)*50)]
         else:
             init_guess = [delta0, 0, *np.ones(wl.size), *np.ones(wl.size)]
-            bounds = [(delta_bounds[0], -2*np.pi, *np.zeros(wl.size), *np.zeros(wl.size)), \
-                      (delta_bounds[1], 2*np.pi, *np.ones(wl.size)*1.5, *np.ones(wl.size)*2)]
+            bounds = [(delta_bounds[0], -2*np.pi, *np.ones(wl.size)*0.9, *np.ones(wl.size)*0.8), \
+                      (delta_bounds[1], 2*np.pi, *np.ones(wl.size)*1.1, *np.ones(wl.size)*1.2)]
 
         popt_dispersed, pcov_dispersed = curve_fit(modelsinminus, concatenated_opds, concatenated_scans.ravel(), p0 = init_guess, bounds=bounds)
 
         curve = modelsinminus(concatenated_opds, *popt_dispersed)
         chi2_dispersed = np.sum((concatenated_scans.ravel() - curve)**2) / (concatenated_scans.size-popt_dispersed.size)
-        print(popt_dispersed)
+        print(popt_dispersed[:2])
+        print(popt_dispersed[2:2+wl.size])
+        print(popt_dispersed[2+wl.size:2+wl.size+wl.size])
+        print(popt_dispersed[2+wl.size+wl.size:])
         print(chi2_dispersed)
         
         curve = np.reshape(curve, (wl.size, -1))
@@ -334,18 +349,21 @@ if run_mode ==  'fullframe':
         
         if fit_wavelength:
             init_guess2 = [delta0, 0, *np.ones(wl.size), *np.ones(wl.size), *np.zeros(wl.size)]
-            bounds2 = [(delta_bounds[0], -2*np.pi, *np.zeros(wl.size), *np.zeros(wl.size), *np.ones(wl.size)*(-40)), \
-                (delta_bounds[1], 2*np.pi, *np.ones(wl.size)*1.5, *np.ones(wl.size)*2, *np.ones(wl.size)*40)]
+            bounds2 = [(delta_bounds[0], -2*np.pi, *np.ones(wl.size)*0.9, *np.ones(wl.size)*0.8, *np.ones(wl.size)*(-40)), \
+                (delta_bounds[1], 2*np.pi, *np.ones(wl.size)*1.1, *np.ones(wl.size)*1.2, *np.ones(wl.size)*40)]
         else:
             init_guess2 = [delta0, 0, *np.ones(wl.size), *np.ones(wl.size)]
-            bounds2 = [(delta_bounds[0], -2*np.pi, *np.zeros(wl.size), *np.zeros(wl.size)), \
-                (delta_bounds[1], 2*np.pi, *np.ones(wl.size)*1.5, *np.ones(wl.size)*2)]
+            bounds2 = [(delta_bounds[0], -2*np.pi, *np.ones(wl.size)*0.9, *np.zeros(wl.size)*0.8), \
+                (delta_bounds[1], 2*np.pi, *np.ones(wl.size)*1.1, *np.ones(wl.size)*1.2)]
         
         popt2, pcov2 = curve_fit(modelsinminus, concatenated_opds, rtconcatenated_scans, p0 = init_guess2, bounds=bounds2)
         
         curve = modelsinminus(concatenated_opds, *popt2)
         chi2 = np.sum((rtconcatenated_scans - curve)**2) /(rtconcatenated_scans.size-popt2.size)
-        print(popt2)
+        print(popt2[:2])
+        print(popt2[2:2+wl.size])
+        print(popt2[2+wl.size:2+wl.size+wl.size])
+        print(popt2[2+wl.size+wl.size:])
         print(chi2)
         
         curve = np.reshape(curve, (wl.size, -1))

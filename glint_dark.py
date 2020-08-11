@@ -123,17 +123,19 @@ def getHistogram(data, bins):
 if __name__ == '__main__':         
     ''' Settings '''
     save = True
-    monitor = True # Set True to map the average, variance of relative difference of set of dark current datacubes
+    monitor = False # Set True to map the average, variance of relative difference of set of dark current datacubes
     nb_files = (None, None)
     edge_min, edge_max = -500, 500
     
     ''' Inputs '''
-    datafolder = 'data202006/20200602/turbulence/'
-    data_path = '//tintagel.physics.usyd.edu.au/snert/'+'/GLINTData/'+datafolder
+    datafolder = 'data202007/20200705/scans/'
+    # data_path = '//tintagel.physics.usyd.edu.au/snert/'+'/GLINTData/'+datafolder
+    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
     dark_list = [data_path+f for f in os.listdir(data_path) if 'dark' in f][nb_files[0]:nb_files[1]]
 
     ''' Output '''
-    output_path = '//tintagel.physics.usyd.edu.au/snert/GLINTprocessed/'+datafolder
+    # output_path = '//tintagel.physics.usyd.edu.au/snert/GLINTprocessed/'+datafolder
+    output_path = '/mnt/96980F95980F72D3/glint/GLINTprocessed/'+datafolder
     if not os.path.exists(output_path):
         os.makedirs(output_path)
         
