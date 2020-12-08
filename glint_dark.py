@@ -128,8 +128,7 @@ if __name__ == '__main__':
     edge_min, edge_max = -500, 500
     
     ''' Inputs '''
-    datafolder = 'data202007/20200705/scans/'
-    # data_path = '//tintagel.physics.usyd.edu.au/snert/'+'/GLINTData/'+datafolder
+    datafolder = '20190719_labcal1550/'
     data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
     dark_list = [data_path+f for f in os.listdir(data_path) if 'dark' in f][nb_files[0]:nb_files[1]]
 

@@ -81,10 +81,12 @@ nonoise_switch = False
 nb_files = (0,10,1) # Number of data files to read. None = all files
 #root = "C:/Users/marc-antoine/glint/" # Root path containing the reduced data
 root = "//tintagel.physics.usyd.edu.au/snert/" # Root path containing the reduced data
+root = '/mnt/96980F95980F72D3/glint/'
 #path_to_data = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'
-path_to_data = '//tintagel.physics.usyd.edu.au/snert/GLINTData/'
-datafolder = 'data202006/AlfBoo/' # Folder of the data to explore
-darkfolder = 'data202006/AlfBoo/'
+path_to_data = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'
+path_to_data = '/mnt/96980F95980F72D3/glint_data/'
+datafolder = 'data202007/20200705/scans/' # Folder of the data to explore
+darkfolder = 'data202007/20200705/scans/'
 wl_path = root+'GLINTprocessed/'+datafolder+'20200601_px_to_wl.npy'
 output_path = root+'GLINTprocessed/'+datafolder # Path to reduced data
 dark_path = output_path+'superdark.npy'
@@ -92,7 +94,7 @@ fps = 10
 
 ''' Running script '''
 data_path = path_to_data+datafolder # Full path to the data
-data_list = sorted([data_path+f for f in os.listdir(data_path) if 'n1n4' in f])
+data_list = sorted([data_path+f for f in os.listdir(data_path) if 'dark_20200705T155341337' in f])
 data_list = data_list[nb_files[0]:nb_files[1]:nb_files[2]]
 if not nonoise_switch:
     switch_dark = False
@@ -108,7 +110,7 @@ if not nonoise_switch:
         with h5py.File(dark_list[0], 'r') as dataFile:
             dark = np.array(dataFile['imagedata'])
             dark = np.transpose(dark, axes=(0,2,1))
-            dark = dark.mean(axis=0)    
+            dark = dark.mean(axis=0)
 else:
     print('No-noise data')
     dark = np.zeros((344,96))
@@ -124,7 +126,7 @@ for f in data_list:
             print(f)
             continue
         data = np.transpose(data, axes=(0,2,1))
-        data = data - dark
+        data = data - dark * 0
         
         try:
             stack = np.vstack((stack, data))
@@ -256,7 +258,7 @@ def run2(k):
             text_antinull1, text_antinull2, text_antinull3, text_antinull4, text_antinull5, text_antinull6]
 
 anim = animation.FuncAnimation(fig, run2, init_func=init3, frames=data.shape[0], interval=10)#, blit=True)
-
+ppp
 plt.figure(figsize=(19.20,10.80))
 for i in range(16):
     if i<4: 
@@ -385,12 +387,12 @@ plt.grid()
 plt.xticks(size=30);plt.yticks(size=30)
 plt.legend(loc='best', fontsize=35)
 plt.xlabel('Wavelength (nm)', size=35)
-plt.ylabel('Intensity (AU)', size=35)
+plt.ylabel('Intensity (count)', size=35)
 plt.title('Visual check of wiggles', size=40)
 plt.xlim(1400, 1700)
 plt.ylim(-0.05, 1.05)
 plt.tight_layout()
-
+ppp
 plt.figure(figsize=(19.20,10.80))
 for i in range(16):
     plt.subplot(4,4,i+1)
@@ -404,7 +406,7 @@ for k in range(100):
     ax = fig.add_subplot(111)
     plt.imshow(stack[k], interpolation='none', aspect=2, vmax = 200, vmin=0, extent=[wl_scale[0,0]-5/2, wl_scale[0,-1]+5/2, stack[0].shape[0], 0])
     cb = plt.colorbar()
-    cb.set_label(label='Intensity (AU)', size=20)
+    cb.set_label(label='Intensity (count)', size=20)
     cb.ax.tick_params(labelsize=15)
     plt.xticks(size=15)
     plt.yticks(size=15)

@@ -8,11 +8,12 @@ import matplotlib.pyplot as plt
 import h5py
 from functools import partial
 from scipy.optimize import curve_fit
-from numba import jit
+from numba import jit, prange
 import os
+import cupy as cp
 
 
-def gaussian(x, A, B, loc, sig):
+def gaussian(x, A, B, C, loc, sig):
     """
     Computes a gaussian curve
     
@@ -34,7 +35,9 @@ def gaussian(x, A, B, loc, sig):
         
         The gaussian curve respect to x values
     """
-    return A * np.exp(-(x-loc)**2/(2*sig**2)) + B
+    gaus = np.exp(-(x-loc)**2/(2*sig**2))
+    normalisation = np.sum(np.exp(-(x-loc)**2/(2*sig**2)))
+    return A * gaus / normalisation + B * x + C
 
 
 def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths):
@@ -49,12 +52,13 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
     nb_tracks = 16
     amplitude_fit = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
     amplitude = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
-    integ_model = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
-    integ_windowed = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
+    # integ_model = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
+    # integ_windowed = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
     residuals_fit = np.zeros((nbimg, nb_tracks, len(spectral_axis), slices_axes.shape[1]))
+    error = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
     residuals_reg = np.zeros((nbimg, nb_tracks, len(spectral_axis), slices_axes.shape[1]))
     cov = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
-    weights = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
+    # weights = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
     labels = ['P4', 'N3', 'P3', 'N2', 'AN4', 'N5', 'N4', 'N6', 'AN1', 'AN6', 'N1', 'AN2', 'P2', 'AN3', 'AN5', 'P1']
 
     # With fitted amplitude
@@ -63,26 +67,49 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
         for i in which_tracks:
             for j in range(len(spectral_axis)):
                 gaus = partial(gaussian, loc=positions[i,j], sig=widths[i,j])
-                popt, pcov = curve_fit(gaus, slices_axes[i], slices[k,j,i], p0=[slices[k,j,i].max(), 0])
+                popt, pcov = curve_fit(gaus, slices_axes[i], slices[k,j,i], p0=[slices[k,j,i].max(), 0, 0])
                 amplitude_fit[k,i,j] = popt[0]
                 cov[k,i,j] = pcov[0,0]
-                integ_model[k,i,j] = np.sum(gaus(slices_axes[i], *popt))
-                weight = gaus(slices_axes[i], 1., 0)
-                weight /= weight.sum()
-                integ_windowed[k,i,j] = np.sum(weight * slices[k,j,i])
+                # integ_model[k,i,j] = np.sum(gaus(slices_axes[i], *popt))
+                # weight = gaus(slices_axes[i], 1., 0)
+                # weight /= weight.sum()
+                # integ_windowed[k,i,j] = np.sum(weight * slices[k,j,i])
                 residuals_fit[k,i,j] = slices[k,j,i] - gaus(slices_axes[i], *popt)
                 
-                simple_gaus = np.exp(-(slices_axes[i]-positions[i,j])**2/(2*widths[i,j]**2))
-                A = np.vstack((simple_gaus, np.ones_like(simple_gaus)))
+                simple_gaus0 = np.exp(-(slices_axes[i]-positions[i,j])**2/(2*widths[i,j]**2))
+                simple_gaus = simple_gaus0 / np.sum(simple_gaus0)
+                simple_gaus[np.isnan(simple_gaus)] = 0.
+                # A = np.vstack((simple_gaus, np.ones_like(simple_gaus)))
+                A = np.vstack((simple_gaus, np.ones_like(simple_gaus), slices_axes[i]))
                 A = np.transpose(A)
-                popt2 = np.linalg.lstsq(A, slices[k,j,i])[0]
-                residuals_reg[k,i,j] = slices[k,j,i] - (popt2[0] * simple_gaus + popt2[1])
+                try:
+                    # popt2 = np.linalg.lstsq(A, slices[k,j,i], rcond=None)[0]
+                    popt2 = np.linalg.solve(A.T.dot(A), A.T.dot(slices[k,j,i]))
+                except ValueError as e:
+                    print(simple_gaus0)
+                    print(np.any(np.isnan(simple_gaus)), np.any(np.isinf(simple_gaus)))
+                    print(labels[i], 'Track', i, 'Frame', k, 'Column', j)
+                    print('Centre axe', np.mean(slices_axes[i]),'Loc', positions[i,j], 'Width', widths[i,j])
+                    raise e
+                except np.linalg.LinAlgError as e:
+                    print(simple_gaus0)
+                    print(np.any(np.isnan(simple_gaus)), np.any(np.isinf(simple_gaus)))
+                    print(labels[i], 'Track', i, 'Frame', k, 'Column', j)
+                    print('Centre axe', np.mean(slices_axes[i]),'Loc', positions[i,j], 'Width', widths[i,j])
+                    print( e)
+                    popt2 = np.zeros((3,))
+
+                    
+                res = slices[k,j,i] - (popt2[0] * simple_gaus + popt2[1] + popt2[2] * slices_axes[i])
+                chi2 = np.sum(res**2) / (slices_axes[i].size-len(popt2))
+                error[k,i,j] = (chi2 / np.sum((slices_axes[i] - slices_axes[i].mean())**2))**0.5
+                residuals_reg[k,i,j] = res
                 amplitude[k,i,j] = popt2[0]
-                integ_model[k,i,j] = np.sum(simple_gaus * popt2[0])
-                weight = simple_gaus.copy()
-                weight /= np.sum(weight)
-                integ_windowed[k,i,j] = np.sum(weight * slices[k,j,i])
-                weights[k,i,j] = weight.sum()
+                # integ_model[k,i,j] = np.sum(simple_gaus * popt2[0])
+                # weight = simple_gaus.copy()
+                # weight /= np.sum(weight)
+                # integ_windowed[k,i,j] = np.sum(weight * slices[k,j,i])
+                # weights[k,i,j] = weight.sum()
                 
 #                switch = True
 #                if abs(popt) > 1.e+4 or abs(popt2[0]) > 1.e+4:
@@ -91,19 +118,20 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
 #                    if abs(popt2[0]) > 1.e+4:
 #                        debug.append([1, k, i, j])
                 if j==59 and k == 0:
-                    print(k, i, j)
-                    print('Weight on std', (np.sum((simple_gaus/simple_gaus.sum())**2))**0.5)
-                    print(slices[k,j,i][:7].std())
+                    # print(k, i, j)
+                    # print('Weight on std', (np.sum((simple_gaus/simple_gaus.sum())**2))**0.5)
+                    # print(slices[k,j,i][:7].std())
                     plt.figure()
                     plt.subplot(211)
                     plt.plot(slices_axes[i], slices[k,j,i], 'o', label='data')
-                    plt.plot(slices_axes[i], gaus(slices_axes[i], *popt), '+-', label='curve_fit '+str(popt[0]))
-                    plt.plot(slices_axes[i], popt2[0]* simple_gaus + popt2[1], '+--', label='linear reg '+str(popt2[0]))
+                    plt.plot(slices_axes[i], gaus(slices_axes[i], *popt), '+-', label='curve_fit %s'%(popt))
+                    # plt.plot(slices_axes[i], popt2[0]* simple_gaus + popt2[1], '+--', label='linear reg %s'%(popt2))
+                    plt.plot(slices_axes[i], popt2[0]* simple_gaus + popt2[1] + popt2[2] * slices_axes[i], '+--', label='linear reg %s'%(popt2))
                     plt.xlabel('Spatial position (px)')
                     plt.ylabel('Amplitude')
                     plt.grid()
                     plt.legend(loc='best')
-                    plt.title('Frame '+str(k)+'/ Track '+str(i+1)+'/ Column '+str(j)+'/ '+labels[i])
+                    plt.title('Frame '+str(k)+'/ Track '+str(i)+'/ Column '+str(j)+'/ '+labels[i])
 #                    plt.subplot(312)
 #                    plt.plot(slices[k,j,i], residuals_fit[k,i,j], 'o', label='fit')
 #                    plt.plot(slices[k,j,i], residuals_reg[k,i,j], 'd', label='linear reg')
@@ -113,7 +141,7 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
 #                    plt.legend(loc='best')
                     plt.subplot(212)
                     plt.plot(slices_axes[i], residuals_fit[k,i,j], 'o', label='fit (%s)'%(np.mean(residuals_fit[k,i,j])))
-                    plt.plot(slices_axes[i], residuals_reg[k,i,j], 'd', label='linear reg (%s)'%(np.mean(residuals_reg[k,i,j])))
+                    plt.plot(slices_axes[i], residuals_reg[k,i,j], 'd', label='linear reg (%s, %s)'%(np.mean(residuals_reg[k,i,j]), error[k,i,j]))
                     plt.xlabel('Spatial position (px)')
                     plt.ylabel('Residual')
                     plt.grid()
@@ -124,7 +152,8 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
 #                        temp2 = simple_gaus
 #                        switch = False
     
-    return amplitude_fit, amplitude, integ_model, integ_windowed, residuals_fit, residuals_reg, cov, weights
+    # return amplitude_fit, amplitude, integ_model, integ_windowed, residuals_fit, residuals_reg, cov, weights
+    return amplitude_fit, amplitude, residuals_fit, residuals_reg, cov, error
 
 
 class File(object):
@@ -327,7 +356,7 @@ class Null(File):
         if 'dark' in kwargs:
             dk = kwargs['dark'][None,:]
             self.slices = self.slices - dk#[:,:,:,10-4:10+5]
-            self.med_slices = np.mean(self.slices[:,:10], axis=(1,3))
+            self.med_slices = np.median(self.slices[:,:10], axis=(1,3))
             self.slices = self.slices - self.med_slices[:,None,:,None]
             
         
@@ -366,16 +395,6 @@ class Null(File):
             **amplitude**: ndarray
                 Estimation of the spectral flux as the amplitude of the Gaussian 
                 profile fitted by numpy's linear leastsquare method.
-            **integ_model**: ndarray
-                Estimation of the spectral flux as the integral of the theoretical
-                Gaussian profile which parameters are the amplitude 
-                (used in the ``amplitude`` method) and the measured positions and width
-                of this profile per wavelength.
-            **integ_windowed**: ndarray
-                Like raw integral but with a Gaussian window giving different 
-                weights to pixels along spatial axis
-            **weights**:
-                Weights in the windowing.
             **residuals_reg**: ndarray
                 Residuals from the fit which gives ``amplitude`` attribute.
             **amplitude_fit**: ndarray
@@ -389,6 +408,8 @@ class Null(File):
             **cov**: scalar
                 From debug-mode only.
                 Covariance estimated by the scipy's curve_fit method
+            **amplitude_error**: ndarray
+                Uncertainty of the estimation of ``amplitude``
         """
         which_tracks = np.arange(16)
         nbimg = self.data.shape[0]
@@ -397,19 +418,30 @@ class Null(File):
         # widths = np.array([p(spectral_axis) for p in width_poly])
         # positions = position
         # widths = width
-        self.raw = self.slices[:,:,:,10-4:10+5].mean(axis=-1)
-        self.raw = np.transpose(self.raw, axes=(0,2,1))
-        self.raw_err = self.bg_std * slices_axes.shape[-1]**0.5
-        
-        if mode_flux != 'raw':
+
+        if mode_flux == 'raw':
+            self.raw = self.slices[:,:,:,10-4:10+5].mean(axis=-1)
+            self.raw = np.transpose(self.raw, axes=(0,2,1))
+            self.raw_err = self.slices[:,:,:,:10-5].std(axis=-1) / slices_axes.shape[-1]**0.5
+            self.raw_err = np.transpose(self.raw_err, axes=(0,2,1))
+        else:
             if debug:
-                self.amplitude_fit, self.amplitude, self.integ_model, self.integ_windowed, self.residuals_fit, self.residuals_reg, self.cov, self.weights = \
+                print('DEBUG')
+                self.raw = self.slices[:,:,:,10-4:10+5].mean(axis=-1)
+                self.raw = np.transpose(self.raw, axes=(0,2,1))
+                self.raw_err = self.slices[:,:,:,:10-5].std(axis=-1) / slices_axes.shape[-1]**0.5
+                self.raw_err = np.transpose(self.raw_err, axes=(0,2,1))
+            #     self.amplitude_fit, self.amplitude, self.integ_model, self.integ_windowed, self.residuals_fit, self.residuals_reg, self.cov, self.weights = \
+            # _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths)
+                self.amplitude_fit, self.amplitude, self.residuals_fit, self.residuals_reg, self.cov, self.amplitude_error = \
             _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths)
             else:
-                self.amplitude, self.integ_model, self.integ_windowed, self.residuals_reg, self.weights = \
-                self._getSpectralFluxNumba(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths)
-    
-            self.windowed_err = self.bg_std * np.sum(self.weights)**0.5
+                try:
+                    self.amplitude, self.residuals_reg, self.amplitude_error = self._getSpectralFluxNumba(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths)
+                except np.linalg.LinAlgError:
+                    print('LinAlgError')
+                    self.amplitude, self.residuals_reg, self.amplitude_error = self._getSpectralFluxNumba2(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths)
+            # self.windowed_err = self.bg_std #* np.sum(self.weights)**0.5
         
         # return positions, widths
         
@@ -441,66 +473,114 @@ class Null(File):
             **amplitude**: ndarray
                 Estimation of the spectral flux as the amplitude of the Gaussian 
                 profile fitted by numpy's linear leastsquare method.
-            **integ_model**: ndarray
-                Estimation of the spectral flux as the integral of the theoretical
-                Gaussian profile which parameters are the amplitude 
-                (used in the ``amplitude`` method) and the measured positions and width
-                of this profile per wavelength.
-            **integ_windowed**: ndarray
-                Like raw integral but with a Gaussian window giving different 
-                weights to pixels along spatial axis
-            **weights**:
-                Weights in the windowing.
             **residuals_reg**: ndarray
-                Residuals from the fit which gives ``amplitude`` attribute.
-                            **amplitude**: ndarray
-                Estimation of the spectral flux as the amplitude of the Gaussian 
-                profile fitted by numpy's linear leastsquare method.
-            **integ_model**: ndarray
-                Estimation of the spectral flux as the integral of the theoretical
-                Gaussian profile which parameters are the amplitude 
-                (used in the ``amplitude`` method) and the measured positions and width
-                of this profile per wavelength.
-            **integ_windowed**: ndarray
-                Like raw integral but with a Gaussian window giving different 
-                weights to pixels along spatial axis
-            **weights**:
-                Weights in the windowing.
-            **residuals_reg**: ndarray
-                Residuals from the fit which gives ``amplitude`` attribute.
+                Residuals from the fit which gives ``amplitude`` attribute.                
         """
         nb_tracks = 16
         amplitude = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
-        integ_model = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
-        integ_windowed = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
         residuals_reg = np.zeros((nbimg, nb_tracks, len(spectral_axis), slices_axes.shape[1]))
-        weights = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
+        error = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
         
+        std = 1/slices[:,:,:,:10-5].std()
         # With fitted amplitude
         for k in range(nbimg):
             for i in which_tracks:
                 for j in range(len(spectral_axis)):
+                    # print(k,i,j)
                     # 1st estimator : amplitude of the Gaussian profil of the track, use of linear least square
-                    simple_gaus = np.exp(-(slices_axes[i]-positions[i,j])**2/(2*widths[i,j]**2)) # Shape factor of the intensity profile, to be removed before computing Null depth
-                    A = np.vstack((simple_gaus, np.ones_like(simple_gaus)))
-                    A = np.transpose(A)
+                    # simple_gaus = np.exp(-(slices_axes[i]-positions[i,j])**2/(2*widths[i,j]**2)) # Shape factor of the intensity profile, to be removed before computing Null depth
+                    # A = np.vstack((simple_gaus, np.ones_like(simple_gaus)))
+                    # A = np.transpose(A)
+                    simple_gaus0 = np.exp(-(slices_axes[i]-positions[i,j])**2/(2*widths[i,j]**2))
+                    simple_gaus = simple_gaus0 / np.sum(simple_gaus0)
+                    simple_gaus[np.isnan(simple_gaus)] = 0.
+                    
+                    weights = np.diag(simple_gaus + std)
+                    
+                    A = np.vstack((simple_gaus, np.ones_like(simple_gaus), slices_axes[i]))
+                    # A = np.vstack((simple_gaus, np.ones_like(simple_gaus)))
+                    Aw = np.dot(A, weights)
+                    AwAwT = np.dot(Aw, np.transpose(Aw))
+                    dataw = np.dot(slices[k,j,i], weights)
+                    b = np.dot(Aw,dataw)
+                    
                     if j >= 20:
-                        popt2 = np.linalg.lstsq(A, slices[k,j,i])[0]
+                        # popt2 = np.linalg.lstsq(Aw.T, dataw)[0]
+                        # popt2 = np.linalg.solve(np.dot(A,np.transpose(A)), np.dot(A, slices[k,j,i]))
+                        popt2 = np.linalg.solve(AwAwT, b)
                     else:
-                        popt2 = np.array([0.])
-                    residuals_reg[k,i,j] = slices[k,j,i] - (popt2[0] * simple_gaus + popt2[1])
+                        # popt2 = np.zeros(A.shape[1])
+                        popt2 = np.zeros(A.shape[0])
+                    residuals_reg[k,i,j] = slices[k,j,i] - (popt2[0] * simple_gaus + popt2[1] + popt2[2] * slices_axes[i])
                     amplitude[k,i,j] = popt2[0]
+                    chi2 = np.sum(residuals_reg[k,i,j]**2) / (slices_axes[i].size-popt2.size)
+                    error[k,i,j] = (chi2 / np.sum((slices_axes[i] - np.mean(slices_axes[i]))**2))**0.5
                     
-                    # 2nd estimator : integration of the energy knowing the amplitude
-                    integ_model[k,i,j] = np.sum(simple_gaus * popt2[0])
+        return amplitude, residuals_reg, error
+
+    @staticmethod
+    @jit(nopython=True)
+    def _getSpectralFluxNumba2(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths):
+        """
+        Numba-ized function measuring the flux per spectral channel (1 pixel width)
+        
+        :Parameters:
+            **nbimg**: int
+                Number fo frames to process
+            **which_tracks**: array-like
+                list of the output from which to measure the flux.
+                Outputs are numbered from 0 to 15 from top to bottom 
+                (in the way the frame are loaded).
+            **slices_axes**: ndarray
+                Spatial axis in pixel for every outputs.
+            **slices**: ndarray
+                Array containing the flux in the 16 outputs on every frames.
+            **spectral_axis**: ndarray
+                Common spectral axis in pixel for every outputs.
+            **positions**: array-like
+                Estimated positions of each output respect to wavelength.
+            **widths**: array-like
+                Estimated widths of each output respect to wavelength.
+                
+        :Returns:
+            **amplitude**: ndarray
+                Estimation of the spectral flux as the amplitude of the Gaussian 
+                profile fitted by numpy's linear leastsquare method.
+            **residuals_reg**: ndarray
+                Residuals from the fit which gives ``amplitude`` attribute.                
+        """
+        nb_tracks = 16
+        amplitude = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
+        residuals_reg = np.zeros((nbimg, nb_tracks, len(spectral_axis), slices_axes.shape[1]))
+        error = np.zeros((nbimg, nb_tracks, len(spectral_axis)))
+        
+        std = 1/slices[:,:,:,:10-5].std()
+        # With fitted amplitude
+        for k in range(nbimg):
+            for i in which_tracks:
+                for j in range(len(spectral_axis)):
+                    # print(k,i,j)
+                    # 1st estimator : amplitude of the Gaussian profil of the track, use of linear least square
+                    simple_gaus0 = np.exp(-(slices_axes[i]-positions[i,j])**2/(2*widths[i,j]**2))
+                    simple_gaus = simple_gaus0 / np.sum(simple_gaus0)
+                    simple_gaus[np.isnan(simple_gaus)] = 0.
+                    A = np.vstack((simple_gaus, np.ones_like(simple_gaus), slices_axes[i]))
+
+                    weights = np.diag(simple_gaus + std)
+                    Aw = np.dot(A, weights)
+                    dataw = np.dot(slices[k,j,i], weights)
                     
-                    # 3rd estimator : weighted mean of the track in a column of pixels
-                    weight = np.exp(-(slices_axes[i]-positions[i,j])**2/(2*2**2)) # Same weight window for every tracks and spectral channel to make it removed when doing the ratio of intensity
-                    weight /= weight.sum()
-                    integ_windowed[k,i,j] = np.sum(weight * slices[k,j,i])
-                    weights[k,i,j] = weight.sum()
+                    if j >= 20:
+                         popt2 = np.linalg.lstsq(Aw.T, dataw)[0]
+                    else:
+                        # popt2 = np.zeros(A.shape[1])
+                        popt2 = np.zeros(A.shape[0])
+                    residuals_reg[k,i,j] = slices[k,j,i] - (popt2[0] * simple_gaus + popt2[1] + popt2[2] * slices_axes[i])
+                    amplitude[k,i,j] = popt2[0]
+                    chi2 = np.sum(residuals_reg[k,i,j]**2) / (slices_axes[i].size-popt2.size)
+                    error[k,i,j] = (chi2 / np.sum((slices_axes[i] - np.mean(slices_axes[i]))**2))**0.5
                     
-        return amplitude, integ_model, integ_windowed, residuals_reg, weights
+        return amplitude, residuals_reg, error
     
     def getTotalFlux(self):
         """
@@ -693,7 +773,7 @@ class Null(File):
                 Estimated flux in the antinull output X=1..6, from the ``raw`` attribute.                     
         """
       
-        if mode == 'amplitude':
+        if mode == 'fit':
             # With amplitude
             self.p1 = self.amplitude[:,15][:,self.px_scale[15]]
             self.p2 = self.amplitude[:,13][:,self.px_scale[13]]
@@ -708,35 +788,35 @@ class Null(File):
 
             self.p1_err = self.p2_err = self.p3_err = self.p4_err = self.bg_std
 
-        elif mode == 'model':
-            # With full gaussian model
-            self.p1 = self.integ_model[:,15,:][:,self.px_scale[15]]
-            self.p2 = self.integ_model[:,13,:][:,self.px_scale[13]]
-            self.p3 = self.integ_model[:,2,:][:,self.px_scale[2]]
-            self.p4 = self.integ_model[:,0,:][:,self.px_scale[0]]
-            self.Iminus1, self.Iplus1 = self.integ_model[:,11][:,self.px_scale[11]], self.integ_model[:,9][:,self.px_scale[9]]
-            self.Iminus2, self.Iplus2 = self.integ_model[:,3][:,self.px_scale[3]], self.integ_model[:,12][:,self.px_scale[12]]
-            self.Iminus3, self.Iplus3 = self.integ_model[:,1][:,self.px_scale[1]], self.integ_model[:,14][:,self.px_scale[14]]
-            self.Iminus4, self.Iplus4 = self.integ_model[:,6][:,self.px_scale[6]], self.integ_model[:,4][:,self.px_scale[4]]
-            self.Iminus5, self.Iplus5 = self.integ_model[:,5][:,self.px_scale[5]], self.integ_model[:,7][:,self.px_scale[7]]
-            self.Iminus6, self.Iplus6 = self.integ_model[:,8][:,self.px_scale[8]], self.integ_model[:,10][:,self.px_scale[10]]
+        # elif mode == 'model':
+        #     # With full gaussian model
+        #     self.p1 = self.integ_model[:,15,:][:,self.px_scale[15]]
+        #     self.p2 = self.integ_model[:,13,:][:,self.px_scale[13]]
+        #     self.p3 = self.integ_model[:,2,:][:,self.px_scale[2]]
+        #     self.p4 = self.integ_model[:,0,:][:,self.px_scale[0]]
+        #     self.Iminus1, self.Iplus1 = self.integ_model[:,11][:,self.px_scale[11]], self.integ_model[:,9][:,self.px_scale[9]]
+        #     self.Iminus2, self.Iplus2 = self.integ_model[:,3][:,self.px_scale[3]], self.integ_model[:,12][:,self.px_scale[12]]
+        #     self.Iminus3, self.Iplus3 = self.integ_model[:,1][:,self.px_scale[1]], self.integ_model[:,14][:,self.px_scale[14]]
+        #     self.Iminus4, self.Iplus4 = self.integ_model[:,6][:,self.px_scale[6]], self.integ_model[:,4][:,self.px_scale[4]]
+        #     self.Iminus5, self.Iplus5 = self.integ_model[:,5][:,self.px_scale[5]], self.integ_model[:,7][:,self.px_scale[7]]
+        #     self.Iminus6, self.Iplus6 = self.integ_model[:,8][:,self.px_scale[8]], self.integ_model[:,10][:,self.px_scale[10]]
             
-            self.p1_err = self.p2_err = self.p3_err = self.p4_err = self.raw_err
+        #     self.p1_err = self.p2_err = self.p3_err = self.p4_err = self.raw_err
         
-        elif mode == 'windowed':
-            # With windowed integration
-            self.p1 = self.integ_windowed[:,15,:][:,self.px_scale[15]]
-            self.p2 = self.integ_windowed[:,13,:][:,self.px_scale[13]]
-            self.p3 = self.integ_windowed[:,2,:][:,self.px_scale[2]]
-            self.p4 = self.integ_windowed[:,0,:][:,self.px_scale[0]]
-            self.Iminus1, self.Iplus1 = self.integ_windowed[:,11][:,self.px_scale[11]], self.integ_windowed[:,9][:,self.px_scale[9]]
-            self.Iminus2, self.Iplus2 = self.integ_windowed[:,3][:,self.px_scale[3]], self.integ_windowed[:,12][:,self.px_scale[12]]
-            self.Iminus3, self.Iplus3 = self.integ_windowed[:,1][:,self.px_scale[1]], self.integ_windowed[:,14][:,self.px_scale[14]]
-            self.Iminus4, self.Iplus4 = self.integ_windowed[:,6][:,self.px_scale[6]], self.integ_windowed[:,4][:,self.px_scale[4]]
-            self.Iminus5, self.Iplus5 = self.integ_windowed[:,5][:,self.px_scale[5]], self.integ_windowed[:,7][:,self.px_scale[7]]
-            self.Iminus6, self.Iplus6 = self.integ_windowed[:,8][:,self.px_scale[8]], self.integ_windowed[:,10][:,self.px_scale[10]]
+        # elif mode == 'windowed':
+        #     # With windowed integration
+        #     self.p1 = self.integ_windowed[:,15,:][:,self.px_scale[15]]
+        #     self.p2 = self.integ_windowed[:,13,:][:,self.px_scale[13]]
+        #     self.p3 = self.integ_windowed[:,2,:][:,self.px_scale[2]]
+        #     self.p4 = self.integ_windowed[:,0,:][:,self.px_scale[0]]
+        #     self.Iminus1, self.Iplus1 = self.integ_windowed[:,11][:,self.px_scale[11]], self.integ_windowed[:,9][:,self.px_scale[9]]
+        #     self.Iminus2, self.Iplus2 = self.integ_windowed[:,3][:,self.px_scale[3]], self.integ_windowed[:,12][:,self.px_scale[12]]
+        #     self.Iminus3, self.Iplus3 = self.integ_windowed[:,1][:,self.px_scale[1]], self.integ_windowed[:,14][:,self.px_scale[14]]
+        #     self.Iminus4, self.Iplus4 = self.integ_windowed[:,6][:,self.px_scale[6]], self.integ_windowed[:,4][:,self.px_scale[4]]
+        #     self.Iminus5, self.Iplus5 = self.integ_windowed[:,5][:,self.px_scale[5]], self.integ_windowed[:,7][:,self.px_scale[7]]
+        #     self.Iminus6, self.Iplus6 = self.integ_windowed[:,8][:,self.px_scale[8]], self.integ_windowed[:,10][:,self.px_scale[10]]
             
-            self.p1_err = self.p2_err = self.p3_err = self.p4_err = self.windowed_err
+        #     self.p1_err = self.p2_err = self.p3_err = self.p4_err = self.windowed_err
         
         elif mode == 'raw':
             # With raw integration
@@ -753,7 +833,8 @@ class Null(File):
             
             self.p1_err = self.p2_err = self.p3_err = self.p4_err = self.raw_err  
         else:
-            raise KeyError('Please select the mode among: amplitude, model, windowed and raw.')
+            # raise KeyError('Please select the mode among: fit, model, windowed and raw.')
+            raise KeyError('Please select the mode among: fit and raw.')
             
         self.p1 = self.p1[:,(self.wl_scale[15]>=wl_bounds[0])&(self.wl_scale[15]<=wl_bounds[1])]
         self.p2 = self.p2[:,(self.wl_scale[13]>=wl_bounds[0])&(self.wl_scale[13]<=wl_bounds[1])]

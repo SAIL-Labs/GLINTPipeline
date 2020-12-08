@@ -105,32 +105,37 @@ if __name__ == '__main__':
     no_noise = False
     nb_img = (0, None)
     debug = False
-    save = True
+    save = False
     nb_files = (0, None)
     bin_frames = False
     nb_frames_to_bin = 50
     spectral_binning = False
     wl_bin_min, wl_bin_max = 1525, 1575# In nm
     bandwidth_binning = 50 # In nm
-    mode_flux = 'raw'
+    mode_flux = 'fit'
     activate_estimate_spectrum = False
     nb_files_spectrum = (5000,10000)
     wavelength_bounds = (1400, 1700)
-    suffix = 'dark'
+    suffix = 'dark1_20200601T202755107'
 #    ron = 0
     
+    mode_flux_list = ['raw', 'fit']
+    if not mode_flux in mode_flux_list:
+        raise Exception('Select mode of flux measurement among:', mode_flux_list)
+        
     ''' Inputs '''
-    datafolder = 'data202006/20200602/turbulence/'
+    datafolder = 'data202006/AlfBoo/'
 #    root = "C:/Users/marc-antoine/glint/"
-#    root = "/mnt/96980F95980F72D3/glint/"
-    root = "//tintagel.physics.usyd.edu.au/snert/"
+    root = "/mnt/96980F95980F72D3/glint/"
+    # root = "//tintagel.physics.usyd.edu.au/snert/"
     output_path = root+'GLINTprocessed/'+datafolder
     spectral_calibration_path = output_path
     geometric_calibration_path = output_path
-    data_path = '//tintagel.physics.usyd.edu.au/snert/GLINTData/'+datafolder
-#    data_path = 'C:/Users/marc-antoine/glint//GLINTData/'+datafolder
-#    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
+    # data_path = '//tintagel.physics.usyd.edu.au/snert/GLINTData/'+datafolder
+    # data_path = 'C:/Users/marc-antoine/glint//GLINTData/'+datafolder
+    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
     data_list = sorted([data_path+f for f in os.listdir(data_path) if suffix in f])
+    data_list = data_list * 5
     plot_name = datafolder.split('/')[-2]
     if len(data_list) == 0:
         raise IndexError('Data list is empty')
@@ -223,6 +228,7 @@ if __name__ == '__main__':
     amplitude = []
     amplitude_fit = []
     integ_raw = []
+    integ_raw_err = []
     integ_model = []
     integ_windowed = []
     residuals_reg = []
@@ -315,11 +321,12 @@ if __name__ == '__main__':
         null_err.append(np.transpose(null_depths_err, axes=(1,0,2)))
         if debug:
             amplitude.append(img.amplitude)
-            integ_model.append(img.integ_model)
-            integ_windowed.append(img.integ_windowed)
-            residuals_reg.append(img.residuals_reg)
+            # integ_model.append(img.integ_model)
+            # integ_windowed.append(img.integ_windowed)
+            residuals_reg.append(img.amplitude_error)
             bg_noise.append(img.bg_std)
             integ_raw.append(img.raw)
+            integ_raw_err.append(img.raw_err)
     
             
             try: # if debug mode TRUE in getSpectralFlux method
@@ -346,6 +353,8 @@ if __name__ == '__main__':
     amplitude_fit = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in amplitude_fit])
     integ_raw = np.array([selt for elt in integ_raw for selt in elt])
     integ_raw = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in integ_raw])
+    integ_raw_err = np.array([selt for elt in integ_raw_err for selt in elt])
+    integ_raw_err = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in integ_raw_err])    
     integ_model = np.array([selt for elt in integ_model for selt in elt])
     integ_model = np.array([[elt[i][img.px_scale[i]] for i in range(16)] for elt in integ_model])
     integ_windowed = np.array([selt for elt in integ_windowed for selt in elt])
@@ -503,66 +512,72 @@ if __name__ == '__main__':
     #        plt.ylabel('Std of curve_fit')
     #        plt.grid()
 
-#histo_amplitude = np.histogram(null_amplitude[:,3,0], bins=int(934**0.5), density=True)
-#histo_raw = np.histogram(null_raw[:,3,0], bins=int(934**0.5), density=True)
-#histo_pixel = np.histogram(null_pixel[:,3,0], bins=int(934**0.5), density=True)
-#histo_interp = np.histogram(null[:,3,0], bins=int(934**0.5), density=True)
-#
-#plt.figure()
-#plt.plot(histo_amplitude[1][:-1], histo_amplitude[0], lw=2)
-#plt.plot(histo_raw[1][:-1], histo_raw[0], lw=2)
-#plt.plot(histo_pixel[1][:-1], histo_pixel[0], lw=2)
-#plt.plot(histo_interp[1][:-1], histo_interp[0], lw=2)
-#plt.grid()
-#plt.legend(['fit', 'raw', 'pixel', 'interp'], loc='best', fontsize=30)
-#plt.xticks(size=30);plt.yticks(size=30)
-#plt.ylabel('Count (normalized)', size=35)
-#plt.xlabel('Null depth', size=35)
-#plt.title('Histogram of N4', size=40)
+# import cupy as cp
+# positions = position_outputs
+# widths = width_outputs
+# gslices_axes = cp.asarray(img.slices_axes, dtype=cp.float32)
+# gpositions = cp.asarray(positions, dtype=cp.float32)
+# gwidths = cp.asarray(widths, dtype=cp.float32)
+# std = 1/img.slices[:,:,:,:10-5].std()
+# std = cp.array([std], dtype=cp.float32)
 
-# from scipy.optimize import curve_fit
-# def model1(x, amp):
-#     global x0, sigma
-#     return amp * np.exp(-(x-x0)**2/(2*sigma**2))
+# simple_gaus0 = cp.exp(-(gslices_axes[:,None,:]-gpositions[:,:,None])**2/(2*gwidths[:,:,None]**2))
+# simple_gaus = simple_gaus0 / cp.sum(simple_gaus0, axis=(-1))[:,:,None]
+# simple_gaus[cp.isnan(simple_gaus)] = 0.
 
-# popt_list = []
-# pcov_list = []
-# for k in range(96):
-#     x0 = positions_tracks[15,k]
-#     sigma = width_tracks[15, k]
-#     y = img.slices[-1,k,15,:]
-#     yerr = img.slices[:,:10,15,:].std() * np.ones_like(y)
-#     yerr = y[(np.arange(20)<=5)|(np.arange(20)>=15)].std() * np.ones_like(y)
-#     x = img.slices_axes[15]
-#     popt, pcov = curve_fit(model1, x, y, [1], yerr, True)
-#     popt_list.append(popt)
-#     pcov_list.append(pcov)
-    
-# popt_list = np.array(popt_list)
-# pcov_list = np.array(pcov_list)
+# weights0 = cp.asnumpy(simple_gaus + std)
+# weights = np.zeros((*weights0.shape, weights0.shape[-1]))
+# idx = np.diag_indices(weights.shape[-1])
+# weights[:,:,idx[0],idx[1]]=weights0
+# weights = cp.asarray(weights, dtype=cp.float32)
 
-# popt_list = popt_list[img.px_scale[15]]
-# pcov_list = pcov_list[img.px_scale[15]]
-# integ = popt_list.mean(axis=0)
-# var_integ = pcov_list.sum(axis=0) / popt_list.size**2
-# snr = integ / np.diag(var_integ)**0.5
+# gslices_axes2 = cp.repeat(gslices_axes[:,None,:], simple_gaus.shape[-2], axis=-2)
+# A = cp.vstack((simple_gaus[None,:], cp.ones_like(simple_gaus)[None,:], gslices_axes2[None,:]))
+# A = cp.transpose(A, axes=(1,2,0,3))
+# Aw = A#cp.matmul(A, weights)
+# Aw2 = cp.matmul(Aw, cp.transpose(Aw, (0,1,3,2)))
 
-# stack = img.slices[-1,:,15,:]
-# stack = stack[img.px_scale[15]]
-# stack = stack.mean(axis=0)
-# stack_err = img.slices[:,:10,15,:].std() * img.px_scale[15].size**0.5 * np.ones_like(stack)
-# stack_err = stack[(np.arange(20)<=5)|(np.arange(20)>=15)].std() * np.ones_like(stack)
-# x = img.slices_axes[15]
+# data = cp.asarray(img.slices, dtype=cp.float32)
+# data = cp.transpose(data, (0,2,1,3))
+# dataw = data#cp.matmul(data[:,:,:,None,:], weights)
+# # dataw = cp.reshape(dataw, data.shape)
+# b = cp.matmul(Aw,dataw[:,:,:,:,None])
+# a = cp.repeat(Aw2[None,:], b.shape[0], axis=0)
 
-# def model2(x, amp):
-#     x0 = positions_tracks[15].mean()
-#     sigma = width_tracks[15].mean()
-#     return amp * np.exp(-(x-x0)**2/(2*sigma**2))
+# popt2 = cp.linalg.solve(a, b)
 
-# popt, pcov = curve_fit(model2, x, stack, [stack.max()], stack_err, True)
-# snr2 = popt/np.diag(pcov)**0.5
+# popt3 = cp.asnumpy(popt2)
+# print(np.allclose(img.amplitude2, popt3[:,:,:,0,0]))
 
-# print(snr)
-# print(snr2)
-# print(integ, np.diag(var_integ)**0.5)
-# print(popt, np.diag(pcov)**0.5)
+# offset = 20
+# gp = positions
+# gw = widths
+# simple_gaus0 = np.exp(-(img.slices_axes[:,None,:]-gp[:,:,None])**2/(2*gw[:,:,None]**2))
+# simple_gaus = simple_gaus0 / np.sum(simple_gaus0, axis=(-1))[:,:,None]
+# simple_gaus[np.isnan(simple_gaus)] = 0.
+# simple_gaus = simple_gaus[:,offset:]
+# gslices_axes2 = np.repeat(img.slices_axes[:,None,:], simple_gaus.shape[-2], axis=-2)
+# A = np.vstack((simple_gaus[None,:], np.ones_like(simple_gaus)[None,:], gslices_axes2[None,:]))
+# A = np.transpose(A, axes=(1,2,0,3))
+# B = np.matmul(A, np.transpose(A, (0,1,3,2)))
+# data = np.asarray(img.slices[0,offset:])#, dtype=np.float32)
+# data = np.transpose(data, (1,0,2))
+# b = np.matmul(A,data[:,:,:,None])
+# popt = cp.linalg.solve(cp.asarray(B), cp.asarray(b))
+# poptbis = cp.asnumpy(popt)
+
+
+# # p = position_outputs
+# # w = width_outputs
+# # simple_gaus02 = np.exp(-(img.slices_axes[:,None,:]-p[:,:,None])**2/(2*w[:,:,None]**2))
+# # simple_gaus2 = simple_gaus02 / np.sum(simple_gaus02, axis=(-1))[:,:,None]
+# # simple_gaus2[np.isnan(simple_gaus2)] = 0.
+# # slices_axes2 = np.repeat(img.slices_axes[:,None,:], simple_gaus2.shape[-2], axis=-2)
+# # A2 = np.vstack((simple_gaus2[None,:], np.ones_like(simple_gaus2)[None,:], slices_axes2[None,:]))
+# # A2 = np.transpose(A2, axes=(1,2,0,3))
+# # B2 = np.matmul(A2, np.transpose(A2, axes=(0,1,3,2)))
+# # data2 = img.slices[0].copy()
+# # data2 = np.transpose(data2, (1,0,2))
+# # b2 = np.matmul(A2,data2[:,:,:,None])
+# # popt2 = np.linalg.solve(B2, b2)
+# # popt2bis = np.array(popt2, dtype=np.float32)

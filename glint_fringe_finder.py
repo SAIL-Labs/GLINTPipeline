@@ -192,23 +192,23 @@ if run_mode ==  'fullframe':
     kind_data = 'scan'
     concatenate = False
     wl_offset = 0.
-    maskbounds = (-2.44, 2)
-    find_null = False
+    maskbounds = (-2.4, 2.)
+    find_null = True
     
     fit_wavelength = True
-    delta_bounds = (-20000, -18000)
+    delta_bounds = (-4000, -2000)
     delta0 = np.mean(delta_bounds)
     
     ''' Inputs '''
-    datafolder = 'data202007/20200705/scans_onsky/'
+    datafolder = 'data202009/20200917/scans/'
     #root = "C:/Users/marc-antoine/glint/"
     root = "/mnt/96980F95980F72D3/glint/"
     output_path = root+'GLINTprocessed/'+datafolder
     spectral_calibration_path = output_path
     geometric_calibration_path = output_path
     data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    data_list = [data_path+'null6_35at1.78_zoom_fullIms_20200705T202543.mat']
-    pos_seg_ref = 1.78 # Piston value of the refererence segment in micron
+    data_list = [data_path+'null4_24at1_fullIms_20200916T185129.mat']
+    pos_seg_ref = 1. # Piston value of the refererence segment in micron
     swap_ref = False
             
     if no_noise:
@@ -226,8 +226,8 @@ if run_mode ==  'fullframe':
         pattern_coeff = np.load(geometric_calibration_path+'pattern_coeff.npy')
     position_outputs = pattern_coeff[:,:,1].T
     width_outputs = pattern_coeff[:,:,2].T
-    wl_to_px_coeff = np.load(spectral_calibration_path+'20200601_wl_to_px.npy')
-    px_to_wl_coeff = np.load(spectral_calibration_path+'20200601_px_to_wl.npy')
+    wl_to_px_coeff = np.load(spectral_calibration_path+'20200906_wl_to_px.npy')
+    px_to_wl_coeff = np.load(spectral_calibration_path+'20200906_px_to_wl.npy')
     
     
     spatial_axis = np.arange(dark.shape[0])
