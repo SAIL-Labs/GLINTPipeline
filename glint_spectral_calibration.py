@@ -64,25 +64,25 @@ def gaussian(x, A, x0, sig, offset):
 
 if __name__ == '__main__':
     ''' Settings '''
-    save = True
+    save = False
     
     ''' Inputs '''
     print("-----------------------------\nSpectral calibration")
-    datafolder = 'data202006/wavecal/'
-    data_path = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'+datafolder
-    output_path = 'C:/Users/marc-antoine/glint/GLINTprocessed/'+datafolder
+    datafolder = 'data202009/20200906/wavecal/'
+    data_path = '//tintagel.physics.usyd.edu.au/snert/GLINTData/'+datafolder
+    output_path = '//tintagel.physics.usyd.edu.au/snert/GLINTprocessed/'+datafolder
 
     ''' Output '''
     if not os.path.exists(output_path):
         os.makedirs(output_path)
     
     ''' Iterate on wavelength '''
-    wavelength = [1400, 1450, 1500, 1550, 1600][1:]
-    data_list0 = [[data_path+f for f in os.listdir(data_path) if '1400' in f],
-                 [data_path+f for f in os.listdir(data_path) if '1450bis' in f],
-                 [data_path+f for f in os.listdir(data_path) if '1500bis' in f],
-                 [data_path+f for f in os.listdir(data_path) if '1550bis' in f],
-                 [data_path+f for f in os.listdir(data_path) if '1600' in f]][1:]
+    wavelength = [1400, 1450, 1500, 1550, 1600][:]
+    data_list0 = [[data_path+f for f in os.listdir(data_path) if '1400_' in f],
+                 [data_path+f for f in os.listdir(data_path) if '1450_' in f],
+                 [data_path+f for f in os.listdir(data_path) if '1500_' in f],
+                 [data_path+f for f in os.listdir(data_path) if '1550_' in f],
+                 [data_path+f for f in os.listdir(data_path) if '1600_' in f]][:]
     
     ''' Remove dark from the frames and average them to increase SNR '''
     dark = np.load(output_path+'superdark.npy')
@@ -164,7 +164,14 @@ if __name__ == '__main__':
     print('Spectral resolution for')
     for wl in wavelength:
         print(str(wl)+' nm -> '+str(wl/fwhm.mean(axis=1)[wavelength.index(wl)]))
-    
+        
+    if save:
+        with open(output_path+'spectral_resolution.txt', 'a') as sr:
+            sr.write('Spectral resolution for:\n')
+            for wl in wavelength:
+                sr.write(str(wl)+' nm -> \t'+str(wl/fwhm.mean(axis=1)[wavelength.index(wl)])+'\n')
+            sr.write('\n')
+            
     plt.figure(figsize=(19.2, 10.8))
     for i in range(nb_tracks):
         plt.subplot(4,4,i+1)
@@ -174,3 +181,32 @@ if __name__ == '__main__':
         plt.title('Track %s'%(i+1))
     plt.tight_layout()
     if save: plt.savefig(output_path+'wl2px_%s'%(wavelength[data_list0.index(data_list)]))
+
+    print('Deconvolution from CHARIS tunable laser')
+    fwhm2 = fwhm.mean(axis=1)
+    measured_sigma = fwhm2 / (2 * np.sqrt(2*np.log(2)))
+    measured_sigma2 = calib_pos[:,:,1] * abs(coeff_poly_px_to_wl[None,:,0])
+
+    x = np.array([400, 1000])
+    y = np.array([1, 2])
+    x2 = np.array([1000, 2300])
+    y2 = np.array([2, 5])
+    coeff = np.polyfit(x, y,1)
+    coeff2 = np.polyfit(x2, y2, 1)
+    p = np.poly1d(coeff)
+    p2 = np.poly1d(coeff2)
+    laser_sig = p2(wavelength) / (2 * np.sqrt(2*np.log(2)))
+    deconv_sig = (measured_sigma**2 - laser_sig**2)**0.5
+    deconv_sig2 = (measured_sigma2**2 - laser_sig[:,None]**2)**0.5
+    deconv_fwhm = deconv_sig * 2 * np.sqrt(2*np.log(2))
+    deconv_fwhm2 = deconv_sig2 * 2 * np.sqrt(2*np.log(2))
+    
+    for wl in wavelength:
+        print(str(wl)+' nm -> '+str(wl/deconv_fwhm[wavelength.index(wl)]))
+        
+    if save:
+        with open(output_path+'spectral_resolution.txt', 'a') as sr:
+            sr.write('Spectral resolution after deconvolution for:\n')
+            for wl in wavelength:
+                sr.write(str(wl)+' nm -> \t'+str(wl/deconv_fwhm[wavelength.index(wl)])+'\n')
+            sr.write('\n')        

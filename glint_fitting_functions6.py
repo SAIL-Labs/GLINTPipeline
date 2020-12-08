@@ -240,7 +240,7 @@ def load_data(data, wl_edges, null_key, nulls_to_invert, *args, **kwargs):
     
     if 'frame_binning' in kwargs:
         if not kwargs['frame_binning'] is None:
-            if kwargs['frame_binning'] > 0:
+            if kwargs['frame_binning'] > 1:
                 nb_frames_to_bin = int(kwargs['frame_binning'])
                 null_data, dummy = binning(null_data, nb_frames_to_bin, axis=1, avg=True)
                 photo_data, dummy = binning(photo_data, nb_frames_to_bin, axis=2, avg=True)
@@ -638,7 +638,7 @@ def curvefit(func, xdata, ydata, p0=None, sigma=None, bounds=(-np.inf,np.inf), d
     cost_func = _wrap_func(func, xdata, ydata, transform)    
     jac = '3-point'
     res = least_squares(cost_func, p0, jac=jac, bounds=bounds, method='trf', diff_step=diff_step, x_scale=x_scale, loss='huber', 
-                        verbose=2)#, xtol=None, max_nfev=100)
+                        verbose=2)#, xtol=None)#, max_nfev=100)
     popt = res.x
 
     # Do Moore-Penrose inverse discarding zero singular values.
@@ -797,8 +797,10 @@ def sortFrames(dic_data, binned_frames, quantile, factor_minus, factor_plus, whi
             new_dic[key] = np.take(new_dic[key], idx_good_frames, axis=-1)
 
     if plot:
+        str_null = which_null.capitalize()
+        str_null = str_null[:-1]+' '+str_null[-1]
         plt.figure(figsize=(19.2, 10.8))
-        plt.title(which_null + ' %s %s'%(factor_minus, factor_plus), size=20)
+        plt.title(str_null + ' %s %s'%(factor_minus, factor_plus), size=20)
         plt.plot(x, Iminus, '.', label='I-')
         plt.plot(x, Iplus, '.', label='I+')
         plt.plot(x, Iplus_quantile_med*np.ones_like(Iplus), 'r--', lw=3)
@@ -808,14 +810,56 @@ def sortFrames(dic_data, binned_frames, quantile, factor_minus, factor_plus, whi
         plt.plot(x[idx_good_values], Iminus[idx_good_values], '+', label='Selected I-')
         plt.plot(x[idx_good_values], Iplus[idx_good_values], 'x', label='Selected I+')
         plt.grid()
-        plt.legend(loc='best', fontsize=15)
-        plt.xticks(size=15)
-        plt.yticks(size=15)
-        plt.ylabel('Intensity (AU)', size=20)
-        plt.xlabel('Frames', size=20)
+        plt.legend(loc='best', fontsize=25)
+        plt.xticks(size=25)
+        plt.yticks(size=25)
+        plt.ylabel('Intensity (count)', size=30)
+        plt.xlabel('Frames', size=30)
         plt.tight_layout()
         string = which_null+'_frame_selection_monitor_%s_%s'%(factor_minus, factor_plus)
-        plt.savefig(save_path+string+'.png')
+        plt.savefig(save_path+string+'.png', dpi=300)
+
+#        width = 6.528
+#        height = width / 1.5
+#        sz = 12
+#        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+#        plt.figure(figsize=(width, height))
+#        plt.plot(x, Iminus, '.', label=r'I$^{-}$', markersize=sz, c=colors[0])
+#        plt.plot(x, Iplus, '.', label=r'I$^{+}$', markersize=sz, c=colors[1])
+#        plt.plot(x[idx_good_values], Iminus[idx_good_values], '+', label=r'Selected I$^{-}$', c=colors[8])
+#        plt.plot(x[idx_good_values], Iplus[idx_good_values], 'x', label=r'Selected I$^{+}$', c='k')
+#        plt.fill_between(x, np.ones_like(x)*(Iplus_quantile_med-factor_plus*std_plus), Iplus.max()*np.ones_like(Iplus), color=colors[2], alpha=0.3, label=r'sigma clipping on I$^{+}$')
+#        plt.fill_between(x, np.ones_like(x)*(Iminus_quantile_med+factor_minus*std_minus), Iminus.min()*np.ones_like(Iplus), color=colors[3], alpha=0.3, label=r'sigma clipping on I$^{-}$')
+#        plt.grid()
+#        plt.legend(loc='center', fontsize=sz, ncol=3, bbox_to_anchor=(0.5, -0.4))
+#        plt.annotate('LWE', xy=(110, 15), xytext=(0,18), fontsize=sz, arrowprops ={'width':2, 'headlength':8, 'headwidth':4, 'color':'k'})
+#        plt.annotate('LWE', xy=(220, 15), xytext=(0,18), fontsize=sz, arrowprops ={'width':2, 'headlength':8, 'headwidth':4, 'color':'k'})
+#        plt.xticks(size=sz)
+#        plt.yticks(size=sz)
+#        plt.ylabel('Intensity (count)', size=sz+2)
+#        plt.xlabel('Frames', size=sz+2)
+#        plt.tight_layout()
+#        string = 'sigma_clipping_'+which_null+'_frame_selection_monitor_%s_%s'%(factor_minus, factor_plus)
+#        plt.savefig(save_path+string+'.png', dpi=300)
+
+#        width = 6.528
+#        height = width / 1.618
+#        sz = 12
+#        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+#        plt.figure(figsize=(width, height))
+#        plt.plot(x, Iminus, '.', label=r'I$^{-}$', markersize=sz, c=colors[0])
+#        plt.plot(x, Iplus, '.', label=r'I$^{+}$', markersize=sz, c=colors[1])
+#        plt.grid()
+#        plt.annotate('LWE', xy=(110, 15), xytext=(0,18), fontsize=sz, arrowprops ={'width':2, 'headlength':8, 'headwidth':4, 'color':'k'})
+#        plt.annotate('LWE', xy=(220, 15), xytext=(0,18), fontsize=sz, arrowprops ={'width':2, 'headlength':8, 'headwidth':4, 'color':'k'})
+#        plt.legend(loc='best', fontsize=sz, ncol=2)
+#        plt.xticks(size=sz)
+#        plt.yticks(size=sz)
+#        plt.ylabel('Intensity (count)', size=sz+2)
+#        plt.xlabel('Frames', size=sz+2)
+#        plt.tight_layout()
+#        string = 'lwe_'+which_null+'_frame_selection_monitor_%s_%s'%(factor_minus, factor_plus)
+#        plt.savefig(save_path+string+'.png', dpi=300)
          
     return new_dic, idx_good_frames
 

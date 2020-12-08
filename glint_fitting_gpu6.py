@@ -77,7 +77,6 @@ def MCfunction(bins0, na, mu_opd, sig_opd, *args):
     else:
         spec_chan_width = 5
     
-        
     ''' Number of samples to simulate is high and the memory is low so we iterate to create an average histogram '''
     for _ in range(nloop):
         liste_rv_interfminus = cp.zeros((wl_scale0.size, n_samp_per_loop), dtype=cp.float32)
@@ -242,7 +241,7 @@ def basin_hoppin_values(mu_opd0, sig_opd0, na0, bounds_mu, bounds_sig, bounds_na
     print('Random withdrawing of init guesses')
     
     for _ in range(1000):
-        mu_opd = np.random.normal(mu_opd0, 300)
+        mu_opd = np.random.normal(mu_opd0, 20)
         if mu_opd > bounds_mu[0] and mu_opd < bounds_mu[1]:
             break
         if _ == 1000-1:
@@ -250,7 +249,7 @@ def basin_hoppin_values(mu_opd0, sig_opd0, na0, bounds_mu, bounds_sig, bounds_na
             mu_opd = mu_opd0
     
     for _ in range(1000):
-        sig_opd = abs(np.random.normal(sig_opd0, 200))
+        sig_opd = abs(np.random.normal(sig_opd0, 20))
         if sig_opd > bounds_sig[0] and sig_opd < bounds_sig[1]:
             break
         if _ == 1000-1:
@@ -258,7 +257,7 @@ def basin_hoppin_values(mu_opd0, sig_opd0, na0, bounds_mu, bounds_sig, bounds_na
             sig_opd = sig_opd0
         
     for _ in range(1000):
-        na = np.random.normal(na0, 0.01)
+        na = np.random.normal(na0, 0.03)
         if na > bounds_na[0] and na < bounds_na[1]:
             break
         if _ == 1000-1:
@@ -284,7 +283,7 @@ activate_preview_only = False
 nb_frames_sorting_binning = 100
 activate_time_binning_photometry = True
 nb_frames_binning_photometry = 100
-global_binning = 2
+global_binning = 1
 wl_min = 1525 # lower bound of the bandwidth to process
 wl_max = 1575
 wl_mid = (wl_max + wl_min)/2 # Centre wavelength of the bandwidth
@@ -296,17 +295,17 @@ phase_bias_switch = True # Implement a non-null achromatic phase in the null mod
 opd_bias_switch = True # Implement an offset OPD in the null model
 zeta_switch = True # Use the measured zeta coeff. If False, value are set to 0.5
 oversampling_switch = True # Include the loss of coherence when OPD is too far from 0, according to a sinc envelop
-skip_fit = True # Do not fit, plot the histograms of data and model given the initial guesses
+skip_fit = False # Do not fit, plot the histograms of data and model given the initial guesses
 chi2_map_switch = True
  # Map the parameters space over astronull, DeltaPhi mu and sigma
-nb_files_data = (0, None) #(20782, None) # Which data files to load
-nb_files_dark = (0, None) # Which dark files to load
-basin_hopping_nloop = (100, 101) # lower and upper bound of the iteration loop for basin hopping method
-which_nulls = ['null1', 'null4', 'null5', 'null6'][:1]
+k = 1
+nb_files_data = (k*3936, 3936*(k+1)) #(20782, None) # Which data files to load
+nb_files_dark = (0, 4000) # Which dark files to load
+basin_hopping_nloop = ((k)*10, (k+1)*10) # lower and upper bound of the iteration loop for basin hopping method♀
+which_nulls = ['null1', 'null4', 'null5', 'null6'][1:2]
 map_na_sz = 10
-map_mu_sz = 200
+map_mu_sz = 400
 map_sig_sz = 10
-nb_rows_plot = 3
 
 nulls_to_invert = config['nulls_to_invert'] # If one null and antinull outputs are swapped in the data processing
 nulls_to_invert_model = config['nulls_to_invert_model'] # If one null and antinull outputs are swapped in the data processing
@@ -464,11 +463,11 @@ for key in which_nulls: # Iterate over the null to fit
     # Compute the null
     # =============================================================================
     if activate_spectral_binning:
-        Iminus, dummy = gff.binning(data['Iminus'], data['Iminus'].shape[0], 0)
-        Iplus, dummy = gff.binning(data['Iplus'], data['Iplus'].shape[0], 0)
+        Iminus, dummy = gff.binning(data['Iminus'], data['Iminus'].shape[0], 0, False)
+        Iplus, dummy = gff.binning(data['Iplus'], data['Iplus'].shape[0], 0, False)
         wl_scale, dummy = gff.binning(wl_scale0, wl_scale0.size, 0, True)
-        Iminus_dk, dummy = gff.binning(dark['Iminus'], dark['Iminus'].shape[0], 0)
-        Iplus_dk, dummy = gff.binning(dark['Iplus'], dark['Iplus'].shape[0], 0)
+        Iminus_dk, dummy = gff.binning(dark['Iminus'], dark['Iminus'].shape[0], 0, False)
+        Iplus_dk, dummy = gff.binning(dark['Iplus'], dark['Iplus'].shape[0], 0, False)
     else:
         Iminus = data['Iminus']
         Iplus = data['Iplus']
@@ -545,7 +544,7 @@ for key in which_nulls: # Iterate over the null to fit
         std = np.array([np.std(elt) for elt in data_null3])
         
         basic_esti = np.array([avg, std, wl_scale])
-        basic_save = save_path+key+'_basic_esti'+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])
+        basic_save = save_path+key+'_basic_esti'+'_'+str(wl_min)+'-'+str(wl_max)+'_files_'+str(nb_files_data[0])+'_'+str(nb_files_data[1])+'_'+os.path.basename(datafolder[:-1])
         if activate_spectral_binning:
             basic_save = basic_save+'_sp'
         np.save(basic_save, basic_esti)
@@ -565,6 +564,9 @@ for key in which_nulls: # Iterate over the null to fit
     injection, dummy = gff.getInjectionAndSpectrum(data_IA, data_IB, wl_scale0)
     injection = np.array(injection)
     
+    if activate_spectral_binning:
+        data_IA = data_IA.sum(0).reshape((1,-1))
+        data_IB = data_IB.sum(0).reshape((1,-1))
     
     # =============================================================================
     # Get the distribution of the photometries and selectring values in the range of null depths
@@ -661,6 +663,7 @@ for key in which_nulls: # Iterate over the null to fit
         print('Number of elements ', n_samp_total)
         print('Number of loaded points', data_null.shape[1], nb_files_data)
         print('Number of loaded dark points', dark['Iminus'].shape[1], nb_files_dark)
+        print('Global binning of frames:', global_binning)
         print('Zeta file', os.path.basename(config['zeta_coeff_path']))
         print('Time to load files: %.3f s'%(stop_loading - start_loading))
         print('activate_frame_sorting', activate_frame_sorting)
@@ -749,56 +752,153 @@ for key in which_nulls: # Iterate over the null to fit
             termination_liste.append(term_status)
             pcov_liste.append(popt[1])
             
-            ''' Display the results of the fit'''
-            # Each figure display the histogram of 10 wavelength, if more than 10 are fitted, extra figures are created                    
-            wl_idx0 = np.arange(wl_scale.size)
-            wl_idx0 = list(gff.divide_chunks(wl_idx0, nb_rows_plot*2)) # Subset of wavelength displayed in one figure
+            ''' Display the results of the fit for publishing purpose'''
+            def update_label(old_label, exponent_text):
+                if exponent_text == "":
+                    return old_label
+                
+                try:
+                    units = old_label[old_label.index("(") + 1:old_label.rindex(")")]
+                except ValueError:
+                    units = ""
+                label = old_label.replace("({})".format(units), "")
+                exponent_text = exponent_text.replace("\\times", "")
+                                
+                if units != "":
+                    return "{} ({} {})".format(label, exponent_text, units)
+                else:
+                    return "{} ({})".format(label, exponent_text)
+                
+            def format_label_string_with_exponent(ax, save_path, axis='both'):  
+                """ Format the label string with the exponent from the ScalarFormatter """
+                ax.ticklabel_format(axis=axis, style='sci', useMathText=True, scilimits=(0,0))
             
+                axes_instances = []
+                if axis in ['x', 'both']:
+                    axes_instances.append(ax.xaxis)
+                if axis in ['y', 'both']:
+                    axes_instances.append(ax.yaxis)
+                
+                for axe in axes_instances:
+                    # axe.major.formatter._useMathText = True
+                    plt.draw() # Update the text
+                    plt.savefig(save_path+'deleteme.png') # Had to add it otherwise the figure is not updated
+                    exponent_text = axe.get_offset_text().get_text()
+                    label = axe.get_label().get_text()
+                    axe.offsetText.set_visible(False)
+                    axe.set_label_text(update_label(label, exponent_text))
+            
+            nb_rows_plot = (wl_scale.size//2) + (wl_scale.size%2)
+            wl_idx0 = np.arange(wl_scale.size)[::-1]
+            wl_idx0 = list(gff.divide_chunks(wl_idx0, nb_rows_plot*2)) # Subset of wavelength displayed in one figure
+            labelsz = 28
             for wl_idx in wl_idx0:
-                f = plt.figure(figsize=(19.20,10.80))
-                txt3 = '%s '%key+'Fitted values: ' + 'Na$ = %.2E \pm %.2E$, '%(na_opt, uncertainties[0]) + \
-                r'$\mu_{OPD} = %.2E \pm %.2E$ nm, '%(popt[0][1], uncertainties[1]) + \
-                r'$\sigma_{OPD} = %.2E \pm %.2E$ nm,'%(popt[0][2], uncertainties[2])+' Chi2 = %.2E '%(chi2)+'(Last = %.3f s)'%(stop-start)
-#                txt3 = '%s '%key+'Fitted values: ' + 'Na$ = %.2E \pm %.2E$, '%(na_opt, uncertainties[0]) +' Chi2 = %.2E '%(chi2)+'(Last = %.3f s)'%(stop-start)
+#                f = plt.figure(figsize=(19.20,3.60*nb_rows_plot/0.95))
+                f = plt.figure(figsize=(19.20,3.60*nb_rows_plot))
+#                txt3 = '%s '%key+'Fitted values: ' + 'Na$ = %.2E \pm %.2E$, '%(na_opt, uncertainties[0]) + \
+#                r'$\mu_{OPD} = %.2E \pm %.2E$ nm, '%(popt[0][1], uncertainties[1]) + '\n'+\
+#                r'$\sigma_{OPD} = %.2E \pm %.2E$ nm,'%(popt[0][2], uncertainties[2])+' Chi2 = %.2E '%(chi2)+'(Duration = %.3f s)'%(stop-start)
                 count = 0
                 axs = []
-                for wl in wl_idx[::-1]:
+                for wl in wl_idx:
                     if len(wl_idx) > 1:
                         ax = f.add_subplot(nb_rows_plot,2,count+1)
                     else:
                         ax = f.add_subplot(1,1,count+1)
                     axs.append(ax)
-                    plt.title('%s nm'%wl_scale[wl], size=20)
-                    plt.errorbar(null_axis[wl][:-1], null_pdf[wl], yerr=null_pdf_err[wl], fmt='.', markersize=5, label='Data')
-                    if not skip_fit: plt.errorbar(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], markersize=5, lw=3, alpha=0.8, label='Fit') 
-                    plt.grid()
+                    ax.ticklabel_format(axis='y', style='sci', useMathText=True, scilimits=(0,0))
+#                    ax.set_title('%.0f nm'%(wl_scale[wl]), size=35)
+                    ax.errorbar(null_axis[wl][:-1], null_pdf[wl], yerr=null_pdf_err[wl], fmt='.', markersize=20, label='Data')
+                    ax.errorbar(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], markersize=5, lw=7, alpha=0.8, label='Fit') 
+                    ax.grid()
 #                    plt.legend(loc='best', fontsize=25)
-                    if list(wl_idx).index(wl) <= 1 or len(wl_idx) == 1: plt.xlabel('Null depth', size=20)
-                    if count %2 == 0: plt.ylabel('Frequency', size=20)
-                    plt.xticks(size=15);plt.yticks(size=15)
+                    if list(wl_idx).index(wl) >= len(wl_idx)-2 or len(wl_idx) == 1:
+                        ax.set_xlabel('Null depth', size=labelsz)
+                    if count %2 == 0: 
+                        ax.set_ylabel('Frequency', size=labelsz)
+                        plt.savefig('deleteme.png')
+                        exponent_text = ax.yaxis.get_offset_text().get_text()
+                        label = ax.yaxis.get_label().get_text()
+                        ax.yaxis.offsetText.set_visible(False)
+                        ax.yaxis.set_label_text(update_label(label, exponent_text))
+                    else:
+                        ax.yaxis.offsetText.set_visible(False)
+                    ax.set_xticks(ax.get_xticks()[::2])#, size=30)
+                    ax.tick_params(axis='both', labelsize=labelsz-2)
                     exponent = np.floor(np.log10(null_pdf.max()))
                     ylim = null_pdf.max() * 10**(-exponent)
-                    plt.ylim(-10**(exponent)/10, null_pdf.max()*1.05)
-                    # plt.xlim(-0.01, 0.5)
+                    ax.set_ylim(-10**(exponent)/10, null_pdf.max()*1.05)
+                    ax.text(0.7, 0.8, '%.0f nm'%(wl_scale[wl]), va='center', transform = ax.transAxes, fontsize=labelsz)
                     count += 1
-                plt.tight_layout(rect=[0., 0.05, 1, 1])
-                if len(wl_idx) > 1:
-                    axs[0].text(0.5, -3, txt3, va='center', transform = axs[0].transAxes, bbox=dict(boxstyle="square", facecolor='white'))
-                else:
-                    axs[0].text(0.3, -0.1, txt3, va='center', transform = axs[0].transAxes, bbox=dict(boxstyle="square", facecolor='white'))
-                string = key+'_'+'%03d'%(basin_hopping_count)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(wl_scale[wl_idx[-1]])
+                plt.tight_layout()
+                string = key+'_'+'%03d'%(basin_hopping_count)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(np.around(wl_scale[wl_idx[-1]]))
                 if not oversampling_switch: string = string + '_nooversamplinginmodel'
                 if not zeta_switch: string = string + '_nozetainmodel'
                 if not skip_fit: 
                     string = string + '_fit_pdf'
                 if activate_spectral_binning: string = string + '_sb'
-                plt.savefig(save_path+string+'.png')
-
+                plt.savefig(save_path+string+'_compiled.png', dpi=300)
+                plt.savefig(save_path+string+'_compiled.pdf', format='pdf')
+                plt.close()
+                
+            ''' Display for archive and monitoring purpose '''
+            nb_rows_plot = 3
+            wl_idx0 = np.arange(wl_scale.size)[::-1]
+            wl_idx0 = list(gff.divide_chunks(wl_idx0, nb_rows_plot*2)) # Subset of wavelength displayed in one figure
+                
+            for wl_idx in wl_idx0:
+                f = plt.figure(figsize=(19.20,3.60*nb_rows_plot))
+                txt3 = '%s '%key+'Fitted values: ' + 'Na$ = %.2E \pm %.2E$, '%(na_opt, uncertainties[0]) + \
+                r'$\mu_{OPD} = %.2E \pm %.2E$ nm, '%(popt[0][1], uncertainties[1]) + '\n'+\
+                r'$\sigma_{OPD} = %.2E \pm %.2E$ nm,'%(popt[0][2], uncertainties[2])+' Chi2 = %.2E '%(chi2)+'(Duration = %.3f s)'%(stop-start)
+#                txt3 = '%s '%key+'Fitted values: ' + 'Na$ = %.2E \pm %.2E$, '%(na_opt, uncertainties[0]) +' Chi2 = %.2E '%(chi2)+'(Last = %.3f s)'%(stop-start)
+                count = 0
+                axs = []
+                for wl in wl_idx:
+                    if len(wl_idx) > 1:
+                        ax = f.add_subplot(nb_rows_plot,2,count+1)
+                    else:
+                        ax = f.add_subplot(1,1,count+1)
+                    axs.append(ax)
+                    plt.title('%.0f nm'%wl_scale[wl], size=30)
+                    plt.errorbar(null_axis[wl][:-1], null_pdf[wl], yerr=null_pdf_err[wl], fmt='.', markersize=10, label='Data')
+                    if not skip_fit or 1: plt.errorbar(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], markersize=10, lw=3, alpha=0.8, label='Fit') 
+                    plt.errorbar(null_axis[wl][:-1], out.reshape((wl_scale.size,-1))[wl], markersize=5, lw=5, alpha=0.8, label='Fit') 
+                    plt.grid()
+#                    plt.legend(loc='best', fontsize=25)
+                    if list(wl_idx).index(wl) >= len(wl_idx)-2 or len(wl_idx) == 1: plt.xlabel('Null depth', size=30)
+                    if count %2 == 0: plt.ylabel('Frequency', size=30)
+                    plt.xticks(size=22);plt.yticks(size=22)
+                    exponent = np.floor(np.log10(null_pdf.max()))
+                    ylim = null_pdf.max() * 10**(-exponent)
+                    plt.ylim(-10**(exponent)/10, null_pdf.max()*1.05)
+                    # plt.xlim(-0.01, 0.5)
+                    count += 1
+                plt.tight_layout(rect=[0., 0., 1, 0.88])
+#                plt.tight_layout()
+                if len(wl_idx) > 1:
+#                    axs[0].text(-0.15, -3.55, txt3, va='center', transform = axs[0].transAxes, bbox=dict(boxstyle="square", facecolor='white'), fontsize=17)
+                    axs[0].text(0.3, 1.52, txt3, va='center', transform = axs[0].transAxes, bbox=dict(boxstyle="square", facecolor='white'), fontsize=20)
+                else:
+                    axs[0].text(0.25, 1.15, txt3, va='center', transform = axs[0].transAxes, bbox=dict(boxstyle="square", facecolor='white'), fontsize=17)
+                string = key+'_'+'%03d'%(basin_hopping_count)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(np.around(wl_scale[wl_idx[-1]]))
+                if not oversampling_switch: string = string + '_nooversamplinginmodel'
+                if not zeta_switch: string = string + '_nozetainmodel'
+                if not skip_fit: 
+                    string = string + '_fit_pdf'
+                if activate_spectral_binning: string = string + '_sb'
+                plt.savefig(save_path+string+'.png', dpi=300)
+            
             ''' Display the details of the fit: make sure the reconstructed null and antinull match with the real ones '''
             liste_rv_interfminus = cp.asnumpy(liste_rv_interfminus)
             liste_rv_interfplus = cp.asnumpy(liste_rv_interfplus)
-            liste_rv_interfminus = [elt[~np.isnan(elt)] for elt in liste_rv_interfminus]
-            liste_rv_interfplus = [elt[~np.isnan(elt)] for elt in liste_rv_interfplus]
+            
+            if activate_spectral_binning:
+                liste_rv_interfminus = np.nansum(liste_rv_interfminus, 0).reshape((1, -1))
+                liste_rv_interfplus = np.nansum(liste_rv_interfplus, 0).reshape((1, -1))
+            else:
+                liste_rv_interfminus = [elt[~np.isnan(elt)] for elt in liste_rv_interfminus]
+                liste_rv_interfplus = [elt[~np.isnan(elt)] for elt in liste_rv_interfplus]
             
             histom = [np.histogram(Iminus[k], bins=int(Iminus[k].size**0.5), density=True) for k in range(wl_scale.size)]
             histom2 = [np.histogram(liste_rv_interfminus[k], bins=int(liste_rv_interfminus[k].size**0.5), density=True) for k in range(wl_scale.size)]
@@ -811,16 +911,16 @@ for key in which_nulls: # Iterate over the null to fit
                 f = plt.figure(figsize=(19.20,10.80))
                 count = 0
                 axs = []
-                for wl in wl_idx[::-1]:
+                for wl in wl_idx:
                     if len(wl_idx) > 1:
                         ax = f.add_subplot(nb_rows_plot,2,count+1)
                     else:
                         ax = f.add_subplot(1,1,count+1)
                     axs.append(ax)
-                    plt.title('%s nm'%wl_scale[wl], size=20)
+                    plt.title('%.0f nm'%wl_scale[wl], size=20)
                     plt.plot(histom[wl][1][:-1], histom[wl][0], '.', label='Iminus')
                     plt.plot(histop[wl][1][:-1], histop[wl][0], '.', label='Iplus')
-                    if not skip_fit:
+                    if not skip_fit or 1:
                         plt.plot(histom2[wl][1][:-1], histom2[wl][0], label='rv minus')
                         plt.plot(histop2[wl][1][:-1], histop2[wl][0], label='rv plus')
                     plt.plot(histodkm[wl][1][:-1], histodkm[wl][0], label='Dark minus')
@@ -838,21 +938,21 @@ for key in which_nulls: # Iterate over the null to fit
                     if list(wl_idx).index(wl) <= 1 or len(wl_idx) == 1: plt.xlabel('Flux (AU)', size=20)
                     count += 1
                 plt.tight_layout()
-                string = key+'_%03d'%(basin_hopping_count)+'_details_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(wl_scale[wl_idx[-1]])
+                string = key+'_%03d'%(basin_hopping_count)+'_details_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(np.around(wl_scale[wl_idx[-1]]))
                 if not oversampling_switch: string = string + '_nooversamplinginmodel'
                 if not zeta_switch: string = string + '_nozetainmodel'
                 if not skip_fit: 
                     string = string + '_fit_pdf'
                 if activate_spectral_binning: string = string + '_sb'
-                plt.savefig(save_path+string+'.png')
-                
+                plt.savefig(save_path+string+'.png', dpi=300)
+#                
             ''' Plot the histogram of the photometries '''
             ''' Photo A '''
             for wl_idx in wl_idx0:
                 f = plt.figure(figsize=(19.20,10.80))
                 axs = []
                 count = 0
-                for wl in wl_idx[::-1]:
+                for wl in wl_idx:
                     histo_IA = np.histogram(data_IA[wl], int(data_IA[wl].size**0.5), density=True)
                     histo_dIA = np.histogram(dark['photo'][0][wl], int(np.size(dark['photo'][0][wl])**0.5), density=True)
                     if len(wl_idx) > 1:
@@ -860,7 +960,7 @@ for key in which_nulls: # Iterate over the null to fit
                     else:
                         ax = f.add_subplot(1,1,count+1)
                     axs.append(ax)
-                    plt.title('%s nm'%wl_scale[wl], size=20)
+                    plt.title('%.0f nm'%wl_scale[wl], size=20)
                     plt.plot(histo_IA[1][:-1], histo_IA[0], '.', markersize=5, label='P%s'%(null_table[key][1][0]+1))
                     plt.plot(histo_dIA[1][:-1], histo_dIA[0], '.', markersize=5, label='Dark')
                     plt.grid()
@@ -870,16 +970,16 @@ for key in which_nulls: # Iterate over the null to fit
                     plt.xticks(size=15);plt.yticks(size=20)
                     count += 1
                 plt.tight_layout()
-                string = key+'_'+'%03d'%(basin_hopping_count)+'_P%s'%(null_table[key][1][0]+1)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(wl_scale[wl_idx[-1]])
+                string = key+'_'+'%03d'%(basin_hopping_count)+'_P%s'%(null_table[key][1][0]+1)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%.0f'%(wl_scale[wl_idx[-1]])
                 if activate_spectral_binning: string = string + '_sb'
-                plt.savefig(save_path+string+'.png')
+                plt.savefig(save_path+string+'.png', dpi=300)
 
             ''' Photo B '''
             for wl_idx in wl_idx0:
                 f = plt.figure(figsize=(19.20,10.80))
                 axs = []
                 count = 0
-                for wl in wl_idx[::-1]:
+                for wl in wl_idx:
                     histo_IB = np.histogram(data_IB[wl], int(data_IB[wl].size**0.5), density=True)
                     histo_dIB = np.histogram(dark['photo'][1][wl], int(np.size(dark['photo'][1][wl])**0.5), density=True)
                     if len(wl_idx) > 1:
@@ -887,7 +987,7 @@ for key in which_nulls: # Iterate over the null to fit
                     else:
                         ax = f.add_subplot(1,1,count+1)
                     axs.append(ax)
-                    plt.title('%s nm'%wl_scale[wl], size=20)
+                    plt.title('%.0f nm'%wl_scale[wl], size=20)
                     plt.plot(histo_IB[1][:-1], histo_IB[0], '.', markersize=5, label='P%s'%(null_table[key][1][1]+1))
                     plt.plot(histo_dIB[1][:-1], histo_dIB[0], '.', markersize=5, label='Dark')
                     plt.grid()
@@ -897,22 +997,22 @@ for key in which_nulls: # Iterate over the null to fit
                     plt.xticks(size=15);plt.yticks(size=15)
                     count += 1
                 plt.tight_layout()
-                string = key+'_'+'%03d'%(basin_hopping_count)+'_P%s'%(null_table[key][1][1]+1)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(wl_scale[wl_idx[-1]])
+                string = key+'_'+'%03d'%(basin_hopping_count)+'_P%s'%(null_table[key][1][1]+1)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%.0f'%(wl_scale[wl_idx[-1]])
                 if activate_spectral_binning: string = string + '_sb'
-                plt.savefig(save_path+string+'.png')
+                plt.savefig(save_path+string+'.png', dpi=300)
 
 #            ''' Correlation between photometries '''
 #            for wl_idx in wl_idx0[:1]:
 #                f = plt.figure(figsize=(19.20,10.80))
 #                axs = []
 #                count = 0
-#                for wl in wl_idx[::-1]:
+#                for wl in wl_idx:
 #                    if len(wl_idx) > 1:
 #                        ax = f.add_subplot(nb_rows_plot,2,count+1)
 #                    else:
 #                        ax = f.add_subplot(1,1,count+1)
 #                    axs.append(ax)
-#                    plt.title('%s nm'%wl_scale[wl], size=20)
+#                    plt.title('%.0f nm'%wl_scale[wl], size=20)
 #                    plt.plot(data_IA[wl][:10000], data_IB[wl][:10000], '.', markersize=5)
 #                    plt.grid()
 #                    if list(wl_idx).index(wl) <= 1 or len(wl_idx) == 1: plt.xlabel('P%s (AU)'%(null_table[key][1][0]+1), size=20)
@@ -920,22 +1020,22 @@ for key in which_nulls: # Iterate over the null to fit
 #                    plt.xticks(size=15);plt.yticks(size=15)
 #                    count += 1
 #                plt.tight_layout()
-#                string = key+'_'+'%03d'%(basin_hopping_count)+'_correlation_P%sP%s'%(null_table[key][1][0]+1, null_table[key][1][1]+1)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(wl_scale[wl_idx[-1]])
+#                string = key+'_'+'%03d'%(basin_hopping_count)+'_correlation_P%sP%s'%(null_table[key][1][0]+1, null_table[key][1][1]+1)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%.0f'%(wl_scale[wl_idx[-1]])
 #                if activate_spectral_binning: string = string + '_sb'
-#                plt.savefig(save_path+string+'.png')
+#                plt.savefig(save_path+string+'.png', dpi=300)
 #
 #            ''' Correlation between null and antinull'''
 #            for wl_idx in wl_idx0[:1]:
 #                f = plt.figure(figsize=(19.20,10.80))
 #                axs = []
 #                count = 0
-#                for wl in wl_idx[::-1]:
+#                for wl in wl_idx:
 #                    if len(wl_idx) > 1:
 #                        ax = f.add_subplot(nb_rows_plot,2,count+1)
 #                    else:
 #                        ax = f.add_subplot(1,1,count+1)
 #                    axs.append(ax)
-#                    plt.title('%s nm'%wl_scale[wl], size=20)
+#                    plt.title('%.0f nm'%wl_scale[wl], size=20)
 #                    plt.plot(Iminus[wl][:10000], Iplus[wl][:10000], '.', markersize=5)
 #                    plt.grid()
 #                    if list(wl_idx).index(wl) <= 1 or len(wl_idx) == 1: plt.xlabel('I- (AU)', size=20)
@@ -943,22 +1043,22 @@ for key in which_nulls: # Iterate over the null to fit
 #                    plt.xticks(size=15);plt.yticks(size=15)
 #                    count += 1
 #                plt.tight_layout()
-#                string = key+'_'+'%03d'%(basin_hopping_count)+'_correlation_null_outputs'+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(wl_scale[wl_idx[-1]])
+#                string = key+'_'+'%03d'%(basin_hopping_count)+'_correlation_null_outputs'+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%.0f'%(wl_scale[wl_idx[-1]])
 #                if activate_spectral_binning: string = string + '_sb'
-#                plt.savefig(save_path+string+'.png')
- 
+#                plt.savefig(save_path+string+'.png', dpi=300)
+# 
 #            ''' Correlation between null and data_IA'''
 #            for wl_idx in wl_idx0[:1]:
 #                f = plt.figure(figsize=(19.20,10.80))
 #                axs = []
 #                count = 0
-#                for wl in wl_idx[::-1]:
+#                for wl in wl_idx:
 #                    if len(wl_idx) > 1:
 #                        ax = f.add_subplot(nb_rows_plot,2,count+1)
 #                    else:
 #                        ax = f.add_subplot(1,1,count+1)
 #                    axs.append(ax)
-#                    plt.title('%s nm'%wl_scale[wl], size=20)
+#                    plt.title('%.0f nm'%wl_scale[wl], size=20)
 #                    plt.plot(data_IA[wl][:10000], Iminus[wl][:10000], '.', markersize=5)
 #                    plt.grid()
 #                    if list(wl_idx).index(wl) <= 1 or len(wl_idx) == 1: plt.xlabel('P%s (AU)'%(null_table[key][1][0]+1), size=20)
@@ -966,21 +1066,21 @@ for key in which_nulls: # Iterate over the null to fit
 #                    plt.xticks(size=15);plt.yticks(size=15)
 #                    count += 1
 #                plt.tight_layout()
-#                string = key+'_'+'%03d'%(basin_hopping_count)+'_correlation_P%s_null'%(null_table[key][1][0]+1)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(wl_scale[wl_idx[-1]])
+#                string = key+'_'+'%03d'%(basin_hopping_count)+'_correlation_P%s_null'%(null_table[key][1][0]+1)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%.0f'%(wl_scale[wl_idx[-1]])
 #                if activate_spectral_binning: string = string + '_sb'
-#                plt.savefig(save_path+string+'.png')
+#                plt.savefig(save_path+string+'.png', dpi=300)
 #
 #            for wl_idx in wl_idx0[:1]:
 #                f = plt.figure(figsize=(19.20,10.80))
 #                axs = []
 #                count = 0
-#                for wl in wl_idx[::-1]:
+#                for wl in wl_idx:
 #                    if len(wl_idx) > 1:
 #                        ax = f.add_subplot(nb_rows_plot,2,count+1)
 #                    else:
 #                        ax = f.add_subplot(1,1,count+1)
 #                    axs.append(ax)
-#                    plt.title('%s nm'%wl_scale[wl], size=20)
+#                    plt.title('%.0f nm'%wl_scale[wl], size=20)
 #                    plt.plot(data_IA[wl][:10000], Iplus[wl][:10000], '.', markersize=5)
 #                    plt.grid()
 #                    if list(wl_idx).index(wl) <= 1 or len(wl_idx) == 1: plt.xlabel('P%s (AU)'%(null_table[key][1][0]+1), size=20)
@@ -988,22 +1088,22 @@ for key in which_nulls: # Iterate over the null to fit
 #                    plt.xticks(size=15);plt.yticks(size=15)
 #                    count += 1
 #                plt.tight_layout()
-#                string = key+'_'+'%03d'%(basin_hopping_count)+'_correlation_P%s_antinull'%(null_table[key][1][0]+1)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(wl_scale[wl_idx[-1]])
+#                string = key+'_'+'%03d'%(basin_hopping_count)+'_correlation_P%s_antinull'%(null_table[key][1][0]+1)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%.0f'%(wl_scale[wl_idx[-1]])
 #                if activate_spectral_binning: string = string + '_sb'
-#                plt.savefig(save_path+string+'.png')
+#                plt.savefig(save_path+string+'.png', dpi=300)
 #
 #            ''' Correlation between null and data_IB'''
 #            for wl_idx in wl_idx0[:1]:
 #                f = plt.figure(figsize=(19.20,10.80))
 #                axs = []
 #                count = 0
-#                for wl in wl_idx[::-1]:
+#                for wl in wl_idx:
 #                    if len(wl_idx) > 1:
 #                        ax = f.add_subplot(nb_rows_plot,2,count+1)
 #                    else:
 #                        ax = f.add_subplot(1,1,count+1)
 #                    axs.append(ax)
-#                    plt.title('%s nm'%wl_scale[wl], size=20)
+#                    plt.title('%.0f nm'%wl_scale[wl], size=20)
 #                    plt.plot(data_IB[wl][:10000], Iminus[wl][:10000], '.', markersize=5)
 #                    plt.grid()
 #                    if list(wl_idx).index(wl) <= 1 or len(wl_idx) == 1: plt.xlabel('P%s (AU)'%(null_table[key][1][1]+1), size=20)
@@ -1011,21 +1111,21 @@ for key in which_nulls: # Iterate over the null to fit
 #                    plt.xticks(size=15);plt.yticks(size=15)
 #                    count += 1
 #                plt.tight_layout()
-#                string = key+'_'+'%03d'%(basin_hopping_count)+'_correlation_P%s_null'%(null_table[key][1][1]+1)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(wl_scale[wl_idx[-1]])
+#                string = key+'_'+'%03d'%(basin_hopping_count)+'_correlation_P%s_null'%(null_table[key][1][1]+1)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%.0f'%(wl_scale[wl_idx[-1]])
 #                if activate_spectral_binning: string = string + '_sb'
-#                plt.savefig(save_path+string+'.png')
+#                plt.savefig(save_path+string+'.png', dpi=300)
 #
 #            for wl_idx in wl_idx0[:1]:
 #                f = plt.figure(figsize=(19.20,10.80))
 #                axs = []
 #                count = 0
-#                for wl in wl_idx[::-1]:
+#                for wl in wl_idx:
 #                    if len(wl_idx) > 1:
 #                        ax = f.add_subplot(nb_rows_plot,2,count+1)
 #                    else:
 #                        ax = f.add_subplot(1,1,count+1)
 #                    axs.append(ax)
-#                    plt.title('%s nm'%wl_scale[wl], size=20)
+#                    plt.title('%.0f nm'%wl_scale[wl], size=20)
 #                    plt.plot(data_IA[wl][:10000], Iplus[wl][:10000], '.', markersize=5)
 #                    plt.grid()
 #                    if list(wl_idx).index(wl) <= 1 or len(wl_idx) == 1: plt.xlabel('P%s (AU)'%(null_table[key][1][1]+1), size=20)
@@ -1033,15 +1133,15 @@ for key in which_nulls: # Iterate over the null to fit
 #                    plt.xticks(size=15);plt.yticks(size=15)
 #                    count += 1
 #                plt.tight_layout()
-#                string = key+'_'+'%03d'%(basin_hopping_count)+'_correlation_P%s_antinull'%(null_table[key][1][1]+1)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(wl_scale[wl_idx[-1]])
+#                string = key+'_'+'%03d'%(basin_hopping_count)+'_correlation_P%s_antinull'%(null_table[key][1][1]+1)+'_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%.0f'%(wl_scale[wl_idx[-1]])
 #                if activate_spectral_binning: string = string + '_sb'
-#                plt.savefig(save_path+string+'.png')
+#                plt.savefig(save_path+string+'.png', dpi=300)
 
 #            for wl_idx in wl_idx0[:1]:
 #                f = plt.figure(figsize=(19.20,10.80))
 #                axs = []
 #                count = 0
-#                for wl in wl_idx[::-1]:
+#                for wl in wl_idx:
 #                    cdfaxis = np.unique(data_null[wl])
 #                    cdf = cp.asnumpy(gff.computeCdf(cdfaxis, data_null[wl], '', True))
 #                    fitted_null = np.array(liste_rv_interfminus) / np.array(liste_rv_interfplus)
@@ -1051,7 +1151,7 @@ for key in which_nulls: # Iterate over the null to fit
 #                    else:
 #                        ax = f.add_subplot(1,1,count+1)
 #                    axs.append(ax)
-#                    plt.title('%s nm'%wl_scale[wl], size=20)
+#                    plt.title('%.0f nm'%wl_scale[wl], size=20)
 #                    plt.plot(cdfaxis, cdf, '.', markersize=5)
 #                    plt.plot(cdfaxis, fitted_cdf, '+', markersize=5)
 #                    plt.grid()
@@ -1067,7 +1167,7 @@ for key in which_nulls: # Iterate over the null to fit
             histo_injectionB = np.histogram(injection[1], int(injection[1].size**0.5), density=True)
             histo_injection_dkA = np.histogram(injection_dark[0], int(injection_dark[0].size**0.5), density=True)
             histo_injection_dkB = np.histogram(injection_dark[1], int(injection_dark[1].size**0.5), density=True)
-            plt.title('%s nm'%wl_scale[wl], size=20)
+            plt.title('%.0f nm'%wl_scale[wl], size=20)
             plt.plot(histo_injectionA[1][:-1], histo_injectionA[0], 'o', markersize=5, label='Injection %s'%(null_table[key][1][0]+1))
             plt.plot(histo_injectionB[1][:-1], histo_injectionB[0], 'o', markersize=5, label='Injection %s'%(null_table[key][1][1]+1))
             plt.plot(histo_injection_dkA[1][:-1], histo_injection_dkA[0], '+', markersize=8, label='Injection dark %s'%(null_table[key][1][0]+1))
@@ -1085,9 +1185,9 @@ for key in which_nulls: # Iterate over the null to fit
             plt.ylabel('Frequency', size=20)
             plt.xticks(size=15);plt.yticks(size=15)
             plt.tight_layout()
-            string = key+'_'+'%03d'%(basin_hopping_count)+'_injection_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%s'%int(wl_scale[wl_idx[-1]])
+            string = key+'_'+'%03d'%(basin_hopping_count)+'_injection_'+str(wl_min)+'-'+str(wl_max)+'_'+os.path.basename(datafolder[:-1])+'_%.0f'%(wl_scale[wl_idx[-1]])
             if activate_spectral_binning: string = string + '_sb'
-            plt.savefig(save_path+string+'.png')
+            plt.savefig(save_path+string+'.png', dpi=300)
         else:
             ''' Map the parameters space '''
             print('Mapping parameters space')
@@ -1113,9 +1213,9 @@ for key in which_nulls: # Iterate over the null to fit
             print('Duration: %.3f s'%(stop-start))
             
             if activate_spectral_binning:
-                chi2_savepath = save_path+'chi2map_%s_%03d_%s-%s_sp'%(key, basin_hopping_count, int(wl_min), int(wl_max))
+                chi2_savepath = save_path+'chi2map_%s_%03d_%.0f-%.0f_sp'%(key, basin_hopping_count, wl_min, wl_max)
             else:
-                chi2_savepath = save_path+'chi2map_%s_%03d_%s-%s'%(key, basin_hopping_count, int(wl_min), int(wl_max))
+                chi2_savepath = save_path+'chi2map_%s_%03d_%.0f-%.0f'%(key, basin_hopping_count, wl_min, wl_max)
             np.savez(chi2_savepath, value=chi2map, na=map_na, mu=map_mu_opd, sig=map_sig_opd, wl=wl_scale)
             
             chi2map2 = chi2map[:,:,:,0]
@@ -1151,7 +1251,8 @@ for key in which_nulls: # Iterate over the null to fit
                 map_log.write('activate_frame_sorting %s\n'%(activate_frame_sorting))
                 map_log.write('activate_preview_only %s\n'%(activate_preview_only))
                 map_log.write('factor_minus, factor_plus: %s %s\n'%(factor_minus0[idx_null], factor_plus0[idx_null]))
-                map_log.write('nb_frames_sorting_binning %s\n\n'%(nb_frames_sorting_binning))
+                map_log.write('nb_frames_sorting_binning %s\n'%(nb_frames_sorting_binning))
+                map_log.write('switch_invert_null %s\n\n'%(switch_invert_null)) 
                 map_log.write('Results\n')
                 map_log.write('Min in param space\n%s\t%s\t%s\t%s\n'%(chi2map2.min(), map_na[argmin[0]], map_mu_opd[argmin[1]], map_sig_opd[argmin[2]]))
                 map_log.write('Indexes are\n'+str(argmin)+'\n')                
@@ -1186,9 +1287,9 @@ for key in which_nulls: # Iterate over the null to fit
             plt.tight_layout(rect=[0,0,1,0.95])
             plt.suptitle(key)
             if activate_spectral_binning:
-                plt.savefig(save_path+'%s_%03d_chi2map_mu_vs_sig_%s-%s_sp.png'%(key, basin_hopping_count, int(wl_min), int(wl_max)))
+                plt.savefig(save_path+'%s_%03d_chi2map_mu_vs_sig_%.0f-%.0f_sp.png'%(key, basin_hopping_count, wl_min, wl_max))
             else:
-                plt.savefig(save_path+'%s_%03d_chi2map_mu_vs_sig_%s-%s.png'%(key, basin_hopping_count, int(wl_min), int(wl_max)))
+                plt.savefig(save_path+'%s_%03d_chi2map_mu_vs_sig_%.0f-%.0f.png'%(key, basin_hopping_count, wl_min, wl_max))
             
             plt.figure(figsize=(19.20,10.80))
             if map_sig_opd.size >10:
@@ -1210,9 +1311,9 @@ for key in which_nulls: # Iterate over the null to fit
             plt.tight_layout(rect=[0,0,1,0.95])
             plt.suptitle(key)
             if activate_spectral_binning:
-                plt.savefig(save_path+'%s_%03d_chi2map_null_vs_mu_%s-%s_sp.png'%(key, basin_hopping_count, int(wl_min), int(wl_max)))
+                plt.savefig(save_path+'%s_%03d_chi2map_null_vs_mu_%.0f-%.0f_sp.png'%(key, basin_hopping_count, wl_min, wl_max))
             else:
-                plt.savefig(save_path+'%s_%03d_chi2map_null_vs_mu_%s-%s.png'%(key, basin_hopping_count, int(wl_min), int(wl_max)))
+                plt.savefig(save_path+'%s_%03d_chi2map_null_vs_mu_%.0f-%.0f.png'%(key, basin_hopping_count, wl_min, wl_max))
                 
             plt.figure(figsize=(19.20,10.80))
             if map_mu_opd.size > 10:
@@ -1234,9 +1335,9 @@ for key in which_nulls: # Iterate over the null to fit
             plt.tight_layout(rect=[0,0,1,0.95])
             plt.suptitle(key)
             if activate_spectral_binning:
-                plt.savefig(save_path+'%s_%03d_chi2map_null_vs_sig_%s-%s_sp.png'%(key, basin_hopping_count, int(wl_min), int(wl_max)))
+                plt.savefig(save_path+'%s_%03d_chi2map_null_vs_sig_%.0f-%.0f_sp.png'%(key, basin_hopping_count, wl_min, wl_max))
             else:
-                plt.savefig(save_path+'%s_%03d_chi2map_null_vs_sig_%s-%s.png'%(key, basin_hopping_count, int(wl_min), int(wl_max)))
+                plt.savefig(save_path+'%s_%03d_chi2map_null_vs_sig_%.0f-%.0f.png'%(key, basin_hopping_count, wl_min, wl_max))
             
         if not chi2_map_switch:
             sys.stdout.close()
@@ -1280,10 +1381,10 @@ print('-- End --')
 ##                txt3 = '%s '%key+'Fitted values: ' + 'Na$ = %.2E \pm %.2E$, '%(na_opt, uncertainties[0]) +' Chi2 = %.2E '%(chi2)+'(Last = %.3f s)'%(stop-start)
 #    count = 0
 #    axs = []
-#    for wl in wl_idx[::-1][:1]:
+#    for wl in wl_idx[:1]:
 #        ax = f.add_subplot(1,1,count+1)
 #        axs.append(ax)
-#        plt.title('%s nm'%wl_scale[wl], size=20)
+#        plt.title('%.0f nm'%wl_scale[wl], size=20)
 #        plt.errorbar(a1[0][wl], a1[1][wl], yerr=a1[2][wl], fmt='.', markersize=5, label='No sigma-clipping')
 ##        plt.errorbar(a2[0][wl], a2[1][wl], yerr=a2[2][wl], fmt='.', markersize=5, label='Sigma-clipping')
 #
@@ -1303,10 +1404,10 @@ print('-- End --')
 #    f = plt.figure(figsize=(19.20,10.80))
 #    count = 0
 #    axs = []
-#    for wl in wl_idx[::-1][:1]:
+#    for wl in wl_idx[:1]:
 #        ax = f.add_subplot(1,1,count+1)
 #        axs.append(ax)
-#        plt.title('%s nm'%wl_scale[wl], size=20)
+#        plt.title('%.0f nm'%wl_scale[wl], size=20)
 #        plt.plot(b1['histom'][wl][1][:-1], b1['histom'][wl][0], '.', label='Iminus (no sigma-clipping)')
 #        plt.plot(b1['histop'][wl][1][:-1], b1['histop'][wl][0], '.', label='Iplus (no sigma-clipping)')
 #        plt.plot(histodkm[wl][1][:-1], histodkm[wl][0], label='Dark minus')

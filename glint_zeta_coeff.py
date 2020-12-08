@@ -24,12 +24,6 @@ The settings are in the ``Settings`` section:
     * **nb_img**: tuple, bounds between frames are selected. Leave ``None`` to start from the first frame or to finish to the last one (included).
     * **debug**: bool, set to ``True`` to check if the method ``getSpectralFlux`` correctly behaves (e.g. good geometric calibration). It is strongly adviced to change **nb_img** to only process one frame.
     * **save**: bool, set to ``True`` to save the zeta coefficient.
-    * **mode_flux**: string, choose the method to estimate the spectral flux in the outputs among:
-        * ``amplitude`` uses patterns determined in the script ``glint_geometric_calibration`` and a linear least square is performed to get the amplitude of the pattern
-        * ``model`` proceeds like ``amplitude`` but the integral of the flux is returned
-        * ``windowed`` returns a weighted mean as flux of the spectral channel. The weights is the same pattern as the other modes above
-        * ``raw`` returns the mean of the flux along the spatial axis over the whole width of the output 
-    * **suffix**: str, add a suffix in the names of the saved files.
     
 The outputs are:
     * Some plots for characterization and monitoring purpose, they are not automatically saved.
@@ -72,16 +66,19 @@ if __name__ == '__main__':
     save = False
     mode_flux = 'raw'
     suffix = ''
+    spectral_binning = False
+    wl_bin_min, wl_bin_max = 1525, 1575# In nm
+    bandwidth_binning = 50 # In nm
 
     ''' Inputs '''
     datafolder = 'data202006/20200607/zetacoeff/'
-    root = "/mnt/96980F95980F72D3/glint/"
-    # root = "//tintagel.physics.usyd.edu.au/snert/"
+#    root = "/mnt/96980F95980F72D3/glint/"
+    root = "//tintagel.physics.usyd.edu.au/snert/"
     output_path = root+'GLINTprocessed/'+datafolder
     spectral_calibration_path = output_path
     geometric_calibration_path = output_path
-    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    # data_path = '//tintagel.physics.usyd.edu.au/snert/GLINTData/'+datafolder
+#    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
+    data_path = '//tintagel.physics.usyd.edu.au/snert/GLINTData/'+datafolder
     dark = np.load(output_path+'superdark.npy')
     
     Iminus = []
@@ -157,9 +154,11 @@ if __name__ == '__main__':
         
         ''' Measurement of flux per frame, per spectral channel, per track '''
         list_channels = np.arange(16) #[1,3,4,5,6,7,8,9,10,11,12,14]
-        img2.getSpectralFlux(list_channels, spectral_axis, position_outputs, width_outputs, mode_flux, debug=debug)
-        
+        img2.getSpectralFlux(spectral_axis, position_outputs, width_outputs, mode_flux, debug=debug)
         img2.getIntensities(mode_flux)
+
+        if spectral_binning:
+            img2.spectralBinning(wl_bin_min, wl_bin_max, bandwidth_binning, wl_to_px_coeff)        
         
         ''' Get split and coupler coefficient, biased with transmission coeff between nulling-chip and detector '''
         img2.getRatioCoeff(beam, zeta_coeff)
@@ -635,82 +634,31 @@ if __name__ == '__main__':
     # plt.xticks(size=30);plt.yticks(size=30)
     # plt.tight_layout()
     
-    # plt.figure(figsize=(19.20,10.80))
-    # # plt.subplot(2,1,1)
-    # # plt.title('Splitting ratio for beam 1', size=40)
-    # plt.plot(longueuronde, a[masque], lw=6, c='k', label='To photometric output')
-    # plt.plot(longueuronde, b[masque]+c[masque], '-', lw=4, c=colors[0], label='To coupler of Null 1')
-    # # plt.plot(longueuronde, c[masque], '--', lw=4, c=colors[0], label='To antinull 1')
-    # plt.plot(longueuronde, d[masque]+e[masque], '--', lw=4, c=colors[1], label='To coupler of Null 3')
-    # # plt.plot(longueuronde, e[masque], '-.', lw=4, c=colors[1], label='To antinull 3')
-    # plt.plot(longueuronde, f[masque]+g[masque], '-.', lw=4, c=colors[2], label='To coupler of Null 5')
-    # # plt.plot(longueuronde, g[masque], '.', lw=4, c=colors[2], label='To antinull 5')
-    # plt.grid()
-    # plt.ylim(0,0.6)
-    # # plt.xlim(1200)
-    # plt.legend(loc='best', fontsize=30, ncol=2)
-    # plt.xlabel('Wavelength (nm)', size=35)
-    # plt.ylabel('Splitting ratio', size=35)
-    # plt.xticks(size=30);plt.yticks(size=30)
-    # plt.tight_layout()
-
-    width = 6.528
-    height = width / 1.618
-    sz = 16
-    plt.rc('xtick', labelsize=sz)
-    plt.rc('ytick', labelsize=sz)
-    plt.rc('axes', labelsize=sz)
-    plt.rc('legend', fontsize=sz)
-    plt.rc('font', size=sz)
-    plt.figure(figsize=(width, height))
+    plt.figure(figsize=(19.20,10.80))
+    ax = plt.subplot(111)
     # plt.subplot(2,1,1)
     # plt.title('Splitting ratio for beam 1', size=40)
     plt.plot(longueuronde, a[masque], lw=4, c='k', label='To photometric output')
-    plt.plot(longueuronde, b[masque]+c[masque], '-', lw=3, c=colors[0], label='To coupler of Null 1')
+    plt.plot(longueuronde, b[masque]+c[masque], ':', lw=4, c=colors[0], label='To coupler of Null 1')
     # plt.plot(longueuronde, c[masque], '--', lw=4, c=colors[0], label='To antinull 1')
-    plt.plot(longueuronde, d[masque]+e[masque], '--', lw=3, c=colors[1], label='To coupler of Null 3')
+    plt.plot(longueuronde, d[masque]+e[masque], '--', lw=4, c=colors[1], label='To coupler of Null 3')
     # plt.plot(longueuronde, e[masque], '-.', lw=4, c=colors[1], label='To antinull 3')
-    plt.plot(longueuronde, f[masque]+g[masque], '-.', lw=3, c=colors[2], label='To coupler of Null 5')
+    plt.plot(longueuronde, f[masque]+g[masque], '-.', lw=4, c=colors[2], label='To coupler of Null 5')
     # plt.plot(longueuronde, g[masque], '.', lw=4, c=colors[2], label='To antinull 5')
     plt.grid()
-    plt.ylim(0,0.6)
+    plt.ylim(-0.03,0.6)
     # plt.xlim(1200)
-    plt.legend(loc='best', ncol=2)
-    plt.xlabel('Wavelength (nm)')
-    plt.ylabel('Splitting ratio')
-    # plt.xticks(size=30);plt.yticks(size=30)
+    plt.legend(loc='best', fontsize=34, ncol=2)
+    plt.xlabel('Wavelength (nm)', size=45)
+    plt.ylabel('Splitting ratio', size=45)
+    plt.xticks(size=38);plt.yticks(size=38)
+    plt.text(-0.09, 1.02, r'a)', weight='bold', fontsize=40, transform=ax.transAxes)
     plt.tight_layout()
-    
-    # plt.figure(figsize=(19.20,10.80))
-    # # plt.subplot(2,1,2)
-    # a = Iminus[0,0]/(Iminus[0,0]+Iplus[0,0])
-    # b = Iplus[0,0]/(Iminus[0,0]+Iplus[0,0])
-    # c = Iminus[1,0]/(Iminus[1,0]+Iplus[1,0])
-    # d = Iplus[1,0]/(Iminus[1,0]+Iplus[1,0])
-    # # plt.title('Coupling ratio for Null 1 (Beams 1&2)', size=40)
-    # plt.plot(longueuronde, a[masque], lw=6, c=colors[0], label='Beam 1 to null output')
-    # plt.plot(longueuronde, b[masque], '--', lw=6, c=colors[0], label='Beam 1 to antinull output')
-    # plt.plot(longueuronde, c[masque], lw=4, c=colors[1], label='Beam 2 to null output')
-    # plt.plot(longueuronde, d[masque], '--', lw=4, c=colors[1], label='Beam 2 to antinull output')
-    # plt.grid()
-    # plt.legend(loc='best', fontsize=30)
-    # plt.ylim(0,1.02)
-    # # plt.xlim(1200)
-    # plt.xlabel('Wavelength (nm)', size=35)
-    # plt.ylabel('Coupling ratio', size=35)
-    # plt.xticks(size=30);plt.yticks(size=30)
-    # plt.tight_layout()
+    plt.savefig('splitting_ratioN1bis.pdf', format='pdf')
 
-    width = 6.528
-    height = width / 1.618
-    sz = 16
-    plt.rc('xtick', labelsize=sz)
-    plt.rc('ytick', labelsize=sz)
-    plt.rc('axes', labelsize=sz)
-    plt.rc('legend', fontsize=sz)
-    plt.rc('font', size=sz)    
-    plt.figure(figsize=(width, height))
-    # plt.subplot(2,1,2)
+
+    plt.figure(figsize=(19.20,10.80))
+    ax = plt.subplot(111)
     a = Iminus[0,0]/(Iminus[0,0]+Iplus[0,0])
     b = Iplus[0,0]/(Iminus[0,0]+Iplus[0,0])
     c = Iminus[1,0]/(Iminus[1,0]+Iplus[1,0])
@@ -718,46 +666,32 @@ if __name__ == '__main__':
     # plt.title('Coupling ratio for Null 1 (Beams 1&2)', size=40)
     plt.plot(longueuronde, a[masque], lw=4, c=colors[0], label='Beam 1 to null output')
     plt.plot(longueuronde, b[masque], '--', lw=6, c=colors[0], label='Beam 1 to antinull output')
-    plt.plot(longueuronde, c[masque], lw=3, c=colors[1], label='Beam 2 to null output')
+    plt.plot(longueuronde, c[masque], ':', lw=4, c=colors[1], label='Beam 2 to null output')
     plt.plot(longueuronde, d[masque], '--', lw=4, c=colors[1], label='Beam 2 to antinull output')
     plt.grid()
-    plt.legend(loc='best')
-    plt.ylim(0,1.02)
+    plt.legend(loc='best', fontsize=34, ncol=2)
+    plt.ylim(-0.05,1.3)
     # plt.xlim(1200)
-    plt.xlabel('Wavelength (nm)')
-    plt.ylabel('Coupling ratio')
-    # plt.xticks(size=30);plt.yticks(size=30)
+    plt.xlabel('Wavelength (nm)', size=45)
+    plt.ylabel('Coupling ratio', size=45)
+    plt.xticks(size=38);plt.yticks(size=38)
+    plt.text(-0.09, 1.02, r'b)', weight='bold', fontsize=40, transform=ax.transAxes)
     plt.tight_layout()
-       
-    # plt.figure(figsize=(19.20,10.80))
-    # plt.plot(img2.wl_scale[0][masque], zeta_coeff[keys[0,0]][0][masque], '-', c=colors[0], lw=6, label='Beam 1 to null output')
-    # plt.plot(img2.wl_scale[0][masque], zeta_coeff[keys[0,3]][0][masque], '--', c=colors[0],  lw=6, label='Beam 1 to antinull output')
-    # plt.plot(img2.wl_scale[0][masque], zeta_coeff[keys[1,0]][0][masque], '-', c=colors[1], lw=4, label='Beam 2 to null output')
-    # plt.plot(img2.wl_scale[0][masque], zeta_coeff[keys[1,3]][0][masque], '--', c=colors[1],  lw=4, label='Beam 2 to antinull output')
-    # plt.grid()
-    # plt.legend(loc='best', fontsize=30)
-    # plt.xticks(size=30);plt.yticks(size=30)
-    # plt.xlabel('Wavelength (nm)', size=35)
-    # plt.ylabel(r'$\zeta$ coefficient', size=35)
-    # plt.tight_layout()
-    
-    width = 6.528
-    height = width / 1.618
-    sz = 16
-    plt.rc('xtick', labelsize=sz)
-    plt.rc('ytick', labelsize=sz)
-    plt.rc('axes', labelsize=sz)
-    plt.rc('legend', fontsize=sz)
-    plt.rc('font', size=sz)
-    plt.figure(figsize=(width, height))
+    plt.savefig('coupling_ratioN1bis.pdf', format='pdf')
+
+
+    plt.figure(figsize=(19.20,10.80))
+    ax = plt.subplot(111)
     plt.plot(img2.wl_scale[0][masque], zeta_coeff[keys[0,0]][0][masque], '-', c=colors[0], lw=4, label='Beam 1 to null output')
-    plt.plot(img2.wl_scale[0][masque], zeta_coeff[keys[0,3]][0][masque], '--', c=colors[0],  lw=4, label='Beam 1 to antinull output')
-    plt.plot(img2.wl_scale[0][masque], zeta_coeff[keys[1,0]][0][masque], '-', c=colors[1], lw=3, label='Beam 2 to null output')
-    plt.plot(img2.wl_scale[0][masque], zeta_coeff[keys[1,3]][0][masque], '--', c=colors[1],  lw=3, label='Beam 2 to antinull output')
+    plt.plot(img2.wl_scale[0][masque], zeta_coeff[keys[0,3]][0][masque], ':', c=colors[0],  lw=4, label='Beam 1 to antinull output')
+    plt.plot(img2.wl_scale[0][masque], zeta_coeff[keys[1,0]][0][masque], '--', c=colors[1], lw=4, label='Beam 2 to null output')
+    plt.plot(img2.wl_scale[0][masque], zeta_coeff[keys[1,3]][0][masque], '-.', c=colors[1],  lw=4, label='Beam 2 to antinull output')
     plt.grid()
-    plt.legend(loc='best')
-    # plt.xticks(size=30);plt.yticks(size=30)
-    plt.xlabel('Wavelength (nm)')
-    plt.ylabel(r'$\zeta$ coefficient')
+    plt.legend(loc='best', fontsize=34)
+    plt.xticks(size=38);plt.yticks(size=38)
+    plt.ylim(-0.1)
+    plt.xlabel('Wavelength (nm)', size=45)
+    plt.ylabel(r'$\zeta$ coefficient', size=45)
+    plt.text(-0.09, 1.02, r'c)', weight='bold', fontsize=40, transform=ax.transAxes)
     plt.tight_layout()
-        
+    plt.savefig('zeta_coeffN1bis.pdf', format='pdf')

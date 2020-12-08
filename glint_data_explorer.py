@@ -1,34 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Script's name: **glint_data_explorer.py**
-
-This script quickly explores the data.
-Several plots are generated but you can still add or remove according to your needs.
-The script saves anything.
-It is not designed to handle a lot of data and the reading of hundred of files is long.
-It is recommended to load 10 or 20 files.
-
-The most common plots are:
-    * Animated plot showing the frames and the 1D-plot of every outputs, it loops over all the loaded frames
-    * Visual check of the wiggles in the photometries
-    * Evolution along frames of the average flux of every outputs
-    * Evolution along frames of the null dephts
-    * Distributions of the photometries, null depths and interferometric outputs
-    
-Inputs:
-    * **nonoise_switch**: bool, set to True to avoid loading a dark
-    * **nb_files**: tup, range of file to load (start, stop, step)
-    * **root**: str, common path to all the required files
-    * **path_to_data**: str, path to the directory containing the folder where data to load is
-    * **datafolder**: str, folder containing the data to load
-    * **darkfolder**: str, folder containing the dark to load
-    * **wl_path**: str, path to the spectral calibration files
-    * **output_path**: str, path containing preprocessed data to ease the loading of the data to explore (optional)
-    * **dark_path**: path to the average dark, if already created (optional)
-    * **fps**: float, frame rate at which the animated plot will read the frames
-    
-
+Created on Thu Jun 20 09:58:33 2019
+@author: Marc-Antoine Martinod
+Just fill the settings and run the script.
 """
 
 import numpy as np
@@ -36,6 +11,9 @@ import h5py
 import matplotlib.pyplot as plt
 from matplotlib import animation
 import os
+from skimage.measure import moments
+from scipy.optimize import curve_fit
+from timeit import default_timer as time
 
 def binning(arr, binning, axis=0, avg=False):
     """
@@ -78,24 +56,23 @@ def binning(arr, binning, axis=0, avg=False):
     
 nonoise_switch = False
 ''' Settings '''
-nb_files = (0,10,1) # Number of data files to read. None = all files
+nb_files = (0,1,1) # Number of data files to read. None = all files
 #root = "C:/Users/marc-antoine/glint/" # Root path containing the reduced data
 root = "//tintagel.physics.usyd.edu.au/snert/" # Root path containing the reduced data
-root = '/mnt/96980F95980F72D3/glint/'
-#path_to_data = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'
-path_to_data = '//silo.physics.usyd.edu.au/silo4/snert/GLINTData/'
-path_to_data = '/mnt/96980F95980F72D3/glint_data/'
-datafolder = 'data202007/20200705/scans/' # Folder of the data to explore
-darkfolder = 'data202007/20200705/scans/'
+path_to_data = '//tintagel.physics.usyd.edu.au/snert/GLINTData/'
+datafolder = 'data202009/20200917/Capella/' # Folder of the data to explore
+darkfolder = datafolder
 wl_path = root+'GLINTprocessed/'+datafolder+'20200601_px_to_wl.npy'
 output_path = root+'GLINTprocessed/'+datafolder # Path to reduced data
 dark_path = output_path+'superdark.npy'
-fps = 10
+wl_min, wl_max = 1400,1650
+fps = 1400
 
 ''' Running script '''
 data_path = path_to_data+datafolder # Full path to the data
-data_list = sorted([data_path+f for f in os.listdir(data_path) if 'dark_20200705T155341337' in f])
+data_list = sorted([data_path+f for f in os.listdir(data_path) if 'dark1' in f])
 data_list = data_list[nb_files[0]:nb_files[1]:nb_files[2]]
+
 if not nonoise_switch:
     switch_dark = False
     try:
@@ -106,11 +83,11 @@ if not nonoise_switch:
     
     if switch_dark:
         dark_path = path_to_data + darkfolder
-        dark_list = [dark_path+f for f in os.listdir(dark_path)][:10]
+        dark_list = [dark_path+f for f in os.listdir(dark_path)][:100]
         with h5py.File(dark_list[0], 'r') as dataFile:
             dark = np.array(dataFile['imagedata'])
             dark = np.transpose(dark, axes=(0,2,1))
-            dark = dark.mean(axis=0)
+            dark = dark.mean(axis=0)    
 else:
     print('No-noise data')
     dark = np.zeros((344,96))
@@ -126,7 +103,7 @@ for f in data_list:
             print(f)
             continue
         data = np.transpose(data, axes=(0,2,1))
-        data = data - dark * 0
+        data = data - dark
         
         try:
             stack = np.vstack((stack, data))
@@ -169,7 +146,7 @@ data = np.transpose(data, axes=(1,0,2))
 #data /= spectrum[:,None,:]
 #data = np.array([np.mean(data, axis=0)])
 
-data = binning(data, binning=10, axis=0, avg=True)
+#data = binning(data, binning=10, axis=0, avg=True)
 
 wl_px = np.tile(np.arange(96), (16, 1))
     
@@ -258,7 +235,7 @@ def run2(k):
             text_antinull1, text_antinull2, text_antinull3, text_antinull4, text_antinull5, text_antinull6]
 
 anim = animation.FuncAnimation(fig, run2, init_func=init3, frames=data.shape[0], interval=10)#, blit=True)
-ppp
+
 plt.figure(figsize=(19.20,10.80))
 for i in range(16):
     if i<4: 
@@ -293,42 +270,36 @@ for i in range(16):
         plt.xlabel('Frame')
 plt.tight_layout()  
 
-#plt.figure(figsize=(19.20,10.80))
-#for i in range(16):
-#    if i<4: 
-#        histo = np.histogram(data[:,i,45:57].mean(axis=-1), bins=int(np.size(data[:,i,45:57].mean(axis=-1))**0.5), density=True)
-#        plt.subplot(4,4,i+1)
-#        plt.plot(histo[1][:-1], histo[0], '.')
-#        plt.grid()
-#        plt.title('Histogram of flux in '+titles_photo[i])
-#    elif i%2==0:
-#        null = data[:,i,45:57].mean(axis=-1)/data[:,i+1,45:57].mean(axis=-1)
-#        axis = np.linspace(-1, 3, int(np.size(null)**0.5)+1)
-#        histo = np.histogram(null, bins=axis, density=True)
-#        plt.subplot(4,4,i+1)
-#        plt.plot(histo[1][:-1], histo[0], '.')
-#        plt.grid()
-#        plt.title('Histogram of null '+titles_photo[i])
-#    if i == 1 or i == 3 or i == 12 or i == 14:
-#        plt.xlabel('Frame')
-#plt.tight_layout() 
-#plt.figure(figsize=(19.20,10.80))
-#for i in range(16):
-#    plt.subplot(4,4,i+1)
-#    plt.plot(com_wl[:,i], 'o-')
-#    plt.grid()
-#    plt.title('Center of mass of '+titles_photo[i])
-#plt.tight_layout()
-#
-#plt.figure(figsize=(19.20,10.80))
-#for i in range(16):
-#    plt.subplot(4,4,i+1)
-#    b = data[:,i,40:75].sum(axis=-1)
-#    histo = np.histogram(b, int(b.size**0.5))
-#    plt.plot(histo[1][:-1], histo[0], 'o-')
-#    plt.grid()
-#    plt.title('Histogram of flux of '+titles_photo[i])
-#plt.tight_layout()
+plt.figure(figsize=(19.20,10.80))
+for i in range(16):
+    if i<4: 
+        histo = np.histogram(data[:,i,45:57].mean(axis=-1), bins=int(np.size(data[:,i,45:57].mean(axis=-1))**0.5), density=True)
+        plt.subplot(4,4,i+1)
+        plt.plot(histo[1][:-1], histo[0], '.')
+        plt.grid()
+        plt.title('Histogram of flux in '+titles_photo[i])
+    elif i%2==0:
+        null = data[:,i,45:57].mean(axis=-1)/data[:,i+1,45:57].mean(axis=-1)
+        axis = np.linspace(-1, 3, int(np.size(null)**0.5)+1)
+        histo = np.histogram(null, bins=axis, density=True)
+        plt.subplot(4,4,i+1)
+        plt.plot(histo[1][:-1], histo[0], '.')
+        plt.grid()
+        plt.title('Histogram of null '+titles_photo[i])
+    if i == 1 or i == 3 or i == 12 or i == 14:
+        plt.xlabel('Frame')
+plt.tight_layout() 
+plt.figure(figsize=(19.20,10.80))
+
+plt.figure(figsize=(19.20,10.80))
+for i in range(16):
+    plt.subplot(4,4,i+1)
+    b = data[:,i,40:75].sum(axis=-1)
+    histo = np.histogram(b, int(b.size**0.5))
+    plt.plot(histo[1][:-1], histo[0], 'o-')
+    plt.grid()
+    plt.title('Histogram of flux of '+titles_photo[i])
+plt.tight_layout()
 
 
 #plt.figure(figsize=(19.20,10.80))
@@ -355,63 +326,63 @@ plt.tight_layout()
 #plt.xlim(1400, 1700)
 #plt.tight_layout()
 
-photo1 = data[:,0].copy()
-photo2 = data[:,1].copy()
-photo3 = data[:,2].copy()
-photo4 = data[:,3].copy()
-plt.figure(figsize=(19.20,10.80))
-plt.plot(wl_scale[0], photo1.mean(axis=0), lw=3, label='P1')
-plt.plot(wl_scale[1], photo2.mean(axis=0), lw=3, label='P2')
-plt.plot(wl_scale[4], photo3.mean(axis=0), lw=3, label='P3')
-plt.plot(wl_scale[5], photo4.mean(axis=0), lw=3, label='P4')
-plt.grid()
-plt.xticks(size=30);plt.yticks(size=30)
-plt.legend(loc='best', fontsize=35)
-plt.xlabel('Wavelength (nm)', size=35)
-plt.ylabel('Intensity (AU)', size=35)
-plt.title('Average photometries', size=40)
-plt.xlim(1400, 1700)
-plt.tight_layout()
+#photo1 = data[:,0].copy()
+#photo2 = data[:,1].copy()
+#photo3 = data[:,2].copy()
+#photo4 = data[:,3].copy()
+#plt.figure(figsize=(19.20,10.80))
+#plt.plot(wl_scale[0], photo1.mean(axis=0), lw=3, label='P1')
+#plt.plot(wl_scale[1], photo2.mean(axis=0), lw=3, label='P2')
+#plt.plot(wl_scale[4], photo3.mean(axis=0), lw=3, label='P3')
+#plt.plot(wl_scale[5], photo4.mean(axis=0), lw=3, label='P4')
+#plt.grid()
+#plt.xticks(size=30);plt.yticks(size=30)
+#plt.legend(loc='best', fontsize=35)
+#plt.xlabel('Wavelength (nm)', size=35)
+#plt.ylabel('Intensity (AU)', size=35)
+#plt.title('Average photometries', size=40)
+#plt.xlim(1400, 1700)
+#plt.tight_layout()
+#
+#photo1 /= photo1.max(axis=1)[:,None]
+#photo2 /= photo2.max(axis=1)[:,None]
+#photo3 /= photo3.max(axis=1)[:,None]
+#photo4 /= photo4.max(axis=1)[:,None]
+#
+#plt.figure(figsize=(19.20,10.80))
+#plt.plot(wl_scale[0], photo1.mean(axis=0), lw=3, label='P1')
+#plt.plot(wl_scale[1], photo2.mean(axis=0), lw=3, label='P2')
+#plt.plot(wl_scale[4], photo3.mean(axis=0), lw=3, label='P3')
+#plt.plot(wl_scale[5], photo4.mean(axis=0), lw=3, label='P4')
+#plt.grid()
+#plt.xticks(size=30);plt.yticks(size=30)
+#plt.legend(loc='best', fontsize=35)
+#plt.xlabel('Wavelength (nm)', size=35)
+#plt.ylabel('Intensity (AU)', size=35)
+#plt.title('Visual check of wiggles', size=40)
+#plt.xlim(1400, 1700)
+#plt.ylim(-0.05, 1.05)
+#plt.tight_layout()
+#
+#plt.figure(figsize=(19.20,10.80))
+#for i in range(16):
+#    plt.subplot(4,4,i+1)
+#    plt.plot(wl_scale[i], data[:,i].mean(axis=0))
+#    plt.grid()
+#    plt.title(titles_photo[i])
+#plt.tight_layout()
 
-photo1 /= photo1.max(axis=1)[:,None]
-photo2 /= photo2.max(axis=1)[:,None]
-photo3 /= photo3.max(axis=1)[:,None]
-photo4 /= photo4.max(axis=1)[:,None]
-
-plt.figure(figsize=(19.20,10.80))
-plt.plot(wl_scale[0], photo1.mean(axis=0), lw=3, label='P1')
-plt.plot(wl_scale[1], photo2.mean(axis=0), lw=3, label='P2')
-plt.plot(wl_scale[4], photo3.mean(axis=0), lw=3, label='P3')
-plt.plot(wl_scale[5], photo4.mean(axis=0), lw=3, label='P4')
-plt.grid()
-plt.xticks(size=30);plt.yticks(size=30)
-plt.legend(loc='best', fontsize=35)
-plt.xlabel('Wavelength (nm)', size=35)
-plt.ylabel('Intensity (count)', size=35)
-plt.title('Visual check of wiggles', size=40)
-plt.xlim(1400, 1700)
-plt.ylim(-0.05, 1.05)
-plt.tight_layout()
-ppp
-plt.figure(figsize=(19.20,10.80))
-for i in range(16):
-    plt.subplot(4,4,i+1)
-    plt.plot(wl_scale[i], data[:,i].mean(axis=0))
-    plt.grid()
-    plt.title(titles_photo[i])
-plt.tight_layout()
-
-for k in range(100):
-    fig = plt.figure(figsize=(8, 8))
+for k in range(1):
+    fig = plt.figure(figsize=(18/2, 17.96/2))
     ax = fig.add_subplot(111)
     plt.imshow(stack[k], interpolation='none', aspect=2, vmax = 200, vmin=0, extent=[wl_scale[0,0]-5/2, wl_scale[0,-1]+5/2, stack[0].shape[0], 0])
     cb = plt.colorbar()
-    cb.set_label(label='Intensity (count)', size=20)
-    cb.ax.tick_params(labelsize=15)
-    plt.xticks(size=15)
-    plt.yticks(size=15)
-    plt.xlabel('Wavelength (nm)', size=20)
-    plt.ylabel('Spatial axis (px)', size=20)
+    cb.set_label(label='Intensity (count)', size=30)
+    cb.ax.tick_params(labelsize=25)
+    plt.xticks(size=25)
+    plt.yticks(size=25)
+    plt.xlabel('Wavelength (nm)', size=30)
+    plt.ylabel('Spatial axis (px)', size=30)
     plt.text(0.05, 0.04, 'P1', transform=ax.transAxes, color='w', fontsize=14)
     plt.text(0.05, 0.15, 'P2', transform=ax.transAxes, color='w', fontsize=14)
     plt.text(0.05, 0.789, 'P3', transform=ax.transAxes, color='w', fontsize=14)
@@ -429,5 +400,58 @@ for k in range(100):
     plt.text(0.05, 0.495, 'AN5', transform=ax.transAxes, color='w', fontsize=14)
     plt.text(0.05, 0.3225, 'AN6', transform=ax.transAxes, color='w', fontsize=14)
     plt.tight_layout()
-    plt.savefig('figure/stack_%03d.png'%k)
-    plt.close('all')
+    plt.savefig('merde.png', dpi=300)
+#    plt.close('all')
+
+#fig = plt.figure(figsize=(8, 8))
+#ax = fig.add_subplot(111)
+#time_text = ax.text(0.05, 0.97, '', transform=ax.transAxes, color='w', fontsize=14)
+#text_p1 = ax.text(0.05, 0.04, 'P1', transform=ax.transAxes, color='w', fontsize=14)
+#text_p2 = ax.text(0.05, 0.15, 'P2', transform=ax.transAxes, color='w', fontsize=14)
+#text_p3 = ax.text(0.05, 0.789, 'P3', transform=ax.transAxes, color='w', fontsize=14)
+#text_p4 = ax.text(0.05, 0.9, 'P4', transform=ax.transAxes, color='w', fontsize=14)
+#text_null1 = ax.text(0.05, 0.265, 'N1', transform=ax.transAxes, color='w', fontsize=14)
+#text_null2 = ax.text(0.05, 0.725, 'N2', transform=ax.transAxes, color='w', fontsize=14)
+#text_null3 = ax.text(0.05, 0.84, 'N3', transform=ax.transAxes, color='w', fontsize=14)
+#text_null4 = ax.text(0.05, 0.5525, 'N4', transform=ax.transAxes, color='w', fontsize=14)
+#text_null5 = ax.text(0.05, 0.61, 'N5', transform=ax.transAxes, color='w', fontsize=14)
+#text_null6 = ax.text(0.05, 0.4375, 'N6', transform=ax.transAxes, color='w', fontsize=14)
+#text_antinull1 = ax.text(0.05, 0.38, 'AN1', transform=ax.transAxes, color='w', fontsize=14)
+#text_antinull2 = ax.text(0.05, 0.2075, 'AN2', transform=ax.transAxes, color='w', fontsize=14)
+#text_antinull3 = ax.text(0.05, 0.0975, 'AN3', transform=ax.transAxes, color='w', fontsize=14)
+#text_antinull4 = ax.text(0.05, 0.6675, 'AN4', transform=ax.transAxes, color='w', fontsize=14)
+#text_antinull5 = ax.text(0.05, 0.495, 'AN5', transform=ax.transAxes, color='w', fontsize=14)
+#text_antinull6 = ax.text(0.05, 0.3225, 'AN6', transform=ax.transAxes, color='w', fontsize=14)
+#
+#ax.set_xlabel('Wavelength (nm)', size=20)
+#ax.set_ylabel('Spatial axis (px)', size=20)
+#ax.tick_params(labelsize=15)
+#lines = [plt.imshow(stack[0], interpolation='none', aspect=2, vmax = 200, vmin=0, extent=[wl_scale[0,0]-5/2, wl_scale[0,-1]+5/2, stack[0].shape[0], 0])]
+#cb = plt.colorbar()
+#cb.set_label(label='Intensity (AU)', size=20)
+#cb.ax.tick_params(labelsize=15)
+#lines = lines + [cb]
+#
+#def init4():
+#    global stack, wl_scale, ims
+#    lines[0].set_data(stack[0])
+#    time_text.set_text('')
+#    return lines + [time_text, text_p1, text_p2, text_p3, text_p4,\
+#            text_null1, text_null2, text_null3, text_null4, text_null5, text_null6,\
+#            text_antinull1, text_antinull2, text_antinull3, text_antinull4, text_antinull5, text_antinull6]
+#        
+#def run4(k):
+#    global data, stack, wl_scale, com_wl, params
+#    lines[0].set_data(stack[k])
+#    time_text.set_text('Frame %s/%s'%(k+1, stack.shape[0]))
+#
+#    return lines + [time_text, text_p1, text_p2, text_p3, text_p4,\
+#            text_null1, text_null2, text_null3, text_null4, text_null5, text_null6,\
+#            text_antinull1, text_antinull2, text_antinull3, text_antinull4, text_antinull5, text_antinull6]
+#
+#anim = animation.FuncAnimation(fig, run4, init_func=init4, frames=stack.shape[0], interval=1/30*1000)
+#print('Saving movie')
+#start = time()
+#anim.save('figure/alfBoo_20200605_30fps.mp4', fps=30, extra_args=['-vcodec', 'libx264'])
+#stop = time()
+#print('Last:', stop-start)

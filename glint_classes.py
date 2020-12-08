@@ -8,10 +8,9 @@ import matplotlib.pyplot as plt
 import h5py
 from functools import partial
 from scipy.optimize import curve_fit
-from numba import jit, prange
+from numba import jit
 import os
 import cupy as cp
-
 
 def gaussian(x, A, B, C, loc, sig):
     """
@@ -67,7 +66,11 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
         for i in which_tracks:
             for j in range(len(spectral_axis)):
                 gaus = partial(gaussian, loc=positions[i,j], sig=widths[i,j])
-                popt, pcov = curve_fit(gaus, slices_axes[i], slices[k,j,i], p0=[slices[k,j,i].max(), 0, 0])
+                try:
+                    popt, pcov = curve_fit(gaus, slices_axes[i], slices[k,j,i], p0=[slices[k,j,i].max(), 0, 0])
+                except:
+                    popt = np.zeros((3,))
+
                 amplitude_fit[k,i,j] = popt[0]
                 cov[k,i,j] = pcov[0,0]
                 # integ_model[k,i,j] = np.sum(gaus(slices_axes[i], *popt))
@@ -83,8 +86,8 @@ def _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, po
                 A = np.vstack((simple_gaus, np.ones_like(simple_gaus), slices_axes[i]))
                 A = np.transpose(A)
                 try:
-                    # popt2 = np.linalg.lstsq(A, slices[k,j,i], rcond=None)[0]
-                    popt2 = np.linalg.solve(A.T.dot(A), A.T.dot(slices[k,j,i]))
+                     popt2 = np.linalg.lstsq(A, slices[k,j,i], rcond=None)[0]
+#                    popt2 = np.linalg.solve(A.T.dot(A), A.T.dot(slices[k,j,i]))
                 except ValueError as e:
                     print(simple_gaus0)
                     print(np.any(np.isnan(simple_gaus)), np.any(np.isinf(simple_gaus)))
@@ -429,7 +432,8 @@ class Null(File):
                 print('DEBUG')
                 self.raw = self.slices[:,:,:,10-4:10+5].mean(axis=-1)
                 self.raw = np.transpose(self.raw, axes=(0,2,1))
-                self.raw_err = self.slices[:,:,:,:10-5].std(axis=-1) / slices_axes.shape[-1]**0.5
+                self.raw_err = np.append(self.slices[:,:,:,:10-5], self.slices[:,:,:,10+5:], axis=-1)
+                self.raw_err = self.raw_err.std(axis=-1) / self.raw_err.shape[-1]**0.5
                 self.raw_err = np.transpose(self.raw_err, axes=(0,2,1))
             #     self.amplitude_fit, self.amplitude, self.integ_model, self.integ_windowed, self.residuals_fit, self.residuals_reg, self.cov, self.weights = \
             # _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths)
@@ -498,13 +502,13 @@ class Null(File):
                     weights = np.diag(simple_gaus + std)
                     
                     A = np.vstack((simple_gaus, np.ones_like(simple_gaus), slices_axes[i]))
-                    # A = np.vstack((simple_gaus, np.ones_like(simple_gaus)))
-                    Aw = np.dot(A, weights)
-                    AwAwT = np.dot(Aw, np.transpose(Aw))
-                    dataw = np.dot(slices[k,j,i], weights)
-                    b = np.dot(Aw,dataw)
-                    
-                    if j >= 20:
+                    if j >= 20 and not np.all(simple_gaus == 0):
+                        # A = np.vstack((simple_gaus, np.ones_like(simple_gaus)))
+                        Aw = np.dot(A, weights)
+                        AwAwT = np.dot(Aw, np.transpose(Aw))
+                        dataw = np.dot(slices[k,j,i], weights)
+                        b = np.dot(Aw,dataw)
+
                         # popt2 = np.linalg.lstsq(Aw.T, dataw)[0]
                         # popt2 = np.linalg.solve(np.dot(A,np.transpose(A)), np.dot(A, slices[k,j,i]))
                         popt2 = np.linalg.solve(AwAwT, b)
@@ -566,11 +570,10 @@ class Null(File):
                     simple_gaus[np.isnan(simple_gaus)] = 0.
                     A = np.vstack((simple_gaus, np.ones_like(simple_gaus), slices_axes[i]))
 
-                    weights = np.diag(simple_gaus + std)
-                    Aw = np.dot(A, weights)
-                    dataw = np.dot(slices[k,j,i], weights)
-                    
-                    if j >= 20:
+                    if j >= 20 and not np.all(simple_gaus == 0):
+                         weights = np.diag(simple_gaus + std)
+                         Aw = np.dot(A, weights)
+                         dataw = np.dot(slices[k,j,i], weights)
                          popt2 = np.linalg.lstsq(Aw.T, dataw)[0]
                     else:
                         # popt2 = np.zeros(A.shape[1])
@@ -831,7 +834,10 @@ class Null(File):
             self.Iminus5, self.Iplus5 = self.raw[:,5][:,self.px_scale[5]], self.raw[:,7][:,self.px_scale[7]]
             self.Iminus6, self.Iplus6 = self.raw[:,8][:,self.px_scale[8]], self.raw[:,10][:,self.px_scale[10]]
             
-            self.p1_err = self.p2_err = self.p3_err = self.p4_err = self.raw_err  
+            self.p1_err = self.raw_err[:,15,:][:,self.px_scale[15]]
+            self.p2_err = self.raw_err[:,13,:][:,self.px_scale[13]]
+            self.p3_err = self.raw_err[:,2,:][:,self.px_scale[2]]
+            self.p4_err = self.raw_err[:,0,:][:,self.px_scale[0]]
         else:
             # raise KeyError('Please select the mode among: fit, model, windowed and raw.')
             raise KeyError('Please select the mode among: fit and raw.')

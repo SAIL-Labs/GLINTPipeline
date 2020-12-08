@@ -165,49 +165,120 @@ import os
 #zeta_coeff_path = calib_params_path + '20190715_zeta_coeff_raw.hdf5'
 
 
-# =============================================================================
-#  data202006/AlfBoo/ mew wl calib
-# =============================================================================
-starname = 'Alf Boo'
-date = '2020-06-01'
-''' Set the bounds of the parameters to fit '''
-nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
-nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
-bounds_mu0 = [(0, 1000), (2200, 2500), (2200, 2500), (0, 1000), (9700, 10100), (12500, 13500)] # bounds for DeltaPhi mu, one tuple per null
-bounds_sig0 = [(100, 300), (200, 300), (200, 300), (10,200), (100, 200), (100, 200)] # bounds for DeltaPhi sig
-bounds_na0 = [(0.0, 0.1), (0., 0.05), (0., 0.01), (0.0, 0.05), (0., 0.05), (0., 0.1)] # bounds for astronull
-diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
-xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-bin_bounds0 = [(-0.1, 1.), (-0.1, 0.4), (-0.1, 0.4), (-0.1, 1.), (-0.1, 1.), (-0.1, 1.)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
+## =============================================================================
+##  data202006/AlfBoo/ mew wl calib
+## =============================================================================
+#starname = 'Alf Boo'
+#date = '2020-06-01'
+#''' Set the bounds of the parameters to fit '''
+#nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
+#nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
+#bounds_mu0 = [(0, 1000), (2200, 2500), (2200, 2500), (0, 1000), (9700, 10100), (12500, 13500)] # bounds for DeltaPhi mu, one tuple per null
+#bounds_sig0 = [(100, 300), (200, 300), (200, 300), (10,200), (100, 200), (100, 200)] # bounds for DeltaPhi sig
+#bounds_na0 = [(0.0, 0.1), (0., 0.05), (0., 0.01), (0.0, 0.05), (0., 0.05), (0., 0.1)] # bounds for astronull
+#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
+#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
+#bin_bounds0 = [(-0.1, 1.), (-0.1, 0.4), (-0.1, 0.4), (-0.1, 1.), (-0.1, 1.), (-0.1, 1.)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
+#
+#''' Set the initial conditions '''
+#mu_opd0 = np.array([300, 2400, 2400, 400, 9800, 12900], dtype=np.float64) # initial guess of DeltaPhi mu
+#sig_opd0 = np.array([200, 260, 260, 110, 130, 160], dtype=np.float64) # initial guess of DeltaPhi sig
+#na0 = np.array([0.08, 0.001, 0.001, 0.011, 0.025, 0.08], dtype=np.float64) # initial guess of astro null
+#
+##mu_opd0[0] = 3.02383619e+02
+##mu_opd0[3] = 4.05482071e+02
+##mu_opd0[4] = 9.85782767e+03
+##mu_opd0[5] = 1.29190582e+04
+##sig_opd0[0] = 1.63288461e+02
+##sig_opd0[3] = 1.14174033e+02
+##sig_opd0[4] = 1.26271045e+02
+##sig_opd0[5] = 1.70226744e+02
+##na0[0] = 7.04645603e-02
+##na0[3] = 1.10478859e-02
+##na0[4] = 2.32493033e-02
+##na0[5] = 7.80002694e-02
+#
+#factor_minus0 = [1., 1, 1, 1.5, 4.5, 2.5] 
+#factor_plus0 = [1., 1, 1, 1.5, 2.5, 2] 
+#
+#''' Import real data '''
+#datafolder = 'data202006/AlfBoo/'
+#darkfolder = 'data202006/AlfBoo/'
+#root = "//tintagel.physics.usyd.edu.au/snert/"
+##root = "C:/Users/marc-antoine/glint/"
+##root = "/mnt/96980F95980F72D3/glint/"
+#file_path = root+'GLINTprocessed/'+datafolder
+#save_path = file_path+'output/'
+#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n1n4' in f]
+#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark1' in f]
+#calib_params_path = file_path#root+'GLINTprocessed/calibration_params/'
+#zeta_coeff_path = calib_params_path + '20200604_zeta_coeff_raw.hdf5'
+##
+### With fitted amplitude instead of raw
+##factor_minus0 = [1., 1, 1, 1.5, 4.5, 2.5] 
+##factor_plus0 = [1., 1, 1, 1.5, 2.5, 2] 
+##zeta_coeff_path = calib_params_path + '20200604_zeta_coeff_fit.hdf5'
 
-''' Set the initial conditions '''
-mu_opd0 = np.array([300, 2400, 2400, 400, 9800, 12900], dtype=np.float64) # initial guess of DeltaPhi mu
-sig_opd0 = np.array([200, 260, 260, 110, 130, 160], dtype=np.float64) # initial guess of DeltaPhi sig
-na0 = np.array([0.08, 0.001, 0.001, 0.011, 0.025, 0.08], dtype=np.float64) # initial guess of astro null
-
-#bounds_mu0[0] = (-1400, -800)
-#bounds_sig0[0] = (50, 250)
-#mu_opd0[0] = -1050
-#sig_opd0[0] = 150
-#na0[0] = 0.09
-#bin_bounds0[0] = (-0.5, 1.5)
-bounds_mu0[0] = (0, 4000)
-
-factor_minus0 = [1., 1, 1, 1.5, 4.5, 2.5] 
-factor_plus0 = [1., 1, 1, 1.5, 2.5, 2] 
-
-''' Import real data '''
-datafolder = 'data202006/AlfBoo/'
-darkfolder = 'data202006/AlfBoo/'
-root = "//tintagel.physics.usyd.edu.au/snert/"
-#root = "C:/Users/marc-antoine/glint/"
-#root = "/mnt/96980F95980F72D3/glint/"
-file_path = root+'GLINTprocessed/'+datafolder
-save_path = file_path+'output/'
-data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n1n4' in f]
-dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark1' in f]
-calib_params_path = file_path#root+'GLINTprocessed/calibration_params/'
-zeta_coeff_path = calib_params_path + '20200604_zeta_coeff_raw.hdf5'
+## =============================================================================
+##  data202006/AlfBoo/ mew wl calib - binned
+## =============================================================================
+#starname = 'Alf Boo'
+#date = '2020-06-01'
+#''' Set the bounds of the parameters to fit '''
+#nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
+#nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
+#bounds_mu0 = [(0, 1000), (2200, 2500), (2200, 2500), (0, 1000), (20000, 26000), (12500, 13500)] # bounds for DeltaPhi mu, one tuple per null
+#bounds_sig0 = [(10, 210), (200, 300), (200, 300), (10,200), (100, 200), (100, 200)] # bounds for DeltaPhi sig
+#bounds_na0 = [(0.0, 0.1), (0., 0.05), (0., 0.01), (0.0, 0.05), (0., 0.2), (0., 0.2)] # bounds for astronull
+#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
+#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
+#bin_bounds0 = [(-0.1, 1.), (-0.1, 0.4), (-0.1, 0.4), (-0.1, 1.), (-0.1, 1.), (-0.1, 1.)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
+#
+##bounds_mu0[4] = (8000, 10500)
+##bounds_na0[4] = (0, 0.2)
+##bounds_sig0[4] = (130, 200)
+#
+#''' Set the initial conditions '''
+#mu_opd0 = np.array([300, 2400, 2400, 400, 9800, 12900], dtype=np.float64) # initial guess of DeltaPhi mu
+#sig_opd0 = np.array([200, 260, 260, 110, 130, 160], dtype=np.float64) # initial guess of DeltaPhi sig
+#na0 = np.array([0.08, 0.001, 0.001, 0.011, 0.025, 0.08], dtype=np.float64) # initial guess of astro null
+#
+##mu_opd0[0] = 3.02383619e+02
+##mu_opd0[3] = 4.05482071e+02
+##mu_opd0[4] = 9.85782767e+03
+##mu_opd0[5] = 1.29190582e+04
+##sig_opd0[0] = 1.63288461e+02
+##sig_opd0[3] = 1.14174033e+02
+##sig_opd0[4] = 1.26271045e+02
+##sig_opd0[5] = 1.70226744e+02
+##na0[0] = 7.04645603e-02
+##na0[3] = 1.10478859e-02
+##na0[4] = 2.32493033e-02
+##na0[5] = 7.80002694e-02
+#
+#factor_minus0 = [1., 1, 1, 1.5, 4.5, 2.5] 
+#factor_plus0 = [1., 1, 1, 1.5, 2.5, 2] 
+#
+#factor_minus0 = [1., 1, 1, 1.5, 4.5, 2] 
+#factor_plus0 = [1., 1, 1, 1.5, 1.5, 1.5] 
+#
+#''' Import real data '''
+#datafolder = 'data202006/AlfBoo/'
+#darkfolder = 'data202006/AlfBoo/'
+#root = "//tintagel.physics.usyd.edu.au/snert/"
+##root = "C:/Users/marc-antoine/glint/"
+##root = "/mnt/96980F95980F72D3/glint/"
+#file_path = root+'GLINTprocessed/'+datafolder
+#save_path = file_path+'output/'
+#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n1n4' in f]
+#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark1' in f]
+#calib_params_path = file_path#root+'GLINTprocessed/calibration_params/'
+#zeta_coeff_path = calib_params_path + '20200604_zeta_coeff_raw.hdf5'
+#
+### With fitted amplitude instead of raw
+##factor_minus0 = [1., 1, 1, 1.5, 4.5, 2.5] 
+##factor_plus0 = [1., 1, 1, 1.5, 2.5, 2] 
+##zeta_coeff_path = calib_params_path + '20200604_zeta_coeff_fit.hdf5'
 
 ## =============================================================================
 ##  data202006/20200605/AlfBoo/
@@ -351,6 +422,89 @@ zeta_coeff_path = calib_params_path + '20200604_zeta_coeff_raw.hdf5'
 #calib_params_path = file_path#root+'GLINTprocessed/calibration_params/'
 #zeta_coeff_path = calib_params_path + '20200604_zeta_coeff_raw.hdf5'
 
+## =============================================================================
+##  data202007/20200705/Del Vir/
+## =============================================================================
+#starname = 'Del Vir'
+#date = '2020-07-05'
+#''' Set the bounds of the parameters to fit '''
+#nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
+#nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
+#bounds_mu0 = [(400, 800), (2200, 2500), (2200, 2500), (0, 800), (7800, 8600), (10800, 11600)] # bounds for DeltaPhi mu, one tuple per null
+#bounds_sig0 = [(50, 200), (200, 300), (200, 300), (50, 150), (50, 150), (50, 250)] # bounds for DeltaPhi sig
+#bounds_na0 = [(0, 0.1), (0., 0.1), (0., 0.01), (0.0, 0.01), (0, 0.01), (0., 0.03)] # bounds for astronull
+#diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
+#xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
+#bin_bounds0 = [(-0.5, 1.5), (-0.1, 0.4), (-0.1, 0.4), (-0.5, 1.5), (-0.5, 1.5), (-0.5, 1.5)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
+#
+#''' Set the initial conditions '''
+#mu_opd0 = np.array([500, 2400, 2400, 540, 8000, 11000], dtype=np.float64) # initial guess of DeltaPhi mu
+#sig_opd0 = np.array([100, 260, 260, 80, 80, 170], dtype=np.float64) # initial guess of DeltaPhi sig
+#na0 = np.array([0.022, 0.001, 0.001, 0.001, 0.007, 0.02], dtype=np.float64) # initial guess of astro null
+#
+##mu_opd0[0] = 5.28582142e+02
+##mu_opd0[3] = 5.23691132e+02
+##mu_opd0[4] = 8.21416419e+03
+##mu_opd0[5] = 1.12587525e+04
+##sig_opd0[0] = 1.15588898e+02
+##sig_opd0[3] = 8.75419645e+01
+##sig_opd0[4] = 1.11547871e+02
+##sig_opd0[5] = 1.66979803e+02
+##na0[0] = 2.14666129e-02
+##na0[3] = 3.30480150e-03
+##na0[4] = 6.85718013e-03
+##na0[5] = 2.46298820e-02
+#
+#factor_minus0 = [1.3, 1, 1, 1.2, 2, 1.] 
+#factor_plus0 = [1.3, 1, 1, 1.2, 1.3, 1.] 
+#
+#''' Import real data '''
+#datafolder = 'data202007/20200705/DelVir/'
+#darkfolder = datafolder
+#root = "//tintagel.physics.usyd.edu.au/snert/"
+##root = "C:/Users/marc-antoine/glint/"
+##root = "/mnt/96980F95980F72D3/glint/"
+#file_path = root+'GLINTprocessed/'+datafolder
+#save_path = file_path+'output2/'
+#data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n1n4' in f]
+##data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n5n6' in f]
+#dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark' in f]
+#calib_params_path = file_path#root+'GLINTprocessed/calibration_params/'
+#zeta_coeff_path = calib_params_path + '20200703_zeta_coeff_raw.hdf5'
+
+# =============================================================================
+# 20200917/Capella
+# =============================================================================
+starname = 'Capella'
+date = '2020-09-17'
+''' Set the bounds of the parameters to fit '''
+nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
+nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
+bounds_mu0 = [(0, 500), (2200, 2500), (2200, 2500), (-4000, 0), (7800, 8600), (10800, 11600)] # bounds for DeltaPhi mu, one tuple per null
+bounds_sig0 = [(20, 140), (200, 300), (200, 300), (40, 140), (50, 150), (50, 250)] # bounds for DeltaPhi sig
+bounds_na0 = [(0, 0.6), (0., 0.1), (0., 0.01), (0.0, 0.3), (0, 0.01), (0., 0.03)] # bounds for astronull
+diffstep = [0.01, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
+xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
+bin_bounds0 = [(-0.5, 2), (-0.1, 0.4), (-0.1, 0.4), (-0.5, 1.25), (-0.5, 1.5), (-0.5, 1.5)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
+
+''' Set the initial conditions '''
+mu_opd0 = np.array([200, 2400, 2400, 560, 8000, 11000], dtype=np.float64) # initial guess of DeltaPhi mu
+sig_opd0 = np.array([100, 260, 260, 80, 80, 170], dtype=np.float64) # initial guess of DeltaPhi sig
+na0 = np.array([0.2, 0.001, 0.001, 0.2, 0.007, 0.02], dtype=np.float64) # initial guess of astro null
+
+factor_minus0 = [2., 1, 1, 1.2, 2, 1.] 
+factor_plus0 = [1.3, 1, 1, 1.2, 2, 1.] 
+
+''' Import real data '''
+datafolder = 'data202009/20200917/Capella/'
+darkfolder = datafolder
+root = "//tintagel.physics.usyd.edu.au/snert/"
+file_path = root+'GLINTprocessed/'+datafolder
+save_path = file_path+'output/'
+data_list = [file_path+f for f in os.listdir(file_path) if '.hdf5' in f and 'n1n4' in f]
+dark_list = [root+'GLINTprocessed/'+darkfolder+f for f in os.listdir(root+'GLINTprocessed/'+darkfolder) if '.hdf5' in f and 'dark2' in f]
+calib_params_path = file_path#root+'GLINTprocessed/calibration_params/'
+zeta_coeff_path = calib_params_path + '20200916_zeta_coeff_raw.hdf5'
 
 # =============================================================================
 # Set the configuration into a dictionay

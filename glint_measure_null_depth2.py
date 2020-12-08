@@ -105,18 +105,18 @@ if __name__ == '__main__':
     no_noise = False
     nb_img = (0, None)
     debug = False
-    save = False
-    nb_files = (0, None)
+    save = True
+    nb_files = (2000, None)
     bin_frames = False
     nb_frames_to_bin = 50
-    spectral_binning = False
+    spectral_binning = True
     wl_bin_min, wl_bin_max = 1525, 1575# In nm
     bandwidth_binning = 50 # In nm
-    mode_flux = 'fit'
+    mode_flux = 'raw'
     activate_estimate_spectrum = False
     nb_files_spectrum = (5000,10000)
     wavelength_bounds = (1400, 1700)
-    suffix = 'dark1_20200601T202755107'
+    suffix = 'n5n6'
 #    ron = 0
     
     mode_flux_list = ['raw', 'fit']
@@ -126,16 +126,15 @@ if __name__ == '__main__':
     ''' Inputs '''
     datafolder = 'data202006/AlfBoo/'
 #    root = "C:/Users/marc-antoine/glint/"
-    root = "/mnt/96980F95980F72D3/glint/"
-    # root = "//tintagel.physics.usyd.edu.au/snert/"
+    # root = "/mnt/96980F95980F72D3/glint/"
+    root = "//tintagel.physics.usyd.edu.au/snert/"
     output_path = root+'GLINTprocessed/'+datafolder
     spectral_calibration_path = output_path
     geometric_calibration_path = output_path
-    # data_path = '//tintagel.physics.usyd.edu.au/snert/GLINTData/'+datafolder
+    data_path = '//tintagel.physics.usyd.edu.au/snert/GLINTData/'+datafolder
     # data_path = 'C:/Users/marc-antoine/glint//GLINTData/'+datafolder
-    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
+    # data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
     data_list = sorted([data_path+f for f in os.listdir(data_path) if suffix in f])
-    data_list = data_list * 5
     plot_name = datafolder.split('/')[-2]
     if len(data_list) == 0:
         raise IndexError('Data list is empty')

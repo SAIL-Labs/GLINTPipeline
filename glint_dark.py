@@ -128,13 +128,14 @@ if __name__ == '__main__':
     edge_min, edge_max = -500, 500
     
     ''' Inputs '''
-    datafolder = '20190719_labcal1550/'
-    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
+    datafolder = 'data202009/20200929/atm/'
+    data_path = '//tintagel.physics.usyd.edu.au/snert/'+'/GLINTData/'+datafolder
+#    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
     dark_list = [data_path+f for f in os.listdir(data_path) if 'dark' in f][nb_files[0]:nb_files[1]]
 
     ''' Output '''
-    # output_path = '//tintagel.physics.usyd.edu.au/snert/GLINTprocessed/'+datafolder
-    output_path = '/mnt/96980F95980F72D3/glint/GLINTprocessed/'+datafolder
+    output_path = '//tintagel.physics.usyd.edu.au/snert/GLINTprocessed/'+datafolder
+#    output_path = '/mnt/96980F95980F72D3/glint/GLINTprocessed/'+datafolder
     if not os.path.exists(output_path):
         os.makedirs(output_path)
         
