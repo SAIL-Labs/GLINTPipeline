@@ -42,6 +42,9 @@ Navigation
    glint_geometric_calibration
    glint_spectral_calibration
    glint_zeta_coeff
+   glint_fitting_gpu
+   glint_fitting_functions
+   glint_fitting_config
 
 Glossary
 ========
@@ -120,7 +123,15 @@ How to self-calibrate the null depth
 ====================================
 The self-calibration of the null depth relies on the modelling of the statistical behaviour of the measured null depth because of the fluctuations
 of intensities and phase.
-The code BARNACLE (BAttling for the measuRements of the Null depth at Any Cost Like a bEast) handles this and its documentation is on its way.
+The code **BARNACLE** (BAttling for the measuRements of the Null depth at Any Cost Like a bEast) handles this and its documentation is on its way.
+In order to know how to use BARNACLE, read the documentation of:
+
+* :doc:`glint_fitting_gpu`
+* :doc:`glint_fitting_functions`
+* :doc:`glint_fitting_config`
+
+Empirically, it is found that data sets of 15 minutes with a frame rate of 1400 Hz give reliable results. 
+It may be possible to use data set of 5 or 10 minutes as well.
 
 Indices and tables
 ==================

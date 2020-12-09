@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Wed Apr 10 11:59:49 2019
-
-@author: mam
+Library of the ``glint_fitting_gpu6.py``.
 """
 
 import numpy as np
@@ -78,6 +76,26 @@ computeCdfCuda = cp.ElementwiseKernel(
     )
 
 def computeCdf(absc, data, mode, normed):
+    """
+    Compute the empirical cumulative density function (CDF) on GPU with CUDA.
+    
+    :Parameters:
+        
+        **absc**: array
+            Abscissa of the CDF.
+        
+        **data**: array
+            Data used to create the CDF.
+        
+        **mode**: string
+            If ``ccdf``, the survival function (complementary of the CDF) is calculated instead.
+        
+        **normed**: bool
+            If ``True``, the CDF is normed so that the maximum is equal to 1.
+        
+    :Returns:
+        **cdf**: CDF of **data**.
+    """
     cdf = cp.zeros(absc.shape, dtype=cp.float32)
     data = cp.asarray(data, dtype=cp.float32)
     absc = cp.asarray(absc, dtype=cp.float32)
@@ -95,10 +113,24 @@ def computeCdf(absc, data, mode, normed):
     return cdf
     
 def rv_generator_wPDF(bins_cent, pdf, nsamp):
-    '''
-    bins_cent : x-axis of the histogram
-    pdf : normalized arbitrary pdf to use to generate rv
-    '''
+    """
+    Random values generator based on the PDF.
+    
+    :Parameters:
+        
+        **bins_cent**: array
+            Centered bins of the PDF.
+        
+        **pdf**: array
+            Normalized arbitrary PDF to use to generate rv.
+        
+        **nsamp**: integer
+            Number of values to generate.
+        
+    :Returns:
+        **output_samples**: array
+            Array of random values generated from the PDF.
+    """
 
     bin_width = bins_cent[1] - bins_cent[0]
     cdf = cp.cumsum(pdf, dtype=cp.float32) * bin_width
@@ -114,11 +146,24 @@ def rv_generator_wPDF(bins_cent, pdf, nsamp):
     return output_samples
 
 def rv_generator(absc, cdf, nsamp):
-    '''
-    absc : cupy-array, x-axis of the histogram
-    cdf : cupy-array, normalized arbitrary pdf to use to generate rv
-    nsamp : int, number of samples to draw
-    '''
+    """
+    Random values generator based on the CDF.
+    
+    :Parameters:
+        
+        **absc**: array
+                Abscissa of the CDF;
+        
+        **cdf**: array
+            Normalized arbitrary CDF to use to generate rv.
+        
+        **nsamp**: integer
+            Number of values to generate.
+        
+    :Returns:
+        **output_samples**: array
+            Array of random values generated from the CDF.
+    """
 
     cdf, mask = cp.unique(cdf, True)    
     cdf_absc = absc[mask]
@@ -130,6 +175,29 @@ def rv_generator(absc, cdf, nsamp):
     return output_samples
 
 def computeCdfCpu(rv, x_axis, normed=True):
+    """
+    Compute the empirical cumulative density function (CDF) on CPU.
+    
+    :Parameters:
+        
+        **rv**: array
+            data used to compute the CDF.
+        
+        **x_axis**: array
+            Abscissa of the CDF.
+        
+        **normed**: bool
+            If ``True``, the CDF is normed so that the maximum is equal to 1.
+        
+    :Returns:
+        
+        **cdf**: array
+            CDF of the **data**.
+        
+        **mask**: array
+            Indexes of cumulated values.
+    """
+    
     cdf = np.ones(x_axis.size)*rv.size
     temp = np.sort(rv)
     idx = 0
@@ -151,6 +219,22 @@ def computeCdfCpu(rv, x_axis, normed=True):
         return cdf, mask
 
 def computeCdfCupy(rv, x_axis):
+    """
+    Compute the empirical cumulative density function (CDF) on GPU with cupy.
+    
+    :Parameters:
+        
+        **rv**: array
+            Data used to compute the CDF.
+        
+        **x_axis**: array
+            Abscissa of the CDF.
+        
+    :Returns:
+        
+        **cdf**: array
+            CDF of **data**.
+    """    
     cdf = cp.ones(x_axis.size, dtype=cp.float32)*rv.size
     temp = cp.asarray(rv, dtype=cp.float32)
     temp = cp.sort(rv)
@@ -165,9 +249,38 @@ def computeCdfCupy(rv, x_axis):
         
     cdf = cdf / rv.size
     
-    return 1-cdf
+    return cdf
     
 def load_data(data, wl_edges, null_key, nulls_to_invert, *args, **kwargs):
+    """
+    Load data from data file to create the histograms of the null depths and do Monte-Carlo.
+    
+    :Parameters:
+        
+        **data**: array
+            List of data files.
+        
+        **wl_edges**: 2-tuple
+            Lower and upper bounds of the spectrum to load.
+        
+        **null_key**: string
+            Baseline to load.
+        
+        **nulls_to_invert**: list
+            List of nulls to invert because their null and antinull outputs are swapped.
+        
+        **args**: extra arguments
+            Use dark data to get the error on the null depth.
+        
+        **kwargs**: extra keyword arguments
+            Performs temporal binning of frames.
+
+    :Returns:
+        
+        **out**: dictionary
+            Includes data to use for the fit: flux in (anti-)null and phtometric outputs, errors, wavelengths.
+
+    """
     # Null table for getting the null and associated photometries in the intermediate data
     # Structure = Chosen null:[number of null, photometry A and photometry B]
     null_table = {'null1':[1,1,2], 'null2':[2,2,3], 'null3':[3,1,4], \
@@ -259,6 +372,21 @@ def load_data(data, wl_edges, null_key, nulls_to_invert, *args, **kwargs):
     return out
 
 def getErrorNull(data_dic, dark_dic):
+    """
+    Compute the error of the null depth.
+
+    :Parameters:
+        
+        **data_dic**: dictionary
+            Dictionary of the data from ``load_data``.
+        
+        **dark_dic**: dictionary
+            Dictionary of the dark from ``load_data``.
+
+    :Returns:
+        **std_null** : array
+            Array of the error on the null depths.
+    """
     var_Iminus = dark_dic['Iminus'].var(axis=-1)[:,None]
     var_Iplus = dark_dic['Iplus'].var(axis=-1)[:,None]
     Iminus = data_dic['Iminus']
@@ -269,6 +397,32 @@ def getErrorNull(data_dic, dark_dic):
     return std_null
 
 def getHistogram(data, bins, density, target='cpu'):
+    """
+    **DISCARDED**
+    
+    Compute the histogram of the data.
+
+    :Parameters:
+        
+        **data**: array
+            Data from which we want the histogram.
+        
+        **bins**: array
+            Left-edge of the bins of the histogram but the last value which is the right-edge of the last bin.
+        
+        **density**: bool
+            If ``True``, the histogram is normalized as described in documentation of ``np.histogram``.
+        
+        **target**: string, optional
+            Indicates what creates the histograms: the ``cpu`` or the ``gpu``. The default is 'cpu'.
+
+    :Returns:
+        **pdf**: array
+            PDF of the data.
+        
+        **bins_cent**: array
+            Centered bins of the histogram.
+    """
     pdf, bin_edges = np.histogram(data, bins=bins, density=density)
     bins_cent = bin_edges[:-1] + np.diff(bin_edges[:2])/2.
     
@@ -278,6 +432,33 @@ def getHistogram(data, bins, density, target='cpu'):
     return pdf, bins_cent
 
 def getHistogramOfIntensities(data, bins, split, target='cpu'):
+    """
+    **DISCARDED**
+    
+    Compute the histograms of the photometric outputs.
+
+    :Parameters:
+        
+        **data**: array
+            Data from which we want the histogram.
+        
+        **bins**: array
+            Left-edge of the bins of the histogram but the last value which is the right-edge of the last bin.
+        
+        **split**: ????
+        
+        **target**: string, optional
+            Indicates what creates the histograms: the ``cpu`` or the ``gpu``. The default is 'cpu'.
+
+
+    :Returns:
+        
+        **pdf_I_interf**: array
+            PDF of the intensities.
+        
+        **bins_cent**: array
+            Centered bins of the histogram.
+    """
     pdf_I = [[np.histogram(selt, bins) for selt in elt] for elt in data]
     bin_edges = np.array([[selt[1] for selt in elt] for elt in pdf_I])
     pdf_I = np.array([[selt[0] for selt in elt] for elt in pdf_I])
@@ -294,6 +475,71 @@ def getHistogramOfIntensities(data, bins, split, target='cpu'):
 
 def computeNullDepth(na, IA, IB, wavelength, opd, phase_bias, dphase_bias, dark_null, dark_antinull, 
                      zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B, spec_chan_width, oversampling_switch, switch_invert_null):
+    """
+    Compute the null depth from generated random values of photometries, detector noise and OPD. 
+    The estimator is the ratio of the null over the antinull fluxes.
+
+    :Parameters:
+        
+        **na**: float
+            Astrophysical null depth.
+        
+        **IA**: array
+            Values of intensity of beam A in the fringe pattern.
+        
+        **IB**: array
+            Values of intensity of beam B in the fringe pattern.
+        
+        **wavelength** : float
+            Wavelength of the fringe pattern.
+
+        **opd**: array
+            Value of OPD in nm.
+
+        **phase_bias**: float
+            Achromatic phase offset in radian.
+
+        **dphase_bias**: float
+            Achromatic phase offset complement in radian (originally supposed to be fitted but now set to 0).
+
+        **dark_null**: array
+            Synthetic values of detector noise in the null output.
+
+        **dark_antinull**: array
+            Synthetic values of detector noise in the antinull output. 
+
+        **zeta_minus_A**: float
+            Value of the zeta coefficient between null and photometric outputs for beam B.
+
+        **zeta_minus_B**: float
+            Value of the zeta coefficient between null and photometric outputs for beam B.
+
+        **zeta_plus_A**: float
+            Value of the zeta coefficient between antinull and photometric outputs for beam A.
+
+        **zeta_plus_B**: float
+            Value of the zeta coefficient between antinull and photometric outputs for beam B.
+
+        **spec_chan_width**: float
+            Width of a spectral channel in nm.
+
+        **oversampling_switch**: bool
+            If ``True``, the spectral channel is oversampled and averaged to take into account the loss of temporal coherence.
+
+        **switch_invert_null**: bool
+            If ``True``, the null and antinull sequences are swapped because they are swapped on real data.
+
+    :Returns:
+        
+        **null**: array
+            Synthetic sequence of null dephts.
+        
+        **Iminus**: array
+            Synthetic sequence of flux in the null output.
+        
+        **Iplus**: array
+            Synthetic sequence of flux in the antinull output.
+    """
     
     visibility = (1 - na) / (1 + na)
     wave_number = 1./wavelength
@@ -328,7 +574,60 @@ def computeNullDepth(na, IA, IB, wavelength, opd, phase_bias, dphase_bias, dark_
 
 def computeNullDepthNoAntinull(IA, IB, wavelength, opd, dark_null, dark_antinull, 
                      zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B, spec_chan_width, oversampling_switch, switch_invert_null):
-    
+    """
+    Compute the null depth from generated random values of photometries, detector noise and OPD. 
+    The estimator is the ratio of the null over the antinull fluxes.
+    The antinull flux is considered as a pure constructive fringe.
+
+    :Parameters:        
+        
+        **IA**: array
+            Values of intensity of beam A in the fringe pattern.
+        
+        **IB**: array
+            Values of intensity of beam B in the fringe pattern.
+        
+        **wavelength** : float
+            Wavelength of the fringe pattern.
+
+        **opd**: array
+            Value of OPD in nm.
+
+        **dark_null**: array
+            Synthetic values of detector noise in the null output.
+
+        **dark_antinull**: array
+            Synthetic values of detector noise in the antinull output. 
+
+        **zeta_minus_A**: float
+            Value of the zeta coefficient between null and photometric outputs for beam B.
+
+        **zeta_minus_B**: float
+            Value of the zeta coefficient between null and photometric outputs for beam B.
+
+        **zeta_plus_A**: float
+            Value of the zeta coefficient between antinull and photometric outputs for beam A.
+
+        **zeta_plus_B**: float
+            Value of the zeta coefficient between antinull and photometric outputs for beam B.
+
+        **spec_chan_width**: float
+            Width of a spectral channel in nm.
+
+        **oversampling_switch**: bool
+            If ``True``, the spectral channel is oversampled and averaged to take into account the loss of temporal coherence.
+
+        **switch_invert_null**: bool
+            If ``True``, the null and antinull sequences are swapped because they are swapped on real data.
+
+    :Returns:        
+        
+        **Iminus**: array
+            Synthetic sequence of flux in the null output.
+        
+        **Iplus**: array
+            Synthetic sequence of flux in the antinull output.
+    """    
     wave_number = 1./wavelength
     sine = cp.sin(2*np.pi*wave_number*(opd))
     if oversampling_switch:
@@ -354,6 +653,70 @@ def computeNullDepthNoAntinull(IA, IB, wavelength, opd, dark_null, dark_antinull
 def computeNullDepth2(na, IA, IB, wavelength, opd, phase_bias, dphase_bias, dark_null, dark_antinull, 
                      zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B, spec_chan_width, oversampling_switch, switch_invert_null, sig_opd):
  
+    """
+    **DISCARDED**
+    
+    Compute the null depth from generated random values of photometries, detector noise and OPD. 
+    The interferometric term is weighted by the loss of coherence expressed as the exponential form :math:`e^{-(2\pi/\lambda \sigma_{OPD})^2 / 2}`.
+
+    :Parameters:
+        
+        **na**: float
+            Astrophysical null depth.
+        
+        **IA**: array
+            Values of intensity of beam A in the fringe pattern.
+        
+        **IB**: array
+            Values of intensity of beam B in the fringe pattern.
+        
+        **wavelength** : float
+            Wavelength of the fringe pattern.
+
+        **opd**: array
+            Value of OPD in nm.
+
+        **dark_null**: array
+            Synthetic values of detector noise in the null output.
+
+        **dark_antinull**: array
+            Synthetic values of detector noise in the antinull output. 
+
+        **zeta_minus_A**: float
+            Value of the zeta coefficient between null and photometric outputs for beam B.
+
+        **zeta_minus_B**: float
+            Value of the zeta coefficient between null and photometric outputs for beam B.
+
+        **zeta_plus_A**: float
+            Value of the zeta coefficient between antinull and photometric outputs for beam A.
+
+        **zeta_plus_B**: float
+            Value of the zeta coefficient between antinull and photometric outputs for beam B.
+
+        **spec_chan_width**: float
+            Width of a spectral channel in nm.
+
+        **oversampling_switch**: bool
+            If ``True``, the spectral channel is oversampled and averaged to take into account the loss of temporal coherence.
+
+        **switch_invert_null**: bool
+            If ``True``, the null and antinull sequences are swapped because they are swapped on real data.
+        
+        **sig_opd**: float
+            Standard deviation of the fluctuations of OPD.
+
+    :Returns:
+        
+        **null**: array
+            Synthetic sequence of null dephts.
+        
+        **Iminus**: array
+            Synthetic sequence of flux in the null output.
+        
+        **Iplus**: array
+            Synthetic sequence of flux in the antinull output.
+    """
     visibility = (1 - na) / (1 + na)
     wave_number = 1./wavelength
     sine = cp.sin(2*np.pi*wave_number*(opd) + phase_bias + dphase_bias)
@@ -383,6 +746,72 @@ def computeNullDepth2(na, IA, IB, wavelength, opd, phase_bias, dphase_bias, dark
 
 def computeNullDepthLinear(na, IA, IB, wavelength, opd, phase_bias, dphase_bias, dark_null, dark_antinull, 
                      zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B, spec_chan_width, oversampling_switch, switch_invert_null):
+
+    """
+    Compute the null depth from generated random values of photometries, detector noise and OPD. 
+    The estimator is the linear expression :math:`N =  N_a + N_{instr}`.
+
+    :Parameters:
+        
+        **na**: float
+            Astrophysical null depth.
+        
+        **IA**: array
+            Values of intensity of beam A in the fringe pattern.
+        
+        **IB**: array
+            Values of intensity of beam B in the fringe pattern.
+        
+        **wavelength** : float
+            Wavelength of the fringe pattern.
+
+        **opd**: array
+            Value of OPD in nm.
+
+        **phase_bias**: float
+            Achromatic phase offset in radian.
+
+        **dphase_bias**: float
+            Achromatic phase offset complement in radian (originally supposed to be fitted but now set to 0).
+
+        **dark_null**: array
+            Synthetic values of detector noise in the null output.
+
+        **dark_antinull**: array
+            Synthetic values of detector noise in the antinull output. 
+
+        **zeta_minus_A**: float
+            Value of the zeta coefficient between null and photometric outputs for beam B.
+
+        **zeta_minus_B**: float
+            Value of the zeta coefficient between null and photometric outputs for beam B.
+
+        **zeta_plus_A**: float
+            Value of the zeta coefficient between antinull and photometric outputs for beam A.
+
+        **zeta_plus_B**: float
+            Value of the zeta coefficient between antinull and photometric outputs for beam B.
+
+        **spec_chan_width**: float
+            Width of a spectral channel in nm.
+
+        **oversampling_switch**: bool
+            If ``True``, the spectral channel is oversampled and averaged to take into account the loss of temporal coherence.
+
+        **switch_invert_null**: bool
+            If ``True``, the null and antinull sequences are swapped because they are swapped on real data.
+
+    :Returns:
+    
+        **null**: array
+            Synthetic sequence of null dephts.
+        
+        **Iminus**: array
+            Synthetic sequence of flux in the null output.
+        
+        **Iplus**: array
+            Synthetic sequence of flux in the antinull output.
+    """
     
     astroNull = na
     wave_number = 1./wavelength
@@ -406,7 +835,71 @@ def computeNullDepthLinear(na, IA, IB, wavelength, opd, phase_bias, dphase_bias,
 
 def computeHanot(na, IA, IB, wavelength, opd, phase_bias, dphase_bias, dark_null, dark_antinull, 
                      zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B, spec_chan_width, oversampling_switch, switch_invert_null):
-    
+    """
+    Compute the null depth from generated random values of photometries, detector noise and OPD. 
+    The estimator is the one used in Hanot et al. (2011)(https://ui.adsabs.harvard.edu/abs/2011ApJ...729..110H/abstract).
+
+    :Parameters:
+        
+        **na**: float
+            Astrophysical null depth.
+        
+        **IA**: array
+            Values of intensity of beam A in the fringe pattern.
+        
+        **IB**: array
+            Values of intensity of beam B in the fringe pattern.
+        
+        **wavelength** : float
+            Wavelength of the fringe pattern.
+
+        **opd**: array
+            Value of OPD in nm.
+
+        **phase_bias**: float
+            Achromatic phase offset in radian.
+
+        **dphase_bias**: float
+            Achromatic phase offset complement in radian (originally supposed to be fitted but now set to 0).
+
+        **dark_null**: array
+            Synthetic values of detector noise in the null output.
+
+        **dark_antinull**: array
+            Synthetic values of detector noise in the antinull output. 
+
+        **zeta_minus_A**: float
+            Value of the zeta coefficient between null and photometric outputs for beam B.
+
+        **zeta_minus_B**: float
+            Value of the zeta coefficient between null and photometric outputs for beam B.
+
+        **zeta_plus_A**: float
+            Value of the zeta coefficient between antinull and photometric outputs for beam A.
+
+        **zeta_plus_B**: float
+            Value of the zeta coefficient between antinull and photometric outputs for beam B.
+
+        **spec_chan_width**: float
+            Width of a spectral channel in nm.
+
+        **oversampling_switch**: bool
+            If ``True``, the spectral channel is oversampled and averaged to take into account the loss of temporal coherence.
+
+        **switch_invert_null**: bool
+            If ``True``, the null and antinull sequences are swapped because they are swapped on real data.
+
+    :Returns:
+        
+        **null**: array
+            Synthetic sequence of null dephts.
+        
+        **Iminus**: array
+            Synthetic sequence of flux in the null output.
+        
+        **Iplus**: array
+            Synthetic sequence of flux in the antinull output.
+    """    
     astroNull = na
     wave_number = 1./wavelength
     DeltaPhi = 2*np.pi*wave_number*(opd) + phase_bias + dphase_bias
@@ -423,15 +916,74 @@ def computeHanot(na, IA, IB, wavelength, opd, phase_bias, dphase_bias, dark_null
 
 def computeNullDepthCos(IA, IB, wavelength, offset_opd, dopd, phase_bias, dphase_bias, na, dark_null, dark_antinull, 
                      zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B, spec_chan_width, oversampling_switch):
-    
+    """
+    Compute the null depth from generated random values of photometries, detector noise and OPD. 
+    The estimator is the ratio of the null over the antinull fluxes.
+    The interferometric term uses a cosine and not a sine function.
+
+    :Parameters:
+        
+        **na**: float
+            Astrophysical null depth.
+        
+        **IA**: array
+            Values of intensity of beam A in the fringe pattern.
+        
+        **IB**: array
+            Values of intensity of beam B in the fringe pattern.
+        
+        **wavelength** : float
+            Wavelength of the fringe pattern.
+
+        **opd**: array
+            Value of OPD in nm.
+
+        **phase_bias**: float
+            Achromatic phase offset in radian.
+
+        **dphase_bias**: float
+            Achromatic phase offset complement in radian (originally supposed to be fitted but now set to 0).
+
+        **dark_null**: array
+            Synthetic values of detector noise in the null output.
+
+        **dark_antinull**: array
+            Synthetic values of detector noise in the antinull output. 
+
+        **zeta_minus_A**: float
+            Value of the zeta coefficient between null and photometric outputs for beam B.
+
+        **zeta_minus_B**: float
+            Value of the zeta coefficient between null and photometric outputs for beam B.
+
+        **zeta_plus_A**: float
+            Value of the zeta coefficient between antinull and photometric outputs for beam A.
+
+        **zeta_plus_B**: float
+            Value of the zeta coefficient between antinull and photometric outputs for beam B.
+
+        **spec_chan_width**: float
+            Width of a spectral channel in nm.
+
+        **oversampling_switch**: bool
+            If ``True``, the spectral channel is oversampled and averaged to take into account the loss of temporal coherence.
+
+        **switch_invert_null**: bool
+            If ``True``, the null and antinull sequences are swapped because they are swapped on real data.
+
+    :Returns:
+        
+        **null**: array
+            Synthetic sequence of null dephts.
+    """    
     visibility = (1 - na) / (1 + na)
     wave_number = 1./wavelength
     sine = cp.cos(2*np.pi*wave_number*(offset_opd + dopd) + phase_bias + dphase_bias)
-#    if oversampling_switch:
-#        delta_wave_number = abs(1/(wavelength + spec_chan_width/2) - 1/(wavelength - spec_chan_width/2))
-#        arg = np.pi*delta_wave_number * (offset_opd + dopd)
-#        sinc = cp.sin(arg) / arg
-#        sine = sine * sinc
+    if oversampling_switch:
+        delta_wave_number = abs(1/(wavelength + spec_chan_width/2) - 1/(wavelength - spec_chan_width/2))
+        arg = np.pi*delta_wave_number * (offset_opd + dopd)
+        sinc = cp.sin(arg) / arg
+        sine = sine * sinc
         
     Iminus = IA*zeta_minus_A + IB*zeta_minus_B - \
         2 * np.sqrt(IA * IB) * np.sqrt(zeta_minus_A*zeta_minus_B) * visibility * sine + \
@@ -444,7 +996,71 @@ def computeNullDepthCos(IA, IB, wavelength, offset_opd, dopd, phase_bias, dphase
 
 def computeNullDepthLinearCos(na, IA, IB, wavelength, opd, phase_bias, dphase_bias, dark_null, dark_antinull, 
                      zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B, spec_chan_width, oversampling_switch):
-    
+    """
+    Compute the null depth from generated random values of photometries, detector noise and OPD. 
+    The estimator is the linear expression :math:`N =  N_a + N_{instr}`.
+    The interferometric term uses a cosine and not a sine function.
+
+    :Parameters:
+        **na**: float
+            Astrophysical null depth.
+        
+        **IA**: array
+            Values of intensity of beam A in the fringe pattern.
+        
+        **IB**: array
+            Values of intensity of beam B in the fringe pattern.
+        
+        **wavelength** : float
+            Wavelength of the fringe pattern.
+
+        **opd**: array
+            Value of OPD in nm.
+
+        **phase_bias**: float
+            Achromatic phase offset in radian.
+
+        **dphase_bias**: float
+            Achromatic phase offset complement in radian (originally supposed to be fitted but now set to 0).
+
+        **dark_null**: array
+            Synthetic values of detector noise in the null output.
+
+        **dark_antinull**: array
+            Synthetic values of detector noise in the antinull output. 
+
+        **zeta_minus_A**: float
+            Value of the zeta coefficient between null and photometric outputs for beam B.
+
+        **zeta_minus_B**: float
+            Value of the zeta coefficient between null and photometric outputs for beam B.
+
+        **zeta_plus_A**: float
+            Value of the zeta coefficient between antinull and photometric outputs for beam A.
+
+        **zeta_plus_B**: float
+            Value of the zeta coefficient between antinull and photometric outputs for beam B.
+
+        **spec_chan_width**: float
+            Width of a spectral channel in nm.
+
+        **oversampling_switch**: bool
+            If ``True``, the spectral channel is oversampled and averaged to take into account the loss of temporal coherence.
+
+        **switch_invert_null**: bool
+            If ``True``, the null and antinull sequences are swapped because they are swapped on real data.
+
+    :Returns:
+        
+        **null**: array
+            Synthetic sequence of null dephts.
+        
+        **Iminus**: array
+            Synthetic sequence of flux in the null output.
+        
+        **Iplus**: array
+            Synthetic sequence of flux in the antinull output.
+    """    
     astroNull = na
     wave_number = 1./wavelength
     cosine = cp.cos(2*np.pi*wave_number*(opd) + phase_bias + dphase_bias)
@@ -459,17 +1075,30 @@ def computeNullDepthLinearCos(na, IA, IB, wavelength, opd, phase_bias, dphase_bi
     null = Iminus / Iplus
     return null + astroNull
 
-def computeNullDepthLinearCos2(IA, IB, na, dark_null, dark_antinull, zeta_minus_A, zeta_minus_B, zeta_plus_A, zeta_plus_B, DeltaPhi):
-    
-    astroNull = na
-    cosine = cp.cos(DeltaPhi)
-    Iminus = IA*zeta_minus_A + IB*zeta_minus_B - 2 * np.sqrt(IA * IB) * np.sqrt(zeta_minus_A*zeta_minus_B) * cosine + dark_null
-    Iplus = IA*zeta_plus_A + IB*zeta_plus_B + 2 * np.sqrt(IA * IB) * np.sqrt(zeta_plus_A*zeta_plus_B) * cosine + dark_antinull
-    null = Iminus / Iplus
-    return null + astroNull
-
 
 def get_zeta_coeff(path, wl_scale, plot=False, **kwargs):
+    """
+    Interpolate the zeta coefficients for the requested wavelengths.
+
+    :Parameters:
+        
+        **path**: string
+            Path to the zeta coefficients' file.
+
+        **wl_scale**: array
+            List of wavelength for which we want the zeta coefficients
+
+        **plot**: bool, optional
+            If ``True``, the plot of the interpolated zeta coefficients curve is displayed. The default is False.
+    
+        **kwargs**: extra keyword arguments
+            Bins the zeta coefficient between the specified wavelength in this keyword.
+
+    :Returns:
+        
+        **coeff_new** : dictionary
+            Dictionary of the interpolated zeta coefficients.
+    """
     coeff_new = {}
     with h5py.File(path, 'r') as coeff:
         wl = np.array(coeff['wl_scale'])[::-1]
@@ -500,55 +1129,29 @@ def get_zeta_coeff(path, wl_scale, plot=False, **kwargs):
             plt.ylim(-1,10)
     
     return coeff_new
-
-def flattop(x):
-    y = 2/(np.pi * x**2) * (np.cos(x/2) - np.cos(x))
-    y[np.isnan(y)] = 1/np.pi * 0.75
-    return y
-
-def pdfDeconvolution(bins, histo_photo, histo_noise, bandwidth, plots=False):
-    '''
-    pdfs must be normalised by their sum
-    '''
-    step = bins[1]-bins[0]
-    freq = np.fft.fftshift(np.fft.fftfreq(bins.size, step))
-    ffthisto = np.fft.fftshift(np.fft.fft(histo_photo))
-    fftnoise = np.fft.fftshift(np.fft.fft(histo_noise))
-        
-    kernel = flattop(bins*bandwidth)
-    kernel /= kernel.sum()
-    
-    fftk = np.fft.fftshift(np.fft.fft(kernel))    
-    fftz = fftk * ffthisto
-    fftdeconv = fftz / fftnoise
-
-    deconv = np.real(np.fft.ifft(np.fft.fftshift(fftdeconv)))
-    
-    if plots:
-        plt.figure()
-        plt.semilogy(freq, abs(ffthisto), label='Data')
-        plt.semilogy(freq, abs(fftnoise), label='Noise')
-        plt.semilogy(freq, abs(fftk), 'o', label='Kernel')
-        plt.semilogy(freq, abs(fftz), '^', label='Kerneled data')
-        plt.semilogy(freq, abs(fftdeconv), label='Deconvolved')
-        plt.grid()
-        plt.legend(loc='best')
-        plt.xlabel(r'Frequency (binwidth$^{-1}$)')
-        plt.ylabel('Amplitude (AU)')
-        
-        plt.figure()
-        plt.plot(bins, histo_photo/histo_photo.max(), label='Data')
-        plt.plot(bins, histo_noise/histo_noise.max(), label='Noise')
-        plt.plot(bins, deconv/deconv.max(), label='Deconvolved')
-        plt.grid()
-        plt.legend(loc='best')
-        plt.xlabel('Bins')
-        plt.ylabel('Count (normalised)')
-        
-    return deconv
  
 
 def getErrorCDF(data_null, data_null_err, null_axis):
+    """
+    Calculate the error of the CDF. It uses the cupy library.
+
+    :Parameters:
+    
+        **data_null**: array
+            Null depth measurements used to create the CDF.
+            
+        **data_null_err**: array
+            Error on the null depth measurements.
+            
+        **null_axis**: array
+            Abscissa of the CDF.
+            
+
+    :Returns:
+    
+            **std**: cupy array
+                Error of the CDF.
+    """
     data_null = cp.asarray(data_null)
     data_null_err = cp.asarray(data_null_err)
     null_axis = cp.asarray(null_axis)
@@ -562,6 +1165,26 @@ def getErrorCDF(data_null, data_null_err, null_axis):
     return cp.asnumpy(std)
 
 def getErrorPDF(data_null, data_null_err, null_axis):
+    """
+    Calculate the error of the PDF. It uses the cupy library.
+
+    :Parameters:
+    
+        **data_null**: array
+            Null depth measurements used to create the PDF.
+            
+        **data_null_err**: array
+            Error on the null depth measurements.
+            
+        **null_axis**: array
+            Abscissa of the CDF.
+            
+
+    :Returns:
+    
+            **std**: array
+                Error of the PDF.
+    """    
     data_null = cp.asarray(data_null)
     data_null_err = cp.asarray(data_null_err)
     null_axis = cp.asarray(null_axis)
@@ -576,22 +1199,118 @@ def getErrorPDF(data_null, data_null_err, null_axis):
     return cp.asnumpy(std)
    
 def doubleGaussCdf(x, mu1, mu2, sig1, sig2, A):
+    """
+    Calculate the CDF of the sum of two normal distributions.
+
+    :Parameters:
+
+        **x** : array
+            Abscissa of the CDF.
+            
+        **mu1**: float
+            Location parameter of the first normal distribution.
+            
+        **mu2**: float
+            Location parameter of the second normal distribution.
+            
+        **sig1**: float
+            Scale parameter of the first normal distribution.
+            
+        **sig2**: float
+            Scale parameter of the second normal distribution.
+            
+        **A**: float
+            Relative amplitude of the second distribution with respect to the first one.
+
+    :Returns:
+        
+        Array
+            CDF of the double normal distribution.
+    """
     return sig1/(sig1+A*sig2) * ndtr((x-mu1)/(sig1)) + A*sig2/(sig1+A*sig2) * ndtr((x-mu2)/(sig2))
 
 def getErrorBinomNorm(pdf, data_size):
-    cdf_err = ((pdf * (1 - pdf))/(data_size))**0.5 # binom-norm
-    cdf_err[cdf_err==0] = cdf_err[cdf_err!=0].min()
-    return cdf_err
+    """
+    Calculate the error of the PDF knowing the number of elements in a bin is a random value following a binomial distribution.
+
+    :Parameters:
+
+        **pdf** : array
+            Normalized PDF which the error is calculated.
+            
+        **data_size**: integer
+            Number of elements used to calculate the PDF.
+
+    :Returns:
+    
+        **pdf_err** : array
+            Error of the PDF.
+    """
+    pdf_err = ((pdf * (1 - pdf))/(data_size))**0.5 # binom-norm
+    pdf_err[pdf_err==0] = pdf_err[pdf_err!=0].min()
+    return pdf_err
 
 def getErrorWilson(cdf, data_size, confidence):
+    """
+    DISCARDED.
+    Calculate the error of the CDF following the Wilson estimator (https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval#Wilson_score_interval).
+
+    :Parameters:
+    
+        **cdf** : array
+            CDF for which we want the error.
+            
+        **data_size**: integer
+            Number of elements used to calculate the CDF.
+            
+        **confidence**: float between 0 and 1
+            Requested confident interval.
+            
+
+    :Returns:
+    
+        **cdf_err**: array
+            Error on the CDF.
+    """
     z = norm.ppf((1+confidence)/2)
     cdf_err = z / (1 + z**2/data_size) * np.sqrt(cdf*(1-cdf)/data_size + z**2/(4*data_size**2))# Wilson
     return cdf_err
 
 
-def rv_gen_doubleGauss(nsamp, mu1, mu2, sig1, A, target):
+def rv_gen_doubleGauss(nsamp, mu1, mu2, sig, A, target):
+    """
+    Random values generator according to a double normal distribution with the same scale factor.
+    This function uses cupy to generate the values.
+    
+    This function can be used to model the phase distribution as a double normal distribution if the fluctuations present two modes.
+
+    :Parameters:
+    
+        **nsamp** : integer
+            Number of random values to generate.
+            
+        **mu1**: float
+            Location parameter of the first normal distribution.
+            
+        **mu2**: float
+            Location parameter of the second normal distribution.
+            
+        **sig**: float
+            Scale parameter of the both normal distributions.
+            
+        **A**: float
+            Relative amplitude of the second normal distribution with respect to the first one.
+            
+        **target**: string
+            If ``target = cpu``, the random values are transferred from the graphic card memory to the RAM.
+
+    :Returns:
+    
+        **rv** : array or cupy array
+            Random values generated according to the double normal distribution.
+    """
     x, step = cp.linspace(-2500,2500, 10000, endpoint=False, retstep=True, dtype=cp.float32)
-    cdf = doubleGaussCdf(x, mu1, mu2, sig1, A)
+    cdf = doubleGaussCdf(x, mu1, mu2, sig, A)
     cdf = cp.asarray(cdf, dtype=cp.float32)
     if target == 'cpu':
         rv = cp.asnumpy(rv_generator(x, cdf, nsamp))
@@ -602,6 +1321,30 @@ def rv_gen_doubleGauss(nsamp, mu1, mu2, sig1, A, target):
 
 
 def _wrap_func(func, xdata, ydata, transform):
+    """
+    Wrapper called by ``curvefit`` to calculate the cost function to minimize.
+    
+    Copy/pasted and adpated from https://github.com/scipy/scipy/blob/v1.5.4/scipy/optimize/minpack.py, line 481.
+
+    :Parameters:
+    
+        **func**: function to fit.
+            
+        **xdata** : array
+            The independent variable where the data is measured.
+            Should usually be an M-length sequence or an (k,M)-shaped array for
+            functions with k predictors, but can actually be any object.
+        
+        **ydata**: array
+            The dependent data, a length M array - nominally ``f(xdata, ...)``.
+            
+        **transform**: array
+            Weight on the data defined by :math:``1/\sigma`` where :math:``\sigma`` is the error on the y-values.
+
+    :Returns:
+    
+        Cost function to minimize.
+    """
     if transform is None:
         def func_wrapped(params):
             return func(xdata, *params) - ydata
@@ -611,13 +1354,142 @@ def _wrap_func(func, xdata, ydata, transform):
 
     return func_wrapped
 
-def curvefit(func, xdata, ydata, p0=None, sigma=None, bounds=(-np.inf,np.inf), diff_step=None, x_scale=1):
-    ''' The scipy wrapper 'curve_fit' does not give all the outputs of the least_squares function but gives the covariance matrix 
+def curvefit(func, xdata, ydata, p0=None, sigma=None, bounds=(None, None), diff_step=None, x_scale=1):
+    """
+    Adaptation from the Scipy wrapper ``curve_fit``.
+    The Scipy wrapper ``curve_fit`` does not give all the outputs of the least_squares function but gives the covariance matrix 
     (not given by the latter function).
     So I create a new wrapper giving both.
-    I just copy/paste the code source of the official wrapper and create new outputs for getting the information I need.
-    The algorithm is TRF'''
+    I just copy/paste the code source of the official wrapper (https://github.com/scipy/scipy/blob/v1.5.4/scipy/optimize/minpack.py#L532-L834) 
+    and create new outputs for getting the information I need.
+    The algorithm is Trust-Reflective-Region.
     
+    For exact documentation of the arguments ``diff_step`` and ``x_scale``, see https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html#scipy.optimize.least_squares.
+
+    :Parameters:
+    
+        **func**: function to fit on data.
+            
+        **xdata** : array.
+            The independent variable where the data is measured.
+            Should usually be an M-length sequence or an (k,M)-shaped array for
+            functions with k predictors, but can actually be any object.
+        
+        **ydata**: array
+            The dependent data, a length M array - nominally ``f(xdata, ...)``.
+            
+        **p0**: list, optional
+            Initial guess for the parameters (length N). If None, then the
+            initial values will all be 1 (if the number of parameters for the
+            function can be determined using introspection, otherwise a
+            The default is None.
+        
+        **sigma**: None or M-length sequence, optional. 
+            Determines the uncertainty in `ydata`. If we define residuals as
+            ``r = ydata - f(xdata, *popt)``. The default is None.
+        
+        **bounds**: 2-tuple of array_like, optional
+            Lower and upper bounds on parameters. Defaults to no bounds.
+            Each element of the tuple must be either an array with the length equal
+            to the number of parameters, or a scalar (in which case the bound is
+            taken to be the same for all parameters). Use ``np.inf`` with an
+            appropriate sign to disable bounds on all or some parameters. 
+            The default is (None, None).
+        
+        **diff_step**:  None or scalar or array_like, optional
+            Determines the relative step size for the finite difference
+            approximation of the Jacobian. The actual step is computed as
+            ``x * diff_step``. If None (default), then `diff_step` is taken to be
+            a conventional "optimal" power of machine epsilon for the finite
+            difference scheme used `William H. Press et. al., “Numerical Recipes. The Art of Scientific Computing. 3rd edition”, Sec. 5.7.`.
+            The default is None.
+        
+        **x_scale**: array_like or scalar, optional
+            Characteristic scale of each variable. Setting `x_scale` is equivalent
+            to reformulating the problem in scaled variables ``xs = x / x_scale``.
+            An alternative view is that the size of a trust region along jth
+            dimension is proportional to ``x_scale[j]``. Improved convergence may
+            be achieved by setting `x_scale` such that a step of a given size
+            along any of the scaled variables has a similar effect on the cost
+            function. If set to 'jac', the scale is iteratively updated using the
+            inverse norms of the columns of the Jacobian matrix (as described in
+            `J. J. More, “The Levenberg-Marquardt Algorithm: Implementation and Theory,” Numerical Analysis, ed. G. A. Watson, Lecture Notes in Mathematics 630, Springer Verlag, pp. 105-116, 1977.`).
+            The default is 1.
+
+    :Raises:
+    
+        **ValueError**: "Unable to determine number of fit parameters". 
+            If either `ydata` or `xdata` contain NaNs, or if incompatible options are used.
+
+    :Returns:
+    
+        **popt**: array
+        Optimal values for the parameters so that the sum of the squared
+        residuals of ``f(xdata, *popt) - ydata`` is minimized.
+
+        **pcov**: 2-D array
+            The estimated covariance of popt. The diagonals provide the variance
+            of the parameter estimate. To compute one standard deviation errors
+            on the parameters use ``perr = np.sqrt(np.diag(pcov))``.
+
+        **res** : `OptimizeResult` with the following fields defined:
+            
+            * x : ndarray, shape (n,)
+                Solution found.
+            * cost : float
+                Value of the cost function at the solution.
+            * fun : ndarray, shape (m,)
+                Vector of residuals at the solution.
+            * jac : ndarray, sparse matrix or LinearOperator, shape (m, n)
+                Modified Jacobian matrix at the solution, in the sense that J^T J
+                is a Gauss-Newton approximation of the Hessian of the cost function.
+                The type is the same as the one used by the algorithm.
+            * grad : ndarray, shape (m,)
+                Gradient of the cost function at the solution.
+            * optimality : float
+                First-order optimality measure. In unconstrained problems, it is always
+                the uniform norm of the gradient. In constrained problems, it is the
+                quantity which was compared with `gtol` during iterations.
+            * active_mask : ndarray of int, shape (n,)
+                Each component shows whether a corresponding constraint is active
+                (that is, whether a variable is at the bound):
+                    
+                    *  0 : a constraint is not active.
+                    * -1 : a lower bound is active.
+                    *  1 : an upper bound is active.
+                    
+                Might be somewhat arbitrary for 'trf' method as it generates a sequence
+                of strictly feasible iterates and `active_mask` is determined within a
+                tolerance threshold.
+            * nfev : int
+                Number of function evaluations done. Methods 'trf' and 'dogbox' do not
+                count function calls for numerical Jacobian approximation, as opposed
+                to 'lm' method.
+            * njev : int or None
+                Number of Jacobian evaluations done. If numerical Jacobian
+                approximation is used in 'lm' method, it is set to None.
+            * status : int
+                The reason for algorithm termination:
+                    
+                    * -1 : improper input parameters status returned from MINPACK.
+                    *  0 : the maximum number of function evaluations is exceeded.
+                    *  1 : `gtol` termination condition is satisfied.
+                    *  2 : `ftol` termination condition is satisfied.
+                    *  3 : `xtol` termination condition is satisfied.
+                    *  4 : Both `ftol` and `xtol` termination conditions are satisfied.
+                    
+            * message : str
+                Verbal description of the termination reason.
+            * success : bool
+                True if one of the convergence criteria is satisfied (`status` > 0).
+    """
+    ''' '''
+    
+    if bounds[0] is None:
+        bounds[0] = -np.inf
+    if bounds[1] is None:
+        bounds[1] = np.inf
+        
     if p0 is None:
         # determine number of parameters by inspecting the function
         from scipy._lib._util import getargspec_no_self as _getargspec
@@ -671,7 +1543,57 @@ def _objective_func(parameters, *args):
     return np.sum(obj_fun**2)
     
 def curvefit2(func, xdata, ydata, p0=None, sigma=None):
-    ''' New wrapper where I use one of the algorithm of the minimize library instead of the TRF'''
+    """
+    New wrapper where one of the algorithm of the Scipy minimize library is used instead of the TRF.
+    Documentation based on https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html.
+
+    :Parameters:
+    
+        **func**: function to fit on data.
+            
+        **xdata** : array
+            The independent variable where the data is measured.
+            Should usually be an M-length sequence or an (k,M)-shaped array for
+            functions with k predictors, but can actually be any object.
+        
+        **ydata**: array
+            The dependent data, a length M array - nominally ``f(xdata, ...)``.
+            
+        **p0**: list, optional
+            Initial guess for the parameters (length N). If None, then the
+            initial values will all be 1 (if the number of parameters for the
+            function can be determined using introspection, otherwise a
+            The default is None.
+        
+        **sigma**: None or M-length sequence, optional 
+            Determines the uncertainty in `ydata`. If we define residuals as
+            ``r = ydata - f(xdata, *popt)``. The default is None.
+
+    :Raises:
+    
+        **ValueError**: "Unable to determine number of fit parameters" 
+            If either `ydata` or `xdata` contain NaNs, or if incompatible options are used.
+
+    :Returns:
+        
+        **popt**: array
+            Optimal values for the parameters so that the sum of the squared
+            residuals of ``f(xdata, *popt) - ydata`` is minimized.
+
+        **pcov**: 2-D array
+            The estimated covariance of popt. The diagonals provide the variance
+            of the parameter estimate. To compute one standard deviation errors
+            on the parameters use ``perr = np.sqrt(np.diag(pcov))``.
+    
+        **res**: OptimizeResult
+            The optimization result represented as a ``OptimizeResult`` object.
+            Important attributes are: ``x`` the solution array, ``success`` a
+            Boolean flag indicating if the optimizer exited successfully and
+            ``message`` which describes the cause of the termination. See
+            `OptimizeResult` for a description of other attributes.
+
+    """
+    ''' '''
     if p0 is None:
         # determine number of parameters by inspecting the function
         from scipy._lib._util import getargspec_no_self as _getargspec
@@ -704,13 +1626,50 @@ def curvefit2(func, xdata, ydata, p0=None, sigma=None):
 # Yield successive n-sized 
 # chunks from l. 
 def divide_chunks(l, n): 
-	
+	"""
+    Yield successive n-sized chunks from l.     
+
+    :Parameters:
+    
+        **l**: integer
+            Size of the list to chunk.
+            
+        **n**: integer
+            Size of a chunk of the list.
+
+    :Yields:
+    
+        Generator of the chunks.
+    """
 	# looping till length l 
 	for i in range(0, len(l), n): 
 		yield l[i:i + n] 
 
 def getInjectionAndSpectrum(photoA, photoB, wl_scale, wl_bounds=(1400,1700)):
+    """
+    Get the distributions of the broadband injections and the spectra of beams A and B.
+
+    :Parameters:
     
+        **photoA**: array-like
+            Values of the photometric output of beam A.
+        
+        **photoB**: array-like
+            Values of the photometric output of beam B.
+        
+        **wl_scale**: array-like
+            Wavelength of the spectra in nm.
+            
+        **wl_bounds** : 2-tuple, optional
+            Boundaries between which the spectra are extracted. The wavelengths are expressed in nm. The default is (1400,1700).
+
+    :Returns:
+    
+        2-tuple of 2-tuple
+            The first tuple contains the histograms of the broadband injection of beams A and B, respectively.
+            The second tuple contains the spectra of beams A and B, respectively.
+
+    """
     # Select the large bandwidth on which we measure the injection
     idx_wl = np.arange(wl_scale.size)
     idx_wl = idx_wl[(wl_scale>=wl_bounds[0])&(wl_scale<=wl_bounds[1])]
@@ -734,13 +1693,17 @@ def binning(arr, binning, axis=0, avg=False):
     Bin elements together
     
     :Parameters:
+        
         **arr**: nd-array
             Array containing data to bin
+            
         **binning**: int
             Number of frames to bin
+            
         **axis**: int
-            axis along which the frames are
-        **avg**: bol
+            axis along which the frames are binned
+            
+        **avg**: bool
             If ``True``, the method returns the average of the binned frame.
             Otherwise, return its sum.
             
@@ -771,6 +1734,52 @@ def binning(arr, binning, axis=0, avg=False):
     return arr, cropped_idx
 
 def sortFrames(dic_data, binned_frames, quantile, factor_minus, factor_plus, which_null, plot=False, save_path=''):
+    """
+    Sigma-clipping to filter the frames which phase is not Gaussian (e.g. because of LWE).
+    Fluxes of the null and antinull outputs are analysed in two steps.
+    In the first step, for a given output, values between two thresholds are kept.
+    The `base` is the upper bound for the antinull output or the lower bound for the null output.
+    The base is defined as the median of the measurements which lower than the quantile (typically 10%) of the total sample in the null output,
+    and upper for the antinull output.
+    The second threshold is defined as the `base` plus or minus the standard deviation of the global sample wieghted by a coefficient.
+    In the second step, frames for which both fluxes are kept are saved, the others are discarded.
+
+    :Parameters:
+    
+        **dic_data**: dictionary
+            Contains the extracted data from files by the function ``load_data``.
+            
+        **binned_frames**: integer
+            Number of frames to bin before applying the filter.
+            It is used to increase the SNR and exhibit the phase noise over the detector noise.
+            
+        **quantile**: float between 0 and 1
+            first quantile taken to determine the `base` threshold.
+            
+        **factor_minus**: float
+            Factor applied to the std of the null flux to determine the second threshold.
+            
+        **factor_plus**: float
+            Factor applied to the std of the antinull flux to determine the second threshold.
+            
+        **which_null**: string
+            Indicates on which baseline the filter is applied.
+            
+        **plot** : bool, optional
+            If ``True``, it displays the time serie of the binned frames, the thresholds and highlights the filtered frames. 
+            The default is False.
+            
+        **save_path**: string, optional
+            Path where the plots is saved in png format (dpi = 300). The default is ''.
+
+    :Returns:
+    
+        **new_dic**: dictionary
+            New dictionary with only the saved data points.
+            
+        **idx_good_frames**: array
+            Index of the kept frames in the input dictionary.
+    """
     nb_frames_total = dic_data['Iminus'].shape[1]
     Iminus = dic_data['Iminus'].mean(axis=0)
     Iplus = dic_data['Iplus'].mean(axis=0)

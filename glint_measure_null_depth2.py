@@ -87,7 +87,7 @@ def gaussian(x, A, loc, sig):
         
         **x**: values where the curve is estimated.
         
-        **a**: amplitude of the Gaussian.
+        **A**: amplitude of the Gaussian.
         
         **x0**: location of the Gaussian.
         

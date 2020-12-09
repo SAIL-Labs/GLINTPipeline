@@ -55,4 +55,4 @@ html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 
 master_doc = 'index'
-autodoc_mock_imports = ["functools", "h5py", "numpy", "matplotlib", "scipy", 'numba', 'timeit']
+autodoc_mock_imports = ["functools", "h5py", "numpy", "matplotlib", "scipy", 'numba', 'timeit', 'cupy', 'cupyx']

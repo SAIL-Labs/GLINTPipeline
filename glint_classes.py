@@ -189,6 +189,7 @@ class File(object):
         Load the datacube when a File-object is created.
 
         :Parameters:
+            
             **data: string (optional)**
                 Path to the datacube to load. 
                 If ``None``, datacube full of 0 is created, with same dimension as real data (nbimg, 344, 96).
@@ -202,6 +203,7 @@ class File(object):
                 If ``True``, swappes the 2nd and 3rd axis of the datacube.
                 
         :Attributes:
+            
             Return the attributes
             
             **data**: ndarray 
@@ -283,6 +285,7 @@ class File(object):
         Bin frames together
         
         :Parameters:
+            
             **arr**: nd-array
                 Array containing data to bin
             **binning**: int
@@ -294,6 +297,7 @@ class File(object):
                 Otherwise, return its sum.
                 
         :Attributes:
+            
             Change the attributes
             
             **data**: ndarray 
