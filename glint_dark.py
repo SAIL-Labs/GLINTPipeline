@@ -330,7 +330,7 @@ if __name__ == '__main__':
                 time_binned = np.mean(time_binned, axis=1)
                 dark_current_binned = np.reshape(dark_current[:new_shape,i], (int(new_shape/binning), binning))
                 dark_current_binned = np.mean(dark_current_binned, axis=1)
-                print(dark_current_binned.std())
+                print(dark_current_binned.mean(), dark_current_binned.std())
                 popt = np.polyfit(time_binned, dark_current_binned, 1)
                 p = np.poly1d(popt)
                 plt.subplot(4,4,i+1)
