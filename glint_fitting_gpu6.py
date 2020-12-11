@@ -432,13 +432,12 @@ if __name__ == '__main__':
     skip_fit = False # Do not fit, plot the histograms of data and model given the initial guesses
     chi2_map_switch = True
      # Map the parameters space over astronull, DeltaPhi mu and sigma
-    k = 1
-    nb_files_data = (k*3936, 3936*(k+1)) #(20782, None) # Which data files to load
+    nb_files_data = (0, 4000) #(20782, None) # Which data files to load
     nb_files_dark = (0, 4000) # Which dark files to load
-    basin_hopping_nloop = ((k)*10, (k+1)*10) # lower and upper bound of the iteration loop for basin hopping method♀
-    which_nulls = ['null1', 'null4', 'null5', 'null6'][1:2]
+    basin_hopping_nloop = (0, 10) # lower and upper bound of the iteration loop for basin hopping method♀
+    which_nulls = ['null1', 'null4', 'null5', 'null6'][:1]
     map_na_sz = 10
-    map_mu_sz = 400
+    map_mu_sz = 200
     map_sig_sz = 10
     
     config = prepareConfig()

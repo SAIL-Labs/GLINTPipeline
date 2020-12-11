@@ -117,7 +117,7 @@ def getHistogram(data, bins):
     if len(data.shape) != 1:
         data = np.ravel(data)
         
-    histo, bin_edges = np.histogram(np.ravel(data), bins=bins)
+    histo = np.histogram(np.ravel(data), bins=bins)[0]
     return histo
   
 if __name__ == '__main__':         
@@ -249,7 +249,7 @@ if __name__ == '__main__':
         plt.grid()
         plt.xlabel('Dark current', size=40)
         plt.ylabel('Counts (normalised)', size=40)
-        plt.xticks(size=35);plt.yticks(size=35);
+        plt.xticks(size=35);plt.yticks(size=35)
         txt = r'$\mu = %.3f$'%(popt[1]) + '\n' + r'$\sigma = %.3f$'%(popt[2])
         plt.text(0.05,0.6, txt, va='center', fontsize=30, transform = ax.transAxes, bbox=dict(boxstyle="square", facecolor='white'))
         plt.savefig(output_path+'histogram_dark_fullframe.png')
