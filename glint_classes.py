@@ -426,23 +426,23 @@ class Null(File):
         # positions = position
         # widths = width
 
-        if mode_flux == 'raw':
+        if debug:
+            print('DEBUG')
             self.raw = self.slices[:,:,:,10-4:10+5].mean(axis=-1)
             self.raw = np.transpose(self.raw, axes=(0,2,1))
-            self.raw_err = self.slices[:,:,:,:10-5].std(axis=-1) / slices_axes.shape[-1]**0.5
+            self.raw_err = np.append(self.slices[:,:,:,:10-5], self.slices[:,:,:,10+5:], axis=-1)
+            self.raw_err = self.raw_err.std(axis=-1) / self.raw_err.shape[-1]**0.5
             self.raw_err = np.transpose(self.raw_err, axes=(0,2,1))
+        #     self.amplitude_fit, self.amplitude, self.integ_model, self.integ_windowed, self.residuals_fit, self.residuals_reg, self.cov, self.weights = \
+        # _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths)
+            self.amplitude_fit, self.amplitude, self.residuals_fit, self.residuals_reg, self.cov, self.amplitude_error = \
+                _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths)
         else:
-            if debug:
-                print('DEBUG')
+            if mode_flux == 'raw':
                 self.raw = self.slices[:,:,:,10-4:10+5].mean(axis=-1)
                 self.raw = np.transpose(self.raw, axes=(0,2,1))
-                self.raw_err = np.append(self.slices[:,:,:,:10-5], self.slices[:,:,:,10+5:], axis=-1)
-                self.raw_err = self.raw_err.std(axis=-1) / self.raw_err.shape[-1]**0.5
+                self.raw_err = self.slices[:,:,:,:10-5].std(axis=-1) / slices_axes.shape[-1]**0.5
                 self.raw_err = np.transpose(self.raw_err, axes=(0,2,1))
-            #     self.amplitude_fit, self.amplitude, self.integ_model, self.integ_windowed, self.residuals_fit, self.residuals_reg, self.cov, self.weights = \
-            # _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths)
-                self.amplitude_fit, self.amplitude, self.residuals_fit, self.residuals_reg, self.cov, self.amplitude_error = \
-            _getSpectralFlux(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths)
             else:
                 try:
                     self.amplitude, self.residuals_reg, self.amplitude_error = self._getSpectralFluxNumba(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths)
@@ -450,7 +450,6 @@ class Null(File):
                     print('LinAlgError')
                     self.amplitude, self.residuals_reg, self.amplitude_error = self._getSpectralFluxNumba2(nbimg, which_tracks, slices_axes, slices, spectral_axis, positions, widths)
             # self.windowed_err = self.bg_std #* np.sum(self.weights)**0.5
-        
         # return positions, widths
         
     @staticmethod
