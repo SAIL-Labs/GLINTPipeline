@@ -63,7 +63,7 @@ if __name__ == '__main__':
     no_noise = False
     nb_img = (None, None)
     debug = False
-    save = False
+    save = True
     mode_flux = 'raw'
     suffix = ''
     spectral_binning = False
@@ -71,14 +71,14 @@ if __name__ == '__main__':
     bandwidth_binning = 50 # In nm
 
     ''' Inputs '''
-    datafolder = 'data202006/20200607/zetacoeff/'
-#    root = "/mnt/96980F95980F72D3/glint/"
-    root = "//tintagel.physics.usyd.edu.au/snert/"
+    datafolder = 'data202012/20201209/zeta/'
+    root = "/mnt/96980F95980F72D3/glint/"
+    # root = "//tintagel.physics.usyd.edu.au/snert/"
     output_path = root+'GLINTprocessed/'+datafolder
     spectral_calibration_path = output_path
     geometric_calibration_path = output_path
-#    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
-    data_path = '//tintagel.physics.usyd.edu.au/snert/GLINTData/'+datafolder
+    data_path = '/mnt/96980F95980F72D3/glint_data/'+datafolder
+    # data_path = '//tintagel.physics.usyd.edu.au/snert/GLINTData/'+datafolder
     dark = np.load(output_path+'superdark.npy')
     
     Iminus = []
@@ -109,8 +109,8 @@ if __name__ == '__main__':
         pattern_coeff = np.load(geometric_calibration_path+'pattern_coeff.npy')
         position_outputs = pattern_coeff[:,:,1].T
         width_outputs = pattern_coeff[:,:,2].T
-        wl_to_px_coeff = np.load(spectral_calibration_path+'20200601_wl_to_px.npy')
-        px_to_wl_coeff = np.load(spectral_calibration_path+'20200601_px_to_wl.npy')
+        wl_to_px_coeff = np.load(spectral_calibration_path+'20200906_wl_to_px.npy')
+        px_to_wl_coeff = np.load(spectral_calibration_path+'20200906_px_to_wl.npy')
         
         
         spatial_axis = np.arange(dark.shape[0])

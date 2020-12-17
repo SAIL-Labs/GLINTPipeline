@@ -430,12 +430,12 @@ if __name__ == '__main__':
     zeta_switch = True # Use the measured zeta coeff. If False, value are set to 0.5
     oversampling_switch = True # Include the loss of coherence when OPD is too far from 0, according to a sinc envelop
     skip_fit = False # Do not fit, plot the histograms of data and model given the initial guesses
-    chi2_map_switch = True
+    chi2_map_switch = False
      # Map the parameters space over astronull, DeltaPhi mu and sigma
-    nb_files_data = (0, 4000) #(20782, None) # Which data files to load
+    nb_files_data = (0, 4000) # Which data files to load
     nb_files_dark = (0, 4000) # Which dark files to load
-    basin_hopping_nloop = (0, 10) # lower and upper bound of the iteration loop for basin hopping method♀
-    which_nulls = ['null1', 'null4', 'null5', 'null6'][:1]
+    basin_hopping_nloop = (20, 30) # lower and upper bound of the iteration loop for basin hopping method♀
+    which_nulls = ['null1', 'null4', 'null5', 'null6'][1:2]
     map_na_sz = 10
     map_mu_sz = 200
     map_sig_sz = 10
@@ -793,7 +793,6 @@ if __name__ == '__main__':
             print('Bin bounds and number of bins %s %s'%(bin_bounds, int(sz**0.5)))
             print('Boundaries (na, mu, sig):')
             print(str(bounds_na)+str(bounds_mu)+str(bounds_sig))
-            print('Bin boundaries ', bin_bounds)
             print('Number of elements ', n_samp_total)
             print('Number of loaded points', data_null.shape[1], nb_files_data)
             print('Number of loaded dark points', dark['Iminus'].shape[1], nb_files_dark)

@@ -516,20 +516,20 @@ def prepareConfig():
     ''' Set the bounds of the parameters to fit '''
     nulls_to_invert = [''] # If one null and antinull outputs are swapped in the data processing
     nulls_to_invert_model = [''] # If one null and antinull outputs are swapped in the data processing
-    bounds_mu0 = [(0, 1000), (2200, 2500), (2200, 2500), (0, 1000), (7800, 8600), (10800, 11600)] # bounds for DeltaPhi mu, one tuple per null
-    bounds_sig0 = [(20, 140), (200, 300), (200, 300), (40, 140), (50, 150), (50, 250)] # bounds for DeltaPhi sig
-    bounds_na0 = [(0, 0.6), (0., 0.1), (0., 0.01), (0.0, 0.3), (0, 0.01), (0., 0.03)] # bounds for astronull
-    diffstep = [0.01, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
+    bounds_mu0 = [(400, 700), (2200, 2500), (2200, 2500), (200, 600), (7800, 8600), (10800, 11600)] # bounds for DeltaPhi mu, one tuple per null
+    bounds_sig0 = [(100, 200), (200, 300), (200, 300), (40, 140), (50, 150), (50, 250)] # bounds for DeltaPhi sig
+    bounds_na0 = [(0, 0.1), (0., 0.1), (0., 0.01), (0.0, 0.05), (0, 0.01), (0., 0.03)] # bounds for astronull
+    diffstep = [0.001, 10, 10] # differential step to apply to the TRF fitting algorithm, used for computing the finite difference
     xscale = np.ones(len(diffstep)) # scale factor of the parameters to fit, see least_squares doc for more details
-    bin_bounds0 = [(-0.5, 2), (-0.1, 0.4), (-0.1, 0.4), (-0.5, 1.25), (-0.5, 1.5), (-0.5, 1.5)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
+    bin_bounds0 = [(-0.1, 0.6), (-0.1, 0.4), (-0.1, 0.4), (-0.2, 0.4), (-0.5, 1.5), (-0.5, 1.5)] # Boundaries of the histogram, to be set manually after checking the histogram sphape with "skip_fit = True"
     
     ''' Set the initial conditions '''
-    mu_opd0 = np.array([200, 2400, 2400, 560, 8000, 11000], dtype=np.float64) # initial guess of DeltaPhi mu
-    sig_opd0 = np.array([100, 260, 260, 80, 80, 170], dtype=np.float64) # initial guess of DeltaPhi sig
-    na0 = np.array([0.2, 0.001, 0.001, 0.2, 0.007, 0.02], dtype=np.float64) # initial guess of astro null
+    mu_opd0 = np.array([550, 2400, 2400, 400, 8000, 11000], dtype=np.float64) # initial guess of DeltaPhi mu
+    sig_opd0 = np.array([180, 260, 260, 100, 80, 170], dtype=np.float64) # initial guess of DeltaPhi sig
+    na0 = np.array([0.08, 0.001, 0.001, 0.02, 0.007, 0.02], dtype=np.float64) # initial guess of astro null
     
-    factor_minus0 = [2., 1, 1, 1.2, 2, 1.] 
-    factor_plus0 = [1.3, 1, 1, 1.2, 2, 1.] 
+    factor_minus0 = [1., 1, 1, 1.2, 2, 1.] 
+    factor_plus0 = [1.3, 1, 1, 2., 2, 1.] 
     
     ''' Import real data '''
     datafolder = 'data202012/20201206/alf tau/'
