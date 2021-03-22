@@ -10,7 +10,7 @@ GLINT Pipeline is a set of scripts and classes used to estimate the null depth f
 and put it in a nice format.
 
 Raw data consists in matlab files containing cube of frames of 344x96 pixels (height x width).
-Each frame contains 16 outputs (4 photometric, 6 null and 6 antinull ones) stack one above the other and
+Each frame contains 16 outputs (4 photometric, 6 null and 6 antinull ones) stacked one above the other and
 spectrally dispersed along the width axis of the frame.
 
 :doc:`glint_classes` is the library of the pipeline to deal with raw data and feed the model fitting algorithm.
