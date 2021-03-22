@@ -63,7 +63,7 @@ Step by step
 4. If steps 2 and 3 are not satisfying, you are doomed and a realignment is necessary so you better call an expert to realign.
 5. Put the mask by typing the noted value on Zaber 4.
 6. Align the mask with the segments. Ideally, all the apertures should be centered on the segments without sey may nothing their edges.
-7. Optimize the flux in photometric taps on the Real-Time control software of GLINT by moving the chip with the Zaber 1&2 (translation) and 3 (focus). Iterate over these three axes to get the best results. Be careful to the wiggles, they can be hard to see on the realtime preview; acquiring a dark, some data and run the python script ``glint_data_explorer.py`` is the best solution. It will display (among other things) a plot entitled **check the wiggles**.
+7. Optimize the flux in photometric taps on the Real-Time control software of GLINT by moving the chip with the Zaber 1&2 (translation) and 3 (focus). Iterate over these three axes to get the best results. Be careful to the wiggles, they can be hard to see on the real time preview; acquiring a dark, some data and run the python script ``glint_data_explorer.py`` is the best solution. It will display (among other things) a plot entitled **check the wiggles**.
 8. Find the best null you can for the desire baselines (theoretically up to 4 baselines can be nulled, empirically, several configurations are needed). The important thing is to know in which null you are (central, n-th). See the next section for the methodology.
 
 Locating the null
@@ -106,18 +106,18 @@ For sanity, step 2 should be run the day before the observation night.
 Routine use
 -----------
 The calibration products exist.
-Data stes to acquire are:
+Data sets to acquire are:
 * dark frames
 * geometric data
 * science frames (lab or on-sky)
 
 Run the script in the following order:
 
-1. :doc:`glint_dark` with *dark frames*
-2. :doc:`glint_geometric_calibration` with *no-fringe frames in lab*
-3. :doc:`glint_measure_null_depth` with *dark frames*
-4. :doc:`glint_measure_null_depth` with *data frames*
-5. Feed the model fitting script with the products
+1. :doc:`glint_dark` with *dark frames*.
+2. :doc:`glint_geometric_calibration` with *no-fringe frames in lab*.
+3. :doc:`glint_measure_null_depth` with *dark frames*.
+4. :doc:`glint_measure_null_depth` with *data frames*.
+5. Feed the model fitting script with the products.
 
 How to self-calibrate the null depth
 ====================================
